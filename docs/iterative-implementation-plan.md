@@ -509,14 +509,17 @@ decision-logger meeting show does-not-exist
 - [x] Decision Log Service implemented and tested (2.5)
 - [x] Logging Foundation implemented (2.4a)
 - [x] Decision Field Service implemented and tested (2.6)
-- [ ] Remaining 2 services implemented (2.7-2.8)
-- [x] Unit test coverage for transcript repositories
-- [x] Integration tests prove DB operations work for transcripts
-- [ ] Field library seeded (~25 fields)
-- [ ] 6 core templates seeded (Standard, Technology, Strategy, Budget, Policy, Proposal)
+- [x] Decision Template Service implemented and tested (2.7)
+- [x] Expert and MCP Configuration Services implemented and tested (2.8)
+- [x] Unit test coverage for all repositories
+- [x] Integration tests prove DB operations work for all services
+- [x] Field library seeded (~25 fields)
+- [x] 6 core templates seeded (Standard, Technology, Strategy, Budget, Policy, Proposal)
 - [x] Context tagging logic working
-- [x] CLI commands available for transcript and decision (partial)
+- [x] All CLI commands implemented and tested
 - [x] No LLM dependencies yet (pure data layer)
+
+**Phase 2 Status: ✅ COMPLETE - All exit criteria met**
 
 ---
 
