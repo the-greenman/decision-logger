@@ -71,6 +71,17 @@ export const RawTranscriptSchema = z.object({
 
 export type RawTranscript = z.infer<typeof RawTranscriptSchema>;
 
+export const CreateRawTranscriptSchema = RawTranscriptSchema.pick({
+  meetingId: true,
+  source: true,
+  format: true,
+  content: true,
+  metadata: true,
+  uploadedBy: true,
+});
+
+export type CreateRawTranscript = z.infer<typeof CreateRawTranscriptSchema>;
+
 export const TranscriptChunkSchema = z.object({
   id: z.string().uuid(),
   meetingId: z.string().uuid(),
@@ -80,7 +91,7 @@ export const TranscriptChunkSchema = z.object({
   speaker: z.string().optional(),
   startTime: z.string().optional(),
   endTime: z.string().optional(),
-  chunkStrategy: z.enum(['fixed', 'semantic', 'speaker']),
+  chunkStrategy: z.enum(['fixed', 'semantic', 'speaker', 'streaming']),
   tokenCount: z.number().int().optional(),
   wordCount: z.number().int().optional(),
   contexts: z.array(z.string()).default([]),
@@ -107,6 +118,23 @@ export const TranscriptChunkSchema = z.object({
 });
 
 export type TranscriptChunk = z.infer<typeof TranscriptChunkSchema>;
+
+export const CreateTranscriptChunkSchema = TranscriptChunkSchema.pick({
+  meetingId: true,
+  rawTranscriptId: true,
+  sequenceNumber: true,
+  text: true,
+  speaker: true,
+  startTime: true,
+  endTime: true,
+  chunkStrategy: true,
+  tokenCount: true,
+  wordCount: true,
+  contexts: true,
+  topics: true,
+});
+
+export type CreateTranscriptChunk = z.infer<typeof CreateTranscriptChunkSchema>;
 
 // ============================================================================
 // CHUNK RELEVANCE SCHEMAS

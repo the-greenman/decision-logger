@@ -23,7 +23,7 @@ import { relations } from 'drizzle-orm';
 export const meetingStatusEnum = pgEnum('meeting_status', ['active', 'completed']);
 export const transcriptSourceEnum = pgEnum('transcript_source', ['upload', 'stream', 'import']);
 export const transcriptFormatEnum = pgEnum('transcript_format', ['json', 'txt', 'vtt', 'srt']);
-export const chunkStrategyEnum = pgEnum('chunk_strategy', ['fixed', 'semantic', 'speaker']);
+export const chunkStrategyEnum = pgEnum('chunk_strategy', ['fixed', 'semantic', 'speaker', 'streaming']);
 export const selectionStrategyEnum = pgEnum('selection_strategy', ['all', 'relevant', 'recent', 'weighted']);
 export const usedForEnum = pgEnum('used_for', ['draft', 'regenerate', 'field-specific']);
 export const flaggedDecisionStatusEnum = pgEnum('flagged_decision_status', ['pending', 'accepted', 'rejected', 'dismissed']);
