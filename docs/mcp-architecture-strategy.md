@@ -501,7 +501,7 @@ decision-logger/
 │   └── mcp/                # MCP handlers using shared core services
 ├── packages/
 │   ├── core/               # Shared business logic
-│   ├── db/                 # Drizzle & pgvector
+│   ├── db/                 # Drizzle ORM & migrations
 │   └── schema/             # Zod schemas & inferred types
 ├── docs/
 └── turbo.json

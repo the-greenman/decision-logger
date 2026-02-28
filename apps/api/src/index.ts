@@ -7,7 +7,20 @@ import {
   getMeetingRoute,
 } from './routes/meetings';
 import { MeetingService } from '@repo/core';
+import { DrizzleMeetingRepository } from '@repo/db';
 import { MockMeetingRepository } from './mock-repository';
+
+// Determine which repository to use
+const useDatabase = process.env.DATABASE_URL !== undefined;
+
+// Create repository and service instances
+const repo = useDatabase 
+  ? new DrizzleMeetingRepository() 
+  : new MockMeetingRepository();
+
+console.log(`Using ${useDatabase ? 'Drizzle' : 'Mock'} repository`);
+
+const meetingService = new MeetingService(repo);
 
 // Create OpenAPI Hono app
 const app = new OpenAPIHono();
@@ -15,10 +28,6 @@ const app = new OpenAPIHono();
 // Middleware
 app.use('*', cors());
 app.use('*', logger());
-
-// Create repository and service instances
-const repo = new MockMeetingRepository();
-const meetingService = new MeetingService(repo);
 
 // Routes
 app.openapi(createMeetingRoute, async (c) => {

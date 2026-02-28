@@ -7,16 +7,21 @@
 import { eq } from 'drizzle-orm';
 import { db } from '../client';
 import { meetings, MeetingSelect, MeetingInsert } from '../schema';
-import { IMeetingRepository } from '@repo/core';
 import { Meeting, CreateMeeting } from '@repo/schema';
 
-export class DrizzleMeetingRepository implements IMeetingRepository {
+export class DrizzleMeetingRepository {
   async create(data: CreateMeeting): Promise<Meeting> {
+    // Extract date portion from ISO datetime string
+    const datePart = data.date.split('T')[0];
+    if (!datePart) {
+      throw new Error('Invalid date format');
+    }
+
     const insertData: MeetingInsert = {
       title: data.title,
-      date: data.date.split('T')[0], // Extract date part from ISO string
+      date: datePart,
       participants: data.participants,
-      status: 'active', // Default value since CreateMeeting doesn't include status
+      status: 'active',
     };
 
     const result = await db.insert(meetings).values(insertData).returning();
@@ -62,7 +67,7 @@ export class DrizzleMeetingRepository implements IMeetingRepository {
     return {
       id: dbMeeting.id,
       title: dbMeeting.title,
-      date: new Date(dbMeeting.date).toISOString(),
+      date: `${dbMeeting.date}T00:00:00Z`, // Convert date string to ISO
       participants: dbMeeting.participants,
       status: dbMeeting.status,
       createdAt: dbMeeting.createdAt.toISOString(),

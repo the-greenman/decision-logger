@@ -22,7 +22,7 @@ pnpm install
 ### 2. Start Database
 
 ```bash
-# Start PostgreSQL 16 with pgvector
+# Start PostgreSQL 16
 docker compose up -d
 
 # Verify database is running

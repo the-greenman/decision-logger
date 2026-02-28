@@ -7,7 +7,7 @@
  * - Sample expert templates
  */
 
-import { db } from '../src/client';
+import { db } from '../dist/index.mjs';
 import { 
   decisionFields, 
   decisionTemplates, 

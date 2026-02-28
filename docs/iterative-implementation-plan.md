@@ -10,7 +10,8 @@ This document defines a detailed, phased implementation plan with validation che
 - **TDD at Every Step**: Tests before code, always
 - **Checkpoint Validation**: Each phase ends with a concrete, demonstrable outcome
 - **Fail Fast**: Small iterations expose problems early
-- **Mock External Dependencies**: LLM calls are expensive; mock them until integration phase
+- **Mock LLM and External APIs Only**: LLM calls are expensive; mock them until integration phase. `MockRepository` is temporary scaffolding — replaced by a real Drizzle implementation in Phase 0.3. The database is core infrastructure, not an external dependency.
+- **Use Real DB from Phase 0.3**: Every repository test from Phase 0.3 onwards must run against a real test database. In-memory mocks are only valid for service-layer unit tests (where the repo is the injected dependency being mocked).
 - **Keep Audio Outside Core**: Audio capture/transcription may exist upstream, but the core system consumes transcript text events only
 
 > **See**: `docs/transcription-service-plan.md` for the external containerized transcription service that integrates with the transcript streaming endpoints
@@ -34,6 +35,25 @@ This document defines a detailed, phased implementation plan with validation che
 
 **Goal**: Prove the entire stack works end-to-end with minimal functionality.
 
+### 0.0 Local Infrastructure
+
+One-time setup required before any database-dependent work. All subsequent phases assume this is complete.
+
+- [ ] Copy `.env.example` → `.env` — credentials must match `docker-compose.yml` (already aligned out of the box)
+- [ ] Start Postgres: `docker-compose up -d`
+- [ ] Verify container healthy: `docker-compose ps` shows `decision-logger-db` as `healthy`
+- [ ] Confirm test database created by init script: both `decision_logger_dev` and `decision_logger_test` are accessible
+
+**Validation Checkpoint 0.0**:
+```bash
+docker-compose up -d
+docker-compose ps  # decision-logger-db shows "healthy"
+psql postgresql://decision_logger:dev_password@localhost:5432/decision_logger_dev -c "SELECT 1"
+# Returns: 1
+psql postgresql://decision_logger:dev_password@localhost:5432/decision_logger_test -c "SELECT 1"
+# Returns: 1 (test DB created automatically by scripts/init-db.sql on first container start)
+```
+
 ### 0.1 Monorepo Scaffold
 - [x] Initialize Turborepo with `apps/` and `packages/` structure
 - [x] Create `packages/schema` with single Zod schema: `MeetingSchema`
@@ -51,6 +71,7 @@ curl http://localhost:3000/health  # Returns { "status": "ok" }
 
 ### 0.2 First Database Table
 - [x] Define `meetings` table in `packages/db/schema.ts`
+- [ ] **Create `packages/db/src/client.ts`** — Drizzle connection using `DATABASE_URL` env var (prerequisite for 0.3)
 - [x] Run `drizzle-kit generate` to create migration
 - [x] Apply migration to local PostgreSQL
 - [x] Verify: Table exists via `psql` or Drizzle Studio
@@ -59,17 +80,23 @@ curl http://localhost:3000/health  # Returns { "status": "ok" }
 ```bash
 pnpm db:migrate  # Migration applies cleanly
 pnpm db:studio   # Can view empty meetings table
+# Verify client resolves: node -e "import('@repo/db').then(m => console.log('ok'))"
 ```
 
 ### 0.3 First Repository (TDD)
 - [x] Define `IMeetingRepository` interface in `packages/core`
 - [x] Write failing test: `MeetingRepository.create()` returns a meeting
-- [x] Implement `DrizzleMeetingRepository`
-- [x] Test passes
+- [ ] **Implement `DrizzleMeetingRepository` in `packages/db/src/repositories/`** (uses DB client from 0.2 — not an in-memory mock)
+- [ ] **Wire `DrizzleMeetingRepository` into `apps/api` and `apps/cli`** (replace `MockMeetingRepository`)
+- [ ] Test passes against real test DB
 
 **Validation Checkpoint 0.3**:
 ```bash
-pnpm test --filter=@repo/core  # 1 passing test
+pnpm test --filter=@repo/db  # Repository integration tests pass (real DB)
+# Prove persistence: POST /api/meetings, then GET /api/meetings — data survives across requests
+curl -X POST http://localhost:3000/api/meetings -H "Content-Type: application/json" \
+  -d '{"title": "Persist Test", "date": "2026-02-27", "participants": ["Alice"]}'
+curl http://localhost:3000/api/meetings  # Must return the created meeting
 ```
 
 ### 0.4 First Service (TDD)
@@ -103,18 +130,21 @@ curl http://localhost:3000/docs  # OpenAPI spec available
 - [x] Create `apps/cli` with Commander.js
 - [x] Implement `decision-logger meeting create <title>` command
 - [x] Wire to API or directly to service
-- [x] Test: CLI creates meeting and displays ID
+- [ ] **Write E2E smoke test: run CLI command, assert output contains a meeting ID**
 
 **Validation Checkpoint 0.6**:
 ```bash
+pnpm test --filter=apps/cli  # At least 1 smoke test passes
 decision-logger meeting create "Test Meeting" --date 2026-02-27 --participants Alice,Bob
 # Output: Created meeting: mtg_abc123
 ```
 
 ### Phase 0 Exit Criteria
+- [ ] Postgres container running and healthy (`docker-compose ps`)
+- [ ] Both `decision_logger_dev` and `decision_logger_test` databases accessible
 - [x] Monorepo builds and tests pass
-- [x] Single meeting can be created via API
-- [x] Single meeting can be created via CLI
+- [ ] Single meeting can be created via API **and persists in real DB**
+- [ ] Single meeting can be created via CLI **and persists in real DB**
 - [x] OpenAPI spec auto-generated from Zod
 - [x] TDD workflow proven (test → implement → pass)
 - [x] DI pattern working (service uses injected repository)
@@ -152,13 +182,14 @@ FlaggedDecisionSchema.parse({ meetingId: "mtg_1", suggestedTitle: "Test", confid
 
 ### 1.2 Drizzle Schema Alignment
 - [ ] Update `packages/db/schema.ts` to match all Zod schemas
-- [ ] Create "Schema Sanity Check" test that validates Zod ↔ Drizzle alignment
+- [ ] Create "Schema Sanity Check" test that validates Zod ↔ Drizzle alignment — **must include a round-trip insert/read for at least one table against a real test DB** (structural name-matching alone is not sufficient)
 - [ ] Generate migrations for all tables
 - [ ] Apply migrations
+- [ ] **Delete `packages/db/src/schema-phase0.ts`** (superseded by full schema; keeping it creates confusion)
 
 **Validation Checkpoint 1.2**:
 ```bash
-pnpm test --filter=@repo/db  # Schema alignment tests pass
+pnpm test --filter=@repo/db  # Schema alignment tests pass, including DB round-trip
 pnpm db:migrate  # All migrations apply
 ```
 
@@ -174,11 +205,24 @@ pnpm build:api  # Generates openapi.yaml
 cat apps/api/openapi.yaml  # Valid, auto-generated spec
 ```
 
+### 1.4 Seed Script Scaffold
+- [ ] Create `packages/db/scripts/seed.ts` with a runnable entry point
+- [ ] Seed at minimum: empty field categories and a single placeholder template (confirms the script works and the tables accept data)
+- [ ] Wire to `pnpm db:seed` in `packages/db/package.json`
+
+**Validation Checkpoint 1.4**:
+```bash
+pnpm db:seed  # Runs without error, inserts placeholder data
+pnpm db:studio  # decision_fields and decision_templates tables are not empty
+```
+
 ### Phase 1 Exit Criteria
 - [ ] All domain schemas defined in `packages/schema`
-- [ ] Drizzle schema matches Zod (verified by test)
+- [ ] Drizzle schema matches Zod (verified by test — including DB round-trip)
 - [ ] OpenAPI auto-generated from route definitions
 - [ ] Manual `openapi.yaml` removed from repo
+- [ ] `packages/db/src/schema-phase0.ts` deleted
+- [ ] `pnpm db:seed` runs without error
 
 ---
 
@@ -849,7 +893,8 @@ decision-logger meeting create --help  # Shows usage examples
 
 | Phase | Key Validation | Pass Criteria |
 |-------|----------------|---------------|
-| 0 | Vertical slice | API creates meeting |
+| 0.0 | Infrastructure | Postgres healthy, both DBs accessible |
+| 0 | Vertical slice | API creates meeting, persists in real DB |
 | 1 | Schema pipeline | OpenAPI auto-generated |
 | 2 | Data services | >80% test coverage |
 | 3 | LLM integration | Mock + real API tests |
@@ -870,7 +915,8 @@ decision-logger meeting create --help  # Shows usage examples
 4. **Re-validate** - Ensure checkpoint passes before continuing
 
 ### Known Risk Areas:
-- **Phase 0**: Monorepo tooling complexity
+- **Phase 0.0**: Docker not available or port 5432 already in use — resolve before any DB work
+- **Phase 0**: Monorepo tooling complexity; `DrizzleMeetingRepository` must use real DB (not in-memory mock)
 - **Phase 1**: Zod ↔ Drizzle alignment edge cases
 - **Phase 3**: LLM provider variability (remote vs optional local adapters)
 - **Phase 5**: MCP tool injection complexity
@@ -894,3 +940,30 @@ decision-logger meeting create --help  # Shows usage examples
 **Total: ~24 working days (5 weeks)**
 
 Buffer time built into each phase for unexpected issues.
+
+---
+
+## Deployment Considerations
+
+### Local Development (Phases 0–8)
+`docker-compose.yml` runs PostgreSQL 16 locally. This is the only infrastructure assumption during development. No pgvector image required.
+
+### Cloudflare Deployment Path (Post-Phase 8)
+The application is compatible with **Cloudflare Workers + Hyperdrive + managed Postgres** (Neon or Supabase) without schema changes:
+
+- **Hono** runs natively on Workers (designed for edge)
+- **Drizzle** supports Workers-compatible connection adapters
+- **Managed Postgres** (Neon/Supabase) preserves all PostgreSQL features: `TEXT[]` arrays, `JSONB`, GIN indexes, partial indexes
+- **pgvector** is available on both Neon and Supabase when needed post-MVP
+- `docker-compose.yml` becomes a local dev tool only; `DATABASE_URL` in production points at the managed instance
+
+**Not compatible** with Cloudflare D1 (SQLite) without a major schema redesign — the use of `TEXT[]` arrays and `JSONB` across 8+ tables rules it out.
+
+### What Keeps Us PostgreSQL-Bound (By Design)
+The following features are in the current schema and are not accidental — they were chosen for correctness:
+- `TEXT[]` / `UUID[]` arrays — participants, contexts, chunkIds, lockedFields, etc.
+- `JSONB` — draftData, fields, decisionMethod, extractionPrompt, connectionConfig, etc.
+- GIN index on `contexts` — efficient context-tag querying
+- Partial indexes — e.g. pending-only flagged decisions, single default template
+
+Switching away from PostgreSQL would require replacing all of these, which is not planned.

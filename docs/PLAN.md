@@ -967,7 +967,7 @@ To ensure consistency, minimize duplication, and facilitate high-quality agentic
 - **Validation**: Zod
 - **Testing**: Vitest
 
-> **Note**: pgvector extension is not required for initial implementation. See `docs/pgvector-justification.md` for future considerations.
+> **Note**: pgvector is not required for initial implementation. If vector similarity search becomes necessary (e.g. semantic chunk retrieval at scale), it can be added as a schema migration. Both Neon and Supabase support pgvector on managed Postgres, which aligns with the Cloudflare deployment path described below.
 
 ### CLI
 - **Framework**: Commander.js (routing)

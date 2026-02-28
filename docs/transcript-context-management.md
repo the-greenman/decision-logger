@@ -78,7 +78,7 @@ CREATE TABLE transcript_chunks (
   word_count INTEGER,
   
   -- Semantic information
-  embedding VECTOR(1536),         -- Vector embedding (dim depends on model, e.g., 1536 for OpenAI)
+  -- embedding VECTOR(1536),     -- Post-MVP: vector similarity search via pgvector (not in initial schema)
   summary TEXT,                  -- AI-generated summary of chunk
   topics TEXT[],                 -- Extracted topics/keywords
   
@@ -96,7 +96,7 @@ CREATE INDEX idx_chunks_meeting ON transcript_chunks(meeting_id);
 CREATE INDEX idx_chunks_sequence ON transcript_chunks(meeting_id, sequence_number);
 CREATE INDEX idx_chunks_time ON transcript_chunks(start_time, end_time);
 CREATE INDEX idx_chunks_contexts ON transcript_chunks USING gin(contexts);
-CREATE INDEX idx_chunks_embedding ON transcript_chunks USING ivfflat(embedding vector_cosine_ops);
+-- Post-MVP: CREATE INDEX idx_chunks_embedding ON transcript_chunks USING ivfflat(embedding vector_cosine_ops);
 ```
 
 **Chunking Strategies:**

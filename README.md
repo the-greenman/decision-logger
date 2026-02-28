@@ -82,7 +82,7 @@ All fields are text-based:
 ### Prerequisites
 
 - Node.js 20+
-- PostgreSQL 16+ with pgvector
+- PostgreSQL 16+ (via Docker — see `docker-compose.yml`)
 - Claude API key
 
 ### Installation
@@ -228,7 +228,7 @@ decision-logger/
 
 - **Runtime**: Node.js 20+
 - **Framework**: Hono (API) + Commander.js/Clack (CLI)
-- **Database**: PostgreSQL 16+ with pgvector and Drizzle ORM
+- **Database**: PostgreSQL 16+ with Drizzle ORM
 - **LLM**: Claude 3.5 Sonnet via Vercel AI SDK
 - **Validation**: Zod
 - **Testing**: Vitest

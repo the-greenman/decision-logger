@@ -6,10 +6,10 @@ services:
     container_name: decision-logger-db
     environment:
       POSTGRES_USER: decision_logger
-      POSTGRES_PASSWORD: dev_password
+      POSTGRES_PASSWORD: decision_logger
       POSTGRES_DB: decision_logger_dev
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
@@ -35,6 +35,22 @@ services:
   #       condition: service_healthy
   #   environment:
   #     DATABASE_URL: postgresql://decision_logger:dev_password@postgres:5432/decision_logger_dev
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: decision-logger-api
+    environment:
+      DATABASE_URL: postgresql://decision_logger:dev_password@postgres:5432/decision_logger_dev
+      PORT: 3000
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "cd packages/db && npx drizzle-kit migrate && cd ../../apps/api && npm start"
 
 volumes:
   postgres_data:
