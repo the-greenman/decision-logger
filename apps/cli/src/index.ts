@@ -1,8 +1,10 @@
-#!/usr/bin/env node
-
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { meetingCommand } from './commands/meeting';
+import { config } from 'dotenv';
+
+// Load environment variables
+config();
 
 const program = new Command();
 

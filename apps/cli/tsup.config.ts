@@ -5,5 +5,8 @@ export default defineConfig({
   format: ['esm'],
   dts: false,
   clean: true,
-  external: ['@repo/schema', '@repo/core'],
+  banner: {
+    js: '#!/usr/bin/env node',
+  },
+  external: ['@repo/schema', '@repo/core', '@repo/db'],
 });

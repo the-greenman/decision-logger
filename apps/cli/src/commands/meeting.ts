@@ -1,10 +1,10 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { MeetingService } from '@repo/core';
-import { MockMeetingRepository } from '../mock-repository';
+import { DrizzleMeetingRepository } from '@repo/db';
 
 // Create service instance
-const repo = new MockMeetingRepository();
+const repo = new DrizzleMeetingRepository();
 const meetingService = new MeetingService(repo);
 
 export const meetingCommand = new Command('meeting')
@@ -40,7 +40,7 @@ meetingCommand
       console.log(chalk.white(`Participants: ${meeting.participants.join(', ')}`));
       console.log(chalk.gray(`Status: ${meeting.status}`));
     } catch (error) {
-      console.error(chalk.red(`Error: ${error.message}`));
+      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
       process.exit(1);
     }
   });
@@ -70,7 +70,7 @@ meetingCommand
         console.log('');
       });
     } catch (error) {
-      console.error(chalk.red(`Error: ${error.message}`));
+      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
       process.exit(1);
     }
   });
@@ -98,7 +98,7 @@ meetingCommand
       console.log(chalk.gray(`Status: ${meeting.status}`));
       console.log(chalk.gray(`Created: ${meeting.createdAt}`));
     } catch (error) {
-      console.error(chalk.red(`Error: ${error.message}`));
+      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
       process.exit(1);
     }
   });
