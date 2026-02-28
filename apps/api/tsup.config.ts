@@ -5,5 +5,5 @@ export default defineConfig({
   format: ['esm'],
   dts: false,
   clean: true,
-  external: ['@repo/core', '@repo/schema'],
+  external: ['@repo/core', '@repo/schema', '@repo/db'],
 });

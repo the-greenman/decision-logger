@@ -365,7 +365,7 @@ pnpm db:studio
 **Status**: 🟡 IN PROGRESS - Most services complete, CLI commands partially implemented
 
 ### 2.1 Meeting Service (Complete)
-- [x] `IMeetingRepository`: create, findById, findAll, updateStatus
+- [x] `IMeetingRepository`: create, findById, findAll, update, updateStatus, delete/archive
 - [x] Unit tests for each method (mocked DB)
 - [x] `MeetingService`: business logic wrapper
 - [x] Integration tests (real test DB)
@@ -426,8 +426,8 @@ pnpm test --filter=@repo/core -- --grep="Meeting"  # All passing
 - [x] Added CreateDecisionField schema and type exports
 
 ### 2.7 Decision Template Service
-- [ ] `IDecisionTemplateRepository`: create, findById, findAll, findDefault, setDefault
-- [ ] `ITemplateFieldAssignmentRepository`: manage field assignments
+- [ ] `IDecisionTemplateRepository`: create, findById, findAll, update, delete, findDefault, setDefault
+- [ ] `ITemplateFieldAssignmentRepository`: create, listByTemplate, update, delete, replaceTemplateAssignments
 - [ ] Seed 6 core templates (Standard, Technology, Strategy, Budget, Policy, Proposal)
 - [ ] Unit tests
 - [ ] `DecisionTemplateService`: template management
@@ -437,6 +437,7 @@ pnpm test --filter=@repo/core -- --grep="Meeting"  # All passing
 - [ ] `IExpertTemplateRepository`: create, findById, findAll, update, delete
 - [ ] `IMCPServerRepository`: create, findByName, findAll, update, delete
 - [ ] `IExpertAdviceHistoryRepository`: create, findByDecisionContextId
+- [ ] Prioritize MCP CRUD after meeting, decision-context, field, and template CRUD surfaces are in place
 - [ ] Unit tests
 - [ ] Integration tests
 

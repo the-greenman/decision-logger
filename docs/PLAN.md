@@ -56,6 +56,16 @@ For high-level understanding, the system revolves around these core entities:
 
 > **See**: `docs/iterative-implementation-plan.md` for the implementation sequence of these schemas.
 
+### CRUD Expectations
+
+- **Meeting**: full CRUD is required. Meetings need create, list/show, general update (title/date/participants/status), and delete/archive support.
+- **FlaggedDecision**: full CRUD is required for manual and AI-assisted triage workflows.
+- **DecisionContext**: full CRUD is required. In addition to workflow actions, the system needs canonical create/read/update/delete access to draft contexts.
+- **DecisionField** and **DecisionTemplate**: full CRUD is required. The field library and template catalog must support seeded defaults plus user-managed custom records.
+- **MCPServer**: full CRUD is required, but this is lower priority than meetings, decision contexts, fields, and templates.
+- **RawTranscript**, **TranscriptChunk**, **DecisionContextWindow**, and **ExpertAdvice**: current operational flow is primarily create/read plus targeted updates during use, but these records should still have a planned CRUD lifecycle (including admin cleanup or retention paths) rather than being left unspecified.
+- **DecisionLog**: intentionally immutable after creation; expose create/read/export, not update/delete in the normal product flow.
+
 
 ## Field Library & Templates
 
