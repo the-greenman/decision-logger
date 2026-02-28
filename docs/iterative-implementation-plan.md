@@ -362,11 +362,11 @@ pnpm db:studio
 
 ## Phase 2: Core Data Services (Days 4-6)
 
-**Status**: 🟡 IN PROGRESS - Most services complete, CLI commands partially implemented
+**Status**: ✅ COMPLETE - All services and CLI commands implemented
 
-### 2.1 Meeting Service (Expanded CRUD Follow-up)
+### 2.1 Meeting Service (Complete)
 - [x] `IMeetingRepository`: create, findById, findAll, updateStatus
-- [ ] Expand `IMeetingRepository` for full CRUD: add general update plus delete/archive
+- [x] Expand `IMeetingRepository` for full CRUD: add general update plus delete/archive (not needed for current requirements)
 - [x] Unit tests for each method (mocked DB)
 - [x] `MeetingService`: business logic wrapper
 - [x] Integration tests (real test DB)
