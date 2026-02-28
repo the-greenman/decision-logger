@@ -10,8 +10,10 @@ This document defines a detailed, phased implementation plan with validation che
 - ✅ **Phase 1**: Schema Foundation - Complete (Days 2-3)
 - 🟡 **Phase 2**: Core Data Services - **In Progress** (Days 4-6)
   - ✅ 2.1 Meeting Service - Complete
-  - ⏳ 2.2 Transcript Service - Next
-  - ⏳ 2.3-2.9 Remaining Services - Pending
+  - ✅ 2.2 Transcript Service - Complete
+  - ✅ 2.3 Flagged Decision Service - Complete
+  - ⏳ 2.4 Decision Context Service - Next
+  - ⏳ 2.5-2.9 Remaining Services - Pending
 - ⏳ **Phase 3**: LLM Integration - Pending
 
 ## Philosophy
@@ -305,7 +307,7 @@ pnpm db:studio
 
 ## Phase 2: Core Data Services (Days 4-6)
 
-**Status**: 🟡 IN PROGRESS - Meeting Service (2.1) and Transcript Service (2.2) are complete
+**Status**: 🟡 IN PROGRESS - Meeting Service (2.1), Transcript Service (2.2), and Flagged Decision Service (2.3) are complete
 
 ### 2.1 Meeting Service (Complete)
 - [x] `IMeetingRepository`: create, findById, findAll, updateStatus
@@ -337,10 +339,10 @@ pnpm test --filter=@repo/core -- --grep="Meeting"  # All passing
 ```
 
 ### 2.3 Flagged Decision Service
-- [ ] `IFlaggedDecisionRepository`: create, findByMeetingId, findById, update, updatePriority, updateStatus
-- [ ] Unit tests
-- [ ] `FlaggedDecisionService`: supports AI and manual creation, triage, prioritization, and dismissal (no LLM yet)
-- [ ] Integration tests
+- [x] `IFlaggedDecisionRepository`: create, findByMeetingId, findById, update, updatePriority, updateStatus
+- [x] Unit tests
+- [x] `FlaggedDecisionService`: supports AI and manual creation, triage, prioritization, and dismissal (no LLM yet)
+- [x] Integration tests
 
 ### 2.4 Decision Context Service
 - [ ] `IDecisionContextRepository`: create, findById, findByMeetingId, update, lockField, unlockField
