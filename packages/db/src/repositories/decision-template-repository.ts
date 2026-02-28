@@ -31,12 +31,13 @@ interface IDecisionTemplateRepository {
   search(query: string): Promise<DecisionTemplate[]>;
 }
 
+// Use the actual database insert type for the interface
 interface ITemplateFieldAssignmentRepository {
-  create(data: CreateTemplateFieldAssignment): Promise<TemplateFieldAssignment>;
-  createMany(data: CreateTemplateFieldAssignment[]): Promise<TemplateFieldAssignment[]>;
+  create(data: TemplateFieldAssignmentInsert): Promise<TemplateFieldAssignment>;
+  createMany(data: TemplateFieldAssignmentInsert[]): Promise<TemplateFieldAssignment[]>;
   findByTemplate(templateId: string): Promise<TemplateFieldAssignment[]>;
   findByField(fieldId: string): Promise<TemplateFieldAssignment[]>;
-  update(templateId: string, fieldId: string, data: Partial<CreateTemplateFieldAssignment>): Promise<TemplateFieldAssignment | null>;
+  update(templateId: string, fieldId: string, data: Partial<TemplateFieldAssignmentInsert>): Promise<TemplateFieldAssignment | null>;
   delete(templateId: string, fieldId: string): Promise<boolean>;
   deleteByTemplate(templateId: string): Promise<boolean>;
 }
@@ -117,13 +118,7 @@ export class DrizzleDecisionTemplateRepository implements IDecisionTemplateRepos
       if (!acc[field.templateId]) {
         acc[field.templateId] = [];
       }
-      acc[field.templateId].push({
-        fieldId: field.fieldId,
-        order: field.order,
-        required: field.required,
-        customLabel: field.customLabel || undefined,
-        customDescription: field.customDescription || undefined,
-      });
+      acc[field.templateId].push(this.mapFieldAssignmentToSchema(field));
       return acc;
     }, {} as Record<string, TemplateFieldAssignment[]>);
 
@@ -145,7 +140,7 @@ export class DrizzleDecisionTemplateRepository implements IDecisionTemplateRepos
       .where(eq(templateFieldAssignments.templateId, row.id))
       .orderBy(asc(templateFieldAssignments.order));
 
-    return this.mapToSchema({ ...row, fields });
+    return this.mapToSchema({ ...row, fields: fields.map(f => this.mapFieldAssignmentToSchema(f)) });
   }
 
   async setDefault(id: string): Promise<DecisionTemplate> {
@@ -178,7 +173,7 @@ export class DrizzleDecisionTemplateRepository implements IDecisionTemplateRepos
       .where(eq(templateFieldAssignments.templateId, result.id))
       .orderBy(asc(templateFieldAssignments.order));
 
-    return this.mapToSchema({ ...result, fields: fields.map(this.mapFieldAssignmentToSchema) });
+    return this.mapToSchema({ ...result, fields: fields.map(f => this.mapFieldAssignmentToSchema(f)) });
   }
 
   async update(id: string, data: Partial<CreateDecisionTemplate>): Promise<DecisionTemplate | null> {
@@ -196,7 +191,7 @@ export class DrizzleDecisionTemplateRepository implements IDecisionTemplateRepos
       .where(eq(templateFieldAssignments.templateId, id))
       .orderBy(asc(templateFieldAssignments.order));
 
-    return this.mapToSchema({ ...row, fields });
+    return this.mapToSchema({ ...row, fields: fields.map(f => this.mapFieldAssignmentToSchema(f)) });
   }
 
   async delete(id: string): Promise<boolean> {
@@ -255,7 +250,7 @@ export class DrizzleDecisionTemplateRepository implements IDecisionTemplateRepos
       .where(eq(templateFieldAssignments.templateId, row.id))
       .orderBy(asc(templateFieldAssignments.order));
 
-    return this.mapToSchema({ ...row, fields });
+    return this.mapToSchema({ ...row, fields: fields.map(f => this.mapFieldAssignmentToSchema(f)) });
   }
 
   async search(query: string): Promise<DecisionTemplate[]> {
@@ -280,13 +275,7 @@ export class DrizzleDecisionTemplateRepository implements IDecisionTemplateRepos
       if (!acc[field.templateId]) {
         acc[field.templateId] = [];
       }
-      acc[field.templateId].push({
-        fieldId: field.fieldId,
-        order: field.order,
-        required: field.required,
-        customLabel: field.customLabel || undefined,
-        customDescription: field.customDescription || undefined,
-      });
+      acc[field.templateId].push(this.mapFieldAssignmentToSchema(field));
       return acc;
     }, {} as Record<string, TemplateFieldAssignment[]>);
 
