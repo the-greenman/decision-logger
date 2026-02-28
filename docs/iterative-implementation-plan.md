@@ -49,6 +49,32 @@ Automated validation gates are required, but each phase should also leave you wi
 - Reuse a small set of stable test meetings and transcript fixtures so regressions are obvious
 - Treat confusing command output, unclear errors, and awkward payloads as phase-level issues, not polish-phase issues
 
+### Command Reality Rules
+
+- Treat bare `decision-logger ...` examples in this document as the target UX, not proof that the command is already runnable
+- A CLI command does not count as manually tested until it has been run through the actual repo entrypoint and its output has been inspected
+- For this repo, the reliable pre-install invocation is:
+
+```bash
+npx pnpm@8.15.0 --filter ./apps/cli exec tsx src/index.ts <command...>
+```
+
+- After the CLI package is built, the packaged binary path can be tested with:
+
+```bash
+npx pnpm@8.15.0 --filter ./apps/cli build
+npx pnpm@8.15.0 --filter ./apps/cli exec decision-logger <command...>
+```
+
+- Do not mark a CLI task complete just because a service test passes; verify the command is registered with Commander, parses arguments correctly, and reaches the service layer
+- When a CLI command is planned but not yet implemented, test the backing API or service directly and note that the CLI example is still aspirational
+
+### Endpoint Reality Rules
+
+- If a CLI command ultimately depends on an API route, manually test the backing route with `curl` before marking the user-facing flow as credible
+- For new routes, verify both the happy path and at least one invalid request
+- Record the exact command or `curl` used in the phase notes so the test is repeatable
+
 ### Recommended Fixtures
 
 - One minimal meeting with 1 participant and 1 transcript event
@@ -164,15 +190,18 @@ curl http://localhost:3000/docs  # OpenAPI spec available
 **Validation Checkpoint 0.6**:
 ```bash
 pnpm test --filter=apps/cli  # At least 1 smoke test passes
-decision-logger meeting create "Test Meeting" --date 2026-02-27 --participants Alice,Bob
+npx pnpm@8.15.0 --filter ./apps/cli exec tsx src/index.ts \
+  meeting create "Test Meeting" --date 2026-02-27 --participants Alice,Bob
 # Output: Created meeting: mtg_abc123
 ```
 
 **Manual Smoke Test**:
 ```bash
 # Confirm the first real user flow feels coherent
-decision-logger meeting create "Manual Smoke A" --date 2026-02-27 --participants Alice
-decision-logger meeting create "Manual Smoke B" --date 2026-02-28 --participants Bob,Carol
+npx pnpm@8.15.0 --filter ./apps/cli exec tsx src/index.ts \
+  meeting create "Manual Smoke A" --date 2026-02-27 --participants Alice
+npx pnpm@8.15.0 --filter ./apps/cli exec tsx src/index.ts \
+  meeting create "Manual Smoke B" --date 2026-02-28 --participants Bob,Carol
 
 # Confirm API and CLI are both usable
 curl -X POST http://localhost:3000/api/meetings \
@@ -368,6 +397,9 @@ pnpm test:coverage  # >80% coverage on packages/core
 - [ ] `decision-logger decisions dismiss <flagged-id>`
 - [ ] Test: All commands work with real database
 
+Implementation rule:
+- Do not mark any command in this section complete until it has been invoked through the actual CLI entrypoint (`tsx` or built binary), not just through a unit test of the underlying service
+
 **Validation Checkpoint 2.9**:
 ```bash
 decision-logger meeting create "Test" --date 2026-02-27 --participants Alice
@@ -516,6 +548,9 @@ pnpm test:llm -- --grep="decision detection"
 - [ ] Add `--mock` flag to use MockLLMService for testing
 - [ ] Test: Generate draft from real transcript
 
+Implementation rule:
+- Validate both `--mock` and non-mock execution through the real CLI entrypoint before considering the command usable
+
 **Validation Checkpoint 3.6**:
 ```bash
 decision-logger context set-meeting mtg_1
@@ -652,6 +687,9 @@ expect(log.decisionMethod.type).toBe('consensus');
 - [ ] `decision-logger draft unlock-field <field-id>`
 - [ ] `decision-logger draft regenerate`
 - [ ] `decision-logger decision log --type <type> --details <text> --actors <names> --logged-by <name>`
+
+Implementation rule:
+- Before marking this workflow credible, prove each command in the chain runs in sequence through the actual CLI entrypoint without manual code edits between steps
 
 **Validation Checkpoint 4.5**:
 ```bash
@@ -821,6 +859,9 @@ decision-logger draft expert-advice technical
 - [ ] GET /api/chunks/:id
 - [ ] POST /api/chunks/search
 - [ ] Integration tests
+
+Implementation rule:
+- Before any CLI built on these routes is considered valid, exercise these endpoints directly with `curl` and confirm the response shape matches the documented contract
 
 ### 6.3 Context Endpoints
 - [ ] GET /api/context (global context state - **critical for web UI**)
