@@ -3,6 +3,7 @@ export * from './schema';
 
 // Database connection
 export { db, client, type Database } from './client';
+export * from './client';
 
 // Repositories
 export { DrizzleMeetingRepository } from './repositories/meeting-repository';

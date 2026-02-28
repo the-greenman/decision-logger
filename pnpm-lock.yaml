@@ -66,6 +66,9 @@ importers:
       '@repo/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@repo/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@repo/schema':
         specifier: workspace:*
         version: link:../../packages/schema

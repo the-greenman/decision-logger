@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { MeetingService } from '@repo/core';
 import { DrizzleMeetingRepository } from '@repo/db';
+import { client } from '@repo/db';
 
 // Create service instance
 const repo = new DrizzleMeetingRepository();
@@ -39,8 +40,12 @@ meetingCommand
       console.log(chalk.white(`Date: ${meeting.date}`));
       console.log(chalk.white(`Participants: ${meeting.participants.join(', ')}`));
       console.log(chalk.gray(`Status: ${meeting.status}`));
+      
+      // Close database connection
+      await client.end();
     } catch (error) {
       console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
+      await client.end();
       process.exit(1);
     }
   });
@@ -55,6 +60,7 @@ meetingCommand
       
       if (meetings.length === 0) {
         console.log(chalk.yellow('No meetings found'));
+        await client.end();
         return;
       }
 
@@ -69,8 +75,12 @@ meetingCommand
         console.log(chalk.gray(`   Status: ${meeting.status}`));
         console.log('');
       });
+      
+      // Close database connection
+      await client.end();
     } catch (error) {
       console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
+      await client.end();
       process.exit(1);
     }
   });
@@ -86,6 +96,7 @@ meetingCommand
       
       if (!meeting) {
         console.error(chalk.red('Meeting not found'));
+        await client.end();
         process.exit(1);
       }
 
@@ -97,8 +108,12 @@ meetingCommand
       console.log(chalk.white(`Participants: ${meeting.participants.join(', ')}`));
       console.log(chalk.gray(`Status: ${meeting.status}`));
       console.log(chalk.gray(`Created: ${meeting.createdAt}`));
+      
+      // Close database connection
+      await client.end();
     } catch (error) {
       console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
+      await client.end();
       process.exit(1);
     }
   });
