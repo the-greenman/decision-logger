@@ -402,7 +402,7 @@ pnpm test --filter=@repo/core -- --grep="Meeting"  # All passing
 
 ### 2.4 Decision Context Service (Complete)
 - [x] `IDecisionContextRepository`: create, findById, findByMeetingId, update, lockField, unlockField, setActiveField, updateStatus
-- [x] Expand `IDecisionContextRepository` for full CRUD: add delete/archive for draft contexts
+- [ ] Expand `IDecisionContextRepository` for full CRUD: add delete/archive for draft contexts (NOT IMPLEMENTED - not needed for current requirements)
 - [x] Unit tests (17 tests)
 - [x] `DecisionContextService`: handles context creation, draft data updates, field locking, status transitions, and active field management
 - [x] Integration tests (13 tests)
