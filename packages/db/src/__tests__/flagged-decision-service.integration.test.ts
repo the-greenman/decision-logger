@@ -14,13 +14,11 @@ import { randomUUID } from 'crypto';
 describe('FlaggedDecisionService Integration Tests', () => {
   let service: FlaggedDecisionService;
   let repository: DrizzleFlaggedDecisionRepository;
-  let meetingRepo: DrizzleMeetingRepository;
   let testMeetingId: string;
 
   beforeEach(async () => {
     // Initialize service with real repository
     repository = new DrizzleFlaggedDecisionRepository();
-    meetingRepo = new DrizzleMeetingRepository();
     service = new FlaggedDecisionService(repository);
     
     // Create test meeting
@@ -122,9 +120,9 @@ describe('FlaggedDecisionService Integration Tests', () => {
 
       expect(results).toHaveLength(3);
       // Should be ordered by priority descending
-      expect(results[0].suggestedTitle).toBe('High Priority');
-      expect(results[1].suggestedTitle).toBe('Medium Priority');
-      expect(results[2].suggestedTitle).toBe('Low Priority');
+      expect(results[0]?.suggestedTitle).toBe('High Priority');
+      expect(results[1]?.suggestedTitle).toBe('Medium Priority');
+      expect(results[2]?.suggestedTitle).toBe('Low Priority');
     });
 
     it('should return empty array for meeting with no decisions', async () => {
@@ -142,6 +140,7 @@ describe('FlaggedDecisionService Integration Tests', () => {
         contextSummary: 'Testing status updates',
         confidence: 0.8,
         chunkIds: [randomUUID()],
+        priority: 0,
       });
 
       // Update status
@@ -152,7 +151,7 @@ describe('FlaggedDecisionService Integration Tests', () => {
 
       // Verify in database
       const found = await repository.findById(created.id);
-      expect(found!.status).toBe('accepted');
+      expect(found?.status).toBe('accepted');
     });
 
     it('should support all status values', async () => {
@@ -170,6 +169,7 @@ describe('FlaggedDecisionService Integration Tests', () => {
           contextSummary: 'Testing',
           confidence: 0.8,
           chunkIds: [randomUUID()],
+          priority: 0,
         });
 
         const updated = await service.updateDecisionStatus(created.id, status);
@@ -250,9 +250,9 @@ describe('FlaggedDecisionService Integration Tests', () => {
 
       // Check new order
       const results = await service.getDecisionsForMeeting(testMeetingId);
-      expect(results[0].suggestedTitle).toBe('First'); // priority 30
-      expect(results[1].suggestedTitle).toBe('Second'); // priority 20
-      expect(results[2].suggestedTitle).toBe('Third'); // priority 10
+      expect(results[0]?.suggestedTitle).toBe('First'); // priority 30
+      expect(results[1]?.suggestedTitle).toBe('Second'); // priority 20
+      expect(results[2]?.suggestedTitle).toBe('Third'); // priority 10
     });
   });
 
