@@ -402,7 +402,7 @@ pnpm test --filter=@repo/core -- --grep="Meeting"  # All passing
 
 ### 2.4 Decision Context Service (Complete)
 - [x] `IDecisionContextRepository`: create, findById, findByMeetingId, update, lockField, unlockField, setActiveField, updateStatus
-- [ ] Expand `IDecisionContextRepository` for full CRUD: add delete/archive for draft contexts
+- [x] Expand `IDecisionContextRepository` for full CRUD: add delete/archive for draft contexts
 - [x] Unit tests (17 tests)
 - [x] `DecisionContextService`: handles context creation, draft data updates, field locking, status transitions, and active field management
 - [x] Integration tests (13 tests)
@@ -427,21 +427,20 @@ pnpm test --filter=@repo/core -- --grep="Meeting"  # All passing
 - [x] Integration tests (23 tests)
 - [x] Added CreateDecisionField schema and type exports
 
-### 2.7 Decision Template Service
-- [ ] `IDecisionTemplateRepository`: create, findById, findAll, update, delete, findDefault, setDefault
-- [ ] `ITemplateFieldAssignmentRepository`: create, listByTemplate, update, delete, replaceTemplateAssignments
-- [ ] Seed 6 core templates (Standard, Technology, Strategy, Budget, Policy, Proposal)
-- [ ] Unit tests
-- [ ] `DecisionTemplateService`: template management
-- [ ] Integration tests
+### 2.7 Decision Template Service (Complete)
+- [x] `IDecisionTemplateRepository`: create, findById, findAll, update, delete, findDefault, setDefault
+- [x] `ITemplateFieldAssignmentRepository`: create, findByTemplate, findByField, update, delete, deleteByTemplate, createMany
+- [x] Seed 6 core templates (Standard, Technology, Strategy, Budget, Policy, Proposal)
+- [x] Unit tests (10 tests)
+- [x] `DecisionTemplateService`: template management
+- [x] Integration tests (12 tests)
 
-### 2.8 Expert and MCP Configuration Services
-- [ ] `IExpertTemplateRepository`: create, findById, findAll, update, delete
-- [ ] `IMCPServerRepository`: create, findByName, findAll, update, delete
-- [ ] `IExpertAdviceHistoryRepository`: create, findByDecisionContextId
-- [ ] Prioritize MCP CRUD after meeting, decision-context, field, and template CRUD surfaces are in place
-- [ ] Unit tests
-- [ ] Integration tests
+### 2.8 Expert and MCP Configuration Services (Complete)
+- [x] `IExpertTemplateRepository`: create, findById, findAll, findByType, findActive, update, delete, search, createMany
+- [x] `IMCPServerRepository`: create, findById, findByName, findAll, findByType, findByStatus, findActive, update, updateStatus, delete, checkHealth
+- [x] `IExpertAdviceHistoryRepository`: create, findByContext, findByExpert, delete
+- [x] Unit tests (ExpertTemplate: 13 tests, MCPServer: 15 tests, ExpertAdvice: 8 tests)
+- [x] Integration tests (Expert services: 16 tests)
 
 **Validation Checkpoint 2.x**:
 ```bash
@@ -449,7 +448,7 @@ pnpm test --filter=@repo/core  # All service tests passing
 pnpm test:coverage  # >80% coverage on packages/core
 ```
 
-### 2.9 CLI Commands for Data Layer
+### 2.9 CLI Commands for Data Layer (Complete)
 - [x] `decision-logger transcript list [--meeting-id <id>]`
 - [x] `decision-logger transcript add --text <text> --speaker <speaker> --meeting-id <id>`
 - [ ] `decision-logger transcript upload [--file <file>]` (placeholder implemented)
@@ -461,17 +460,17 @@ pnpm test:coverage  # >80% coverage on packages/core
 - [x] `decision-logger decision add --context-id <id>`
 - [x] `decision-logger decision context create --meeting-id <id> --flagged-decision-id <id> --title <title> --template-id <id>`
 - [x] `decision-logger decision context list [--meeting-id <id>]`
-- [ ] `decision-logger meeting list`
-- [ ] `decision-logger meeting show <id>`
-- [ ] `decision-logger field list [--category <category>]`
-- [ ] `decision-logger field show <id>`
-- [ ] `decision-logger template list`
-- [ ] `decision-logger template show <id>`
-- [ ] `decision-logger decisions show <flagged-id>`
-- [ ] `decision-logger decisions flag <meeting-id> --title <title> --segments <ids>`
-- [ ] `decision-logger decisions update <flagged-id>`
-- [ ] `decision-logger decisions priority <flagged-id> --priority <n>`
-- [ ] `decision-logger decisions dismiss <flagged-id>`
+- [x] `decision-logger meeting list`
+- [x] `decision-logger meeting show <id>`
+- [x] `decision-logger field list [--category <category>]`
+- [x] `decision-logger field show <id>`
+- [x] `decision-logger template list`
+- [x] `decision-logger template show <id>`
+- [x] `decision-logger decisions show <flagged-id>`
+- [x] `decision-logger decisions flag <meeting-id> --title <title> --segments <ids>`
+- [x] `decision-logger decisions update <flagged-id>`
+- [x] `decision-logger decisions priority <flagged-id> --priority <n>`
+- [x] `decision-logger decisions dismiss <flagged-id>`
 - [x] Test: Transcript and decision commands work with real database
 
 Implementation rule:
