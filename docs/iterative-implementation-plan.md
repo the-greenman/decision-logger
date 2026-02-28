@@ -228,7 +228,7 @@ pnpm db:studio  # decision_fields and decision_templates tables are not empty
 
 ## Phase 2: Core Data Services (Days 4-6)
 
-**Status**: ✅ COMPLETE - Core data services implemented with real database
+**Status**: 🟡 IN PROGRESS - Only Meeting Service (2.1) is complete
 
 ### 2.1 Meeting Service (Complete)
 - [x] `IMeetingRepository`: create, findById, findAll, updateStatus
@@ -332,14 +332,14 @@ decision-logger decisions flag mtg_1 --title "Test" --segments chunk-1,chunk-2
 ```
 
 ### Phase 2 Exit Criteria
-- [x] All 7 core services implemented and tested (including DecisionFieldService)
-- [x] Unit test coverage >80%
-- [x] Integration tests prove DB operations work
-- [x] **Field library seeded (~25 fields)**
-- [x] **6 core templates seeded (Standard, Technology, Strategy, Budget, Policy, Proposal)**
-- [x] Context tagging logic working
-- [x] **CLI commands available for manual testing**
-- [x] No LLM dependencies yet (pure data layer)
+- [ ] All 7 core services implemented and tested (including DecisionFieldService)
+- [ ] Unit test coverage >80%
+- [ ] Integration tests prove DB operations work
+- [ ] **Field library seeded (~25 fields)**
+- [ ] **6 core templates seeded (Standard, Technology, Strategy, Budget, Policy, Proposal)**
+- [ ] Context tagging logic working
+- [ ] **CLI commands available for manual testing**
+- [ ] No LLM dependencies yet (pure data layer)
 
 ---
 
@@ -896,7 +896,7 @@ decision-logger meeting create --help  # Shows usage examples
 | 0.0 | Infrastructure | Postgres healthy, both DBs accessible | ✅ |
 | 0 | Vertical slice | API creates meeting, persists in real DB | ✅ |
 | 1 | Schema pipeline | OpenAPI auto-generated | ✅ |
-| 2 | Data services | >80% test coverage | ✅ |
+| 2 | Data services | >80% test coverage | 🟡 |
 | 3 | LLM integration | Mock + real API tests | ⏳ |
 | 4 | Decision workflow | Lock/regenerate works | ⏳ |
 | 5 | Expert system | Consultation returns advice | ⏳ |
@@ -929,8 +929,8 @@ decision-logger meeting create --help  # Shows usage examples
 |-------|----------|------------|---------|
 | 0: Vertical Slice | 1 day | Day 1 | ✅ Complete |
 | 1: Schema Foundation | 2 days | Day 3 | ✅ Complete |
-| 2: Core Data Services | 3 days | Day 6 | ✅ Complete |
-| 3: LLM Integration | 3 days | Day 9 | ⏳ Next |
+| 2: Core Data Services | 3 days | Day 6 | 🟡 In Progress |
+| 3: LLM Integration | 3 days | Day 9 | ⏳ |
 | 4: Decision Workflow | 3 days | Day 12 | ⏳ |
 | 5: Expert System | 3 days | Day 15 | ⏳ |
 | 6: API Layer | 3 days | Day 18 | ⏳ |
