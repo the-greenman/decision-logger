@@ -18,7 +18,9 @@ import type {
   MCPServer,
   CreateMCPServer,
   ExpertAdvice,
-  CreateExpertAdvice
+  CreateExpertAdvice,
+  CreateMCPServerWithCompatSchema,
+  CreateExpertAdviceWithCompatSchema
 } from '@repo/schema';
 
 type UpdateExpertTemplate = Partial<Omit<CreateExpertTemplate, 'id'>>;

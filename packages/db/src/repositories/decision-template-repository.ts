@@ -6,12 +6,11 @@ import {
   decisionTemplates,
   templateFieldAssignments,
   type DecisionTemplateSelect,
-  type DecisionTemplateInsert,
   type TemplateFieldAssignmentSelect,
   type TemplateFieldAssignmentInsert
 } from '../schema';
 import { db } from '../client';
-import { eq, and, ilike, desc, asc, inArray } from 'drizzle-orm';
+import { eq, and, ilike, asc, inArray } from 'drizzle-orm';
 import type { 
   DecisionTemplate,
   CreateDecisionTemplate,
@@ -59,7 +58,9 @@ export class DrizzleDecisionTemplateRepository implements IDecisionTemplateRepos
 
   private mapFieldAssignmentToSchema(row: TemplateFieldAssignmentSelect): TemplateFieldAssignment {
     return {
+      id: row.id,
       fieldId: row.fieldId,
+      templateId: row.templateId,
       order: row.order,
       required: row.required,
       customLabel: row.customLabel || undefined,
@@ -72,6 +73,10 @@ export class DrizzleDecisionTemplateRepository implements IDecisionTemplateRepos
       .insert(decisionTemplates)
       .values(data)
       .returning();
+
+    if (!row) {
+      throw new Error('Failed to create template');
+    }
 
     return this.mapToSchema(row);
   }
@@ -301,7 +306,9 @@ export class DrizzleDecisionTemplateRepository implements IDecisionTemplateRepos
 export class DrizzleTemplateFieldAssignmentRepository implements ITemplateFieldAssignmentRepository {
   private mapFieldAssignmentToSchema(row: TemplateFieldAssignmentSelect): TemplateFieldAssignment {
     return {
+      id: row.id,
       fieldId: row.fieldId,
+      templateId: row.templateId,
       order: row.order,
       required: row.required,
       customLabel: row.customLabel || undefined,
@@ -314,6 +321,10 @@ export class DrizzleTemplateFieldAssignmentRepository implements ITemplateFieldA
       .insert(templateFieldAssignments)
       .values(data)
       .returning();
+
+    if (!row) {
+      throw new Error('Failed to create template field assignment');
+    }
 
     return this.mapFieldAssignmentToSchema(row);
   }
