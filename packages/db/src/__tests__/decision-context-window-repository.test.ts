@@ -96,7 +96,7 @@ describe('DrizzleDecisionContextWindowRepository', () => {
       // Create initial window
       const initialData = {
         decisionContextId: testDecisionContextId,
-        chunkIds: [testChunkIds[0]],
+        chunkIds: [testChunkIds[0]!],
         selectionStrategy: 'recent' as const,
         totalTokens: 50,
         totalChunks: 1,
@@ -159,7 +159,7 @@ describe('DrizzleDecisionContextWindowRepository', () => {
       // Create windows with different timestamps
       await repository.createOrUpdate({
         decisionContextId: testDecisionContextId,
-        chunkIds: [testChunkIds[0]],
+        chunkIds: [testChunkIds[0]!],
         selectionStrategy: 'recent',
         totalTokens: 50,
         totalChunks: 1,

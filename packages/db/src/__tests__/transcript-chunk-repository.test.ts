@@ -82,6 +82,7 @@ describe('DrizzleTranscriptChunkRepository', () => {
         rawTranscriptId: testRawTranscriptId,
         sequenceNumber: 1,
         text: 'Minimal chunk',
+        contexts: ['meeting:' + testMeetingId],
         chunkStrategy: 'fixed',
       };
 
@@ -162,7 +163,7 @@ describe('DrizzleTranscriptChunkRepository', () => {
       const results = await repository.findByContext(contextTag);
 
       expect(results).toHaveLength(1);
-      expect(results[0].text).toBe('Chunk with context');
+      expect(results[0]!.text).toBe('Chunk with context');
     });
   });
 

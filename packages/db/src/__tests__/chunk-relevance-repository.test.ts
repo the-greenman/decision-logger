@@ -128,8 +128,8 @@ describe('DrizzleChunkRelevanceRepository', () => {
       const results = await repository.findByDecisionField(testDecisionContextId, testFieldId);
 
       expect(results).toHaveLength(1);
-      expect(results[0].fieldId).toBe(testFieldId);
-      expect(results[0].relevance).toBe(0.8);
+      expect(results[0]!.fieldId).toBe(testFieldId);
+      expect(results[0]!.relevance).toBe(0.8);
     });
 
     it('should return empty array for non-existent field', async () => {

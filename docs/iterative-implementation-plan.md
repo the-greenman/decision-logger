@@ -168,6 +168,18 @@ decision-logger meeting create "Test Meeting" --date 2026-02-27 --participants A
 # Output: Created meeting: mtg_abc123
 ```
 
+**Manual Smoke Test**:
+```bash
+# Confirm the first real user flow feels coherent
+decision-logger meeting create "Manual Smoke A" --date 2026-02-27 --participants Alice
+decision-logger meeting create "Manual Smoke B" --date 2026-02-28 --participants Bob,Carol
+
+# Confirm API and CLI are both usable
+curl -X POST http://localhost:3000/api/meetings \
+  -H "Content-Type: application/json" \
+  -d '{"title":"API Smoke","date":"2026-02-27","participants":["Alice"]}'
+```
+
 ### Phase 0 Exit Criteria
 - [x] Postgres container running and healthy (`docker-compose ps`)
 - [x] Both `decision_logger_dev` and `decision_logger_test` databases accessible
@@ -243,6 +255,13 @@ cat apps/api/openapi.yaml  # Valid, auto-generated spec
 ```bash
 pnpm db:seed  # Runs without error, inserts placeholder data
 pnpm db:studio  # decision_fields and decision_templates tables are not empty
+```
+
+**Manual Smoke Test**:
+```bash
+# Sanity-check generated contracts and seeded data by hand
+rg -n "Meeting|TranscriptChunk|FlaggedDecision" apps/api/openapi.yaml
+pnpm db:studio
 ```
 
 ### Phase 1 Exit Criteria
@@ -358,6 +377,19 @@ decision-logger field list --category evaluation  # Shows evaluation fields
 decision-logger template list  # Shows 6 templates
 decision-logger template show technology-selection  # Shows field composition
 decision-logger decisions flag mtg_1 --title "Test" --segments chunk-1,chunk-2
+```
+
+**Manual Smoke Test**:
+```bash
+# Prove the data layer is actually explorable
+decision-logger context set-meeting mtg_1
+decision-logger transcript add --text "We should replace the roof this quarter"
+decision-logger transcript add --text "Let's get two quotes first"
+decision-logger transcript list
+decision-logger transcript list --context meeting:mtg_1
+
+# Try an invalid lookup and verify the error is useful
+decision-logger meeting show does-not-exist
 ```
 
 ### Phase 2 Exit Criteria
@@ -496,6 +528,20 @@ decision-logger draft show
 # Review draft quality, refine prompts if needed
 ```
 
+**Manual Smoke Test**:
+```bash
+# Compare positive and negative behavior, not just happy-path output
+decision-logger transcript upload test-cases/explicit-decisions.json
+decision-logger decisions flagged
+
+decision-logger transcript upload test-cases/discussion-not-decision.json
+decision-logger decisions flagged
+
+# If supported, compare mock and real flows for ergonomics
+decision-logger decisions flagged --mock
+decision-logger draft generate --mock
+```
+
 ### Phase 3 Exit Criteria
 - [ ] LLM calls abstracted behind interface
 - [ ] All LLM logic testable with mocks
@@ -624,6 +670,22 @@ decision-logger draft show  # decision_statement unchanged, options updated
 decision-logger decision log --type consensus --details "All agreed" --actors Alice,Bob --logged-by Alice
 ```
 
+**Manual Smoke Test**:
+```bash
+# Exercise state transitions intentionally
+decision-logger context show
+decision-logger context set-field options
+decision-logger transcript add --text "Option 3 is phased replacement over two quarters"
+decision-logger draft regenerate
+decision-logger draft lock-field options
+decision-logger draft regenerate
+decision-logger context clear-field
+decision-logger context show
+
+# Try an invalid finalization and confirm it fails clearly
+decision-logger decision log --type consensus --details "All agreed" --logged-by Alice
+```
+
 ### Phase 4 Exit Criteria
 - [ ] Context management working
 - [ ] Draft generation respects locks
@@ -709,6 +771,18 @@ decision-logger draft expert-advice technical
 decision-logger draft expert-advice legal
 decision-logger draft expert-advice stakeholder
 # Manually review all three expert responses
+```
+
+**Manual Smoke Test**:
+```bash
+# Verify expert personas are meaningfully distinct
+decision-logger draft expert-advice technical
+decision-logger draft expert-advice legal
+decision-logger draft expert-advice stakeholder
+
+# Confirm weak context is handled gracefully
+decision-logger context clear-decision
+decision-logger draft expert-advice technical
 ```
 
 ### Phase 5 Exit Criteria
@@ -834,6 +908,21 @@ curl http://localhost:3000/api/meetings  # Returns []
 curl http://localhost:3000/docs  # OpenAPI spec UI
 ```
 
+**Manual Smoke Test**:
+```bash
+# Hit the most important routes directly
+curl -X POST http://localhost:3000/api/meetings/mtg_1/transcripts/add \
+  -H "Content-Type: application/json" \
+  -d '{"text":"We should approve the pilot budget"}'
+
+curl -X POST http://localhost:3000/api/meetings/mtg_1/transcripts/stream \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Lets revisit the rollout plan next week","sequenceNumber":1}'
+
+curl http://localhost:3000/api/meetings/mtg_1/chunks
+curl http://localhost:3000/api/meetings/mtg_1/flagged-decisions
+```
+
 ### Phase 6 Exit Criteria
 - [ ] All endpoints implemented
 - [ ] OpenAPI spec complete and accurate
@@ -882,6 +971,15 @@ decision-logger draft generate  # No meeting context → clear error message
 decision-logger meeting create --help  # Shows usage examples
 ```
 
+**Manual Smoke Test**:
+```bash
+# Check command discoverability and bad-state handling
+decision-logger --help
+decision-logger transcript --help
+decision-logger context set-decision does-not-exist
+decision-logger transcript stream --file missing.txt
+```
+
 ### Phase 7 Exit Criteria
 - [ ] Interactive prompts working with Clack
 - [ ] Spinners and colored output enhance UX
@@ -909,6 +1007,20 @@ decision-logger meeting create --help  # Shows usage examples
 - [ ] End-to-end workflow test
 - [ ] Performance benchmarks
 - [ ] Security review
+
+**Manual Smoke Test**:
+```bash
+# Run one realistic session without shortcuts
+decision-logger meeting create "Release Readiness Test" --date 2026-02-27 --participants Alice,Bob,Carol
+decision-logger context set-meeting mtg_1
+decision-logger transcript upload examples/final-smoke-test.json
+decision-logger decisions flagged
+decision-logger context set-decision flag_1
+decision-logger draft generate
+decision-logger draft lock-field decision_statement
+decision-logger decision log --type consensus --details "Approved in review" --actors Alice,Bob,Carol --logged-by Alice
+decision-logger decision export log_1 --format markdown
+```
 
 ### Phase 8 Exit Criteria
 - [ ] Export formats working
