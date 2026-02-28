@@ -28,6 +28,19 @@ export class MeetingService {
     return this.repo.findAll();
   }
 
+  async update(id: string, data: Partial<Pick<CreateMeeting, 'title' | 'participants'>>): Promise<Meeting> {
+    if (!id) {
+      throw new Error('Meeting ID is required');
+    }
+    
+    // Business logic: ensure at least one participant if updating participants
+    if (data.participants !== undefined && data.participants.length === 0) {
+      throw new Error('At least one participant is required');
+    }
+    
+    return this.repo.update(id, data);
+  }
+
   async updateStatus(id: string, status: 'active' | 'completed'): Promise<Meeting> {
     if (!id) {
       throw new Error('Meeting ID is required');

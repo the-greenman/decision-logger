@@ -462,6 +462,7 @@ pnpm test:coverage  # >80% coverage on packages/core
 - [x] `decision-logger decision context list [--meeting-id <id>]`
 - [x] `decision-logger meeting list`
 - [x] `decision-logger meeting show <id>`
+- [x] `decision-logger meeting update <id> [--title <title>] [--participants <participants>]`
 - [x] `decision-logger field list [--category <category>]`
 - [x] `decision-logger field show <id>`
 - [x] `decision-logger template list`

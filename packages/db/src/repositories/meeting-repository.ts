@@ -42,8 +42,32 @@ export class DrizzleMeetingRepository {
   }
 
   async findAll(): Promise<Meeting[]> {
-    const results = await db.select().from(meetings);
-    return results.map((r) => this.mapToMeeting(r));
+    const result = await db.select().from(meetings).orderBy(meetings.date);
+    return result.map(this.mapToMeeting);
+  }
+
+  async update(id: string, data: Partial<Pick<CreateMeeting, 'title' | 'participants'>>): Promise<Meeting> {
+    const updateData: Partial<MeetingInsert> = {};
+    
+    if (data.title !== undefined) {
+      updateData.title = data.title;
+    }
+    
+    if (data.participants !== undefined) {
+      updateData.participants = data.participants;
+    }
+
+    const result = await db
+      .update(meetings)
+      .set(updateData)
+      .where(eq(meetings.id, id))
+      .returning();
+
+    if (!result[0]) {
+      throw new Error('Meeting not found');
+    }
+
+    return this.mapToMeeting(result[0]);
   }
 
   async updateStatus(

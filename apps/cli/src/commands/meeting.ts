@@ -103,3 +103,41 @@ meetingCommand
       process.exit(1);
     }
   });
+
+// Update meeting command
+meetingCommand
+  .command('update')
+  .description('Update meeting title or participants')
+  .argument('<id>', 'Meeting ID')
+  .option('-t, --title <title>', 'New meeting title')
+  .option('-p, --participants <participants>', 'Comma-separated list of participants')
+  .action(async (id, options) => {
+    try {
+      if (!options.title && !options.participants) {
+        console.error(chalk.red('Error: At least one of --title or --participants must be provided'));
+        process.exit(1);
+      }
+
+      const updateData: Partial<{ title: string; participants: string[] }> = {};
+      
+      if (options.title) {
+        updateData.title = options.title;
+      }
+      
+      if (options.participants) {
+        updateData.participants = options.participants.split(',').map((p: string) => p.trim());
+      }
+
+      const meeting = await meetingService.update(id, updateData);
+
+      console.log(chalk.green('✓ Meeting updated successfully'));
+      console.log(chalk.gray(`ID: ${meeting.id}`));
+      console.log(chalk.white(`Title: ${meeting.title}`));
+      console.log(chalk.white(`Date: ${meeting.date}`));
+      console.log(chalk.white(`Participants: ${meeting.participants.join(', ')}`));
+      console.log(chalk.gray(`Status: ${meeting.status}`));
+    } catch (error) {
+      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
+      process.exit(1);
+    }
+  });
