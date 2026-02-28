@@ -4,6 +4,7 @@ export { TranscriptService } from './services/transcript-service';
 
 // Interfaces
 export type { IMeetingRepository } from './interfaces/i-meeting-repository';
+export type { IFlaggedDecisionRepository } from './interfaces/i-flagged-decision-repository';
 export type {
   IRawTranscriptRepository,
   ITranscriptChunkRepository,

@@ -230,6 +230,7 @@ export const FlaggedDecisionSchema = z.object({
 });
 
 export type FlaggedDecision = z.infer<typeof FlaggedDecisionSchema>;
+export type CreateFlaggedDecision = Omit<FlaggedDecision, 'id' | 'status' | 'createdAt'>;
 
 // ============================================================================
 // DECISION CONTEXT SCHEMAS
