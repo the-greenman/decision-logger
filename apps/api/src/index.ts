@@ -36,7 +36,9 @@ app.openapi(createMeetingRoute, async (c) => {
     const meeting = await meetingService.create(data);
     return c.json(meeting, 201);
   } catch (error) {
-    return c.json({ error: error.message }, 400);
+    console.error('Error creating meeting:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: message }, 400);
   }
 });
 
@@ -130,10 +132,16 @@ if (isMainModule) {
     
     // Convert Node request to Web Request
     const url = new URL(req.url || '/', `http://${req.headers.host}`);
+    const headers = new Headers(
+      Object.entries(req.headers)
+        .filter(([, v]) => v !== undefined) 
+        .map(([k, v]) => [k, v]) as [string, string][]
+    );
+    
     const request = new Request(url, {
-      method: req.method,
-      headers: new Headers(Object.entries(req.headers).filter(([k, v]) => v !== undefined) as [string, string][]),
-      body: body.length > 0 ? body : undefined,
+      method: req.method || 'GET',
+      headers,
+      body: body.length > 0 ? body : null,
     });
     
     // Call Hono app
