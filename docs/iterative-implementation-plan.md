@@ -31,7 +31,7 @@ This document defines a detailed, phased implementation plan with validation che
 
 ## Phase 0: Vertical Slice (Day 1)
 
-**Status**: complete and aligned with the Zod-first architecture. The current implementation already uses `packages/schema` for `MeetingSchema` and `@hono/zod-openapi` for the first API route.
+**Status**: ✅ COMPLETE - All validation checkpoints passed
 
 **Goal**: Prove the entire stack works end-to-end with minimal functionality.
 
@@ -39,10 +39,10 @@ This document defines a detailed, phased implementation plan with validation che
 
 One-time setup required before any database-dependent work. All subsequent phases assume this is complete.
 
-- [ ] Copy `.env.example` → `.env` — credentials must match `docker-compose.yml` (already aligned out of the box)
-- [ ] Start Postgres: `docker-compose up -d`
-- [ ] Verify container healthy: `docker-compose ps` shows `decision-logger-db` as `healthy`
-- [ ] Confirm test database created by init script: both `decision_logger_dev` and `decision_logger_test` are accessible
+- [x] Copy `.env.example` → `.env` — credentials must match `docker-compose.yml` (already aligned out of the box)
+- [x] Start Postgres: `docker-compose up -d`
+- [x] Verify container healthy: `docker-compose ps` shows `decision-logger-db` as `healthy`
+- [x] Confirm test database created by init script: both `decision_logger_dev` and `decision_logger_test` are accessible
 
 **Validation Checkpoint 0.0**:
 ```bash
@@ -71,7 +71,7 @@ curl http://localhost:3000/health  # Returns { "status": "ok" }
 
 ### 0.2 First Database Table
 - [x] Define `meetings` table in `packages/db/schema.ts`
-- [ ] **Create `packages/db/src/client.ts`** — Drizzle connection using `DATABASE_URL` env var (prerequisite for 0.3)
+- [x] **Create `packages/db/src/client.ts`** — Drizzle connection using `DATABASE_URL` env var (prerequisite for 0.3)
 - [x] Run `drizzle-kit generate` to create migration
 - [x] Apply migration to local PostgreSQL
 - [x] Verify: Table exists via `psql` or Drizzle Studio
@@ -86,9 +86,9 @@ pnpm db:studio   # Can view empty meetings table
 ### 0.3 First Repository (TDD)
 - [x] Define `IMeetingRepository` interface in `packages/core`
 - [x] Write failing test: `MeetingRepository.create()` returns a meeting
-- [ ] **Implement `DrizzleMeetingRepository` in `packages/db/src/repositories/`** (uses DB client from 0.2 — not an in-memory mock)
-- [ ] **Wire `DrizzleMeetingRepository` into `apps/api` and `apps/cli`** (replace `MockMeetingRepository`)
-- [ ] Test passes against real test DB
+- [x] **Implement `DrizzleMeetingRepository` in `packages/db/src/repositories/`** (uses DB client from 0.2 — not an in-memory mock)
+- [x] **Wire `DrizzleMeetingRepository` into `apps/api` and `apps/cli`** (replace `MockMeetingRepository`)
+- [x] Test passes against real test DB
 
 **Validation Checkpoint 0.3**:
 ```bash
@@ -130,7 +130,7 @@ curl http://localhost:3000/docs  # OpenAPI spec available
 - [x] Create `apps/cli` with Commander.js
 - [x] Implement `decision-logger meeting create <title>` command
 - [x] Wire to API or directly to service
-- [ ] **Write E2E smoke test: run CLI command, assert output contains a meeting ID**
+- [x] **Write E2E smoke test: run CLI command, assert output contains a meeting ID**
 
 **Validation Checkpoint 0.6**:
 ```bash
@@ -140,11 +140,11 @@ decision-logger meeting create "Test Meeting" --date 2026-02-27 --participants A
 ```
 
 ### Phase 0 Exit Criteria
-- [ ] Postgres container running and healthy (`docker-compose ps`)
-- [ ] Both `decision_logger_dev` and `decision_logger_test` databases accessible
+- [x] Postgres container running and healthy (`docker-compose ps`)
+- [x] Both `decision_logger_dev` and `decision_logger_test` databases accessible
 - [x] Monorepo builds and tests pass
-- [ ] Single meeting can be created via API **and persists in real DB**
-- [ ] Single meeting can be created via CLI **and persists in real DB**
+- [x] Single meeting can be created via API **and persists in real DB**
+- [x] Single meeting can be created via CLI **and persists in real DB**
 - [x] OpenAPI spec auto-generated from Zod
 - [x] TDD workflow proven (test → implement → pass)
 - [x] DI pattern working (service uses injected repository)
@@ -154,24 +154,24 @@ decision-logger meeting create "Test Meeting" --date 2026-02-27 --participants A
 
 ## Phase 1: Schema Foundation (Days 2-3)
 
-**Goal**: Complete the Zod schema layer and establish the "Zod-to-All" pipeline.
+**Status**: ✅ COMPLETE - All schemas implemented and aligned
 
 ### 1.1 Domain Schemas
-- [ ] `MeetingSchema` (id, title, date, participants, status, createdAt)
-- [ ] `RawTranscriptSchema` (id, meetingId, source, format, content, metadata, uploadedAt, uploadedBy)
-- [ ] `TranscriptChunkSchema` (id, meetingId, rawTranscriptId, sequenceNumber, text, speaker?, startTime?, endTime?, chunkStrategy, tokenCount?, wordCount?, contexts, topics?, createdAt)
-- [ ] `ChunkRelevanceSchema` (id, chunkId, decisionContextId, fieldId, relevance, taggedBy, taggedAt)
-- [ ] `DecisionContextWindowSchema` (id, decisionContextId, chunkIds, selectionStrategy, totalTokens, totalChunks, relevanceScores, usedFor, createdAt, updatedAt)
-- [ ] `FlaggedDecisionSchema` (id, meetingId, suggestedTitle, contextSummary, confidence, chunkIds, suggestedTemplateId, templateConfidence, status, createdAt)
-- [ ] `DecisionContextSchema` (id, meetingId, flaggedDecisionId, title, templateId, activeField, lockedFields, draftData, status, createdAt, updatedAt)
-- [ ] `DecisionLogSchema` (id, meetingId, decisionContextId, templateId, templateVersion, fields, decisionMethod, sourceChunkIds, loggedAt, loggedBy)
-- [ ] `DecisionFieldSchema` (id, name, description, category, extractionPrompt, fieldType, placeholder, validationRules, version, isCustom, createdAt)
-- [ ] `DecisionTemplateSchema` (id, name, description, category, fields: TemplateFieldAssignment[], version, isDefault, isCustom, createdAt)
-- [ ] `TemplateFieldAssignmentSchema` (fieldId, order, required, customLabel, customDescription)
-- [ ] `ExpertTemplateSchema` (id, name, type, promptTemplate, mcpAccess, outputSchema, isActive, createdAt, updatedAt)
-- [ ] `MCPServerSchema` (id, name, type, connectionConfig, capabilities, status, createdAt, updatedAt)
-- [ ] `ExpertAdviceSchema` (id, decisionContextId, expertId, expertName, request, response, mcpToolsUsed, requestedAt)
-- [ ] Export all schemas and inferred types from `packages/schema`
+- [x] `MeetingSchema` (id, title, date, participants, status, createdAt)
+- [x] `RawTranscriptSchema` (id, meetingId, source, format, content, metadata, uploadedAt, uploadedBy)
+- [x] `TranscriptChunkSchema` (id, meetingId, rawTranscriptId, sequenceNumber, text, speaker?, startTime?, endTime?, chunkStrategy, tokenCount?, wordCount?, contexts, topics?, createdAt)
+- [x] `ChunkRelevanceSchema` (id, chunkId, decisionContextId, fieldId, relevance, taggedBy, taggedAt)
+- [x] `DecisionContextWindowSchema` (id, decisionContextId, chunkIds, selectionStrategy, totalTokens, totalChunks, relevanceScores, usedFor, createdAt, updatedAt)
+- [x] `FlaggedDecisionSchema` (id, meetingId, suggestedTitle, contextSummary, confidence, chunkIds, suggestedTemplateId, templateConfidence, status, createdAt)
+- [x] `DecisionContextSchema` (id, meetingId, flaggedDecisionId, title, templateId, activeField, lockedFields, draftData, status, createdAt, updatedAt)
+- [x] `DecisionLogSchema` (id, meetingId, decisionContextId, templateId, templateVersion, fields, decisionMethod, sourceChunkIds, loggedAt, loggedBy)
+- [x] `DecisionFieldSchema` (id, name, description, category, extractionPrompt, fieldType, placeholder, validationRules, version, isCustom, createdAt)
+- [x] `DecisionTemplateSchema` (id, name, description, category, fields: TemplateFieldAssignment[], version, isDefault, isCustom, createdAt)
+- [x] `TemplateFieldAssignmentSchema` (fieldId, order, required, customLabel, customDescription)
+- [x] `ExpertTemplateSchema` (id, name, type, promptTemplate, mcpAccess, outputSchema, isActive, createdAt, updatedAt)
+- [x] `MCPServerSchema` (id, name, type, connectionConfig, capabilities, status, createdAt, updatedAt)
+- [x] `ExpertAdviceSchema` (id, decisionContextId, expertId, expertName, request, response, mcpToolsUsed, requestedAt)
+- [x] Export all schemas and inferred types from `packages/schema`
 
 **Validation Checkpoint 1.1**:
 ```typescript
@@ -181,11 +181,11 @@ FlaggedDecisionSchema.parse({ meetingId: "mtg_1", suggestedTitle: "Test", confid
 ```
 
 ### 1.2 Drizzle Schema Alignment
-- [ ] Update `packages/db/schema.ts` to match all Zod schemas
-- [ ] Create "Schema Sanity Check" test that validates Zod ↔ Drizzle alignment — **must include a round-trip insert/read for at least one table against a real test DB** (structural name-matching alone is not sufficient)
-- [ ] Generate migrations for all tables
-- [ ] Apply migrations
-- [ ] **Delete `packages/db/src/schema-phase0.ts`** (superseded by full schema; keeping it creates confusion)
+- [x] Update `packages/db/schema.ts` to match all Zod schemas
+- [x] Create "Schema Sanity Check" test that validates Zod ↔ Drizzle alignment — **must include a round-trip insert/read for at least one table against a real test DB** (structural name-matching alone is not sufficient)
+- [x] Generate migrations for all tables
+- [x] Apply migrations
+- [x] **Delete `packages/db/src/schema-phase0.ts`** (superseded by full schema; keeping it creates confusion)
 
 **Validation Checkpoint 1.2**:
 ```bash
@@ -194,10 +194,10 @@ pnpm db:migrate  # All migrations apply
 ```
 
 ### 1.3 OpenAPI Pipeline
-- [ ] Configure `@hono/zod-openapi` route factory
-- [ ] Create route definitions using Zod schemas for request/response
-- [ ] Auto-generate `openapi.yaml` on build
-- [ ] Delete manual `docs/openapi.yaml` (decommissioned)
+- [x] Configure `@hono/zod-openapi` route factory
+- [x] Create route definitions using Zod schemas for request/response
+- [x] Auto-generate `openapi.yaml` on build
+- [x] Delete manual `docs/openapi.yaml` (decommissioned)
 
 **Validation Checkpoint 1.3**:
 ```bash
@@ -206,9 +206,9 @@ cat apps/api/openapi.yaml  # Valid, auto-generated spec
 ```
 
 ### 1.4 Seed Script Scaffold
-- [ ] Create `packages/db/scripts/seed.ts` with a runnable entry point
-- [ ] Seed at minimum: empty field categories and a single placeholder template (confirms the script works and the tables accept data)
-- [ ] Wire to `pnpm db:seed` in `packages/db/package.json`
+- [x] Create `packages/db/scripts/seed.ts` with a runnable entry point
+- [x] Seed at minimum: empty field categories and a single placeholder template (confirms the script works and the tables accept data)
+- [x] Wire to `pnpm db:seed` in `packages/db/package.json`
 
 **Validation Checkpoint 1.4**:
 ```bash
@@ -217,24 +217,24 @@ pnpm db:studio  # decision_fields and decision_templates tables are not empty
 ```
 
 ### Phase 1 Exit Criteria
-- [ ] All domain schemas defined in `packages/schema`
-- [ ] Drizzle schema matches Zod (verified by test — including DB round-trip)
-- [ ] OpenAPI auto-generated from route definitions
-- [ ] Manual `openapi.yaml` removed from repo
-- [ ] `packages/db/src/schema-phase0.ts` deleted
-- [ ] `pnpm db:seed` runs without error
+- [x] All domain schemas defined in `packages/schema`
+- [x] Drizzle schema matches Zod (verified by test — including DB round-trip)
+- [x] OpenAPI auto-generated from route definitions
+- [x] Manual `openapi.yaml` removed from repo
+- [x] `packages/db/src/schema-phase0.ts` deleted
+- [x] `pnpm db:seed` runs without error
 
 ---
 
 ## Phase 2: Core Data Services (Days 4-6)
 
-**Goal**: Implement all data access layers with full TDD coverage.
+**Status**: ✅ COMPLETE - Core data services implemented with real database
 
 ### 2.1 Meeting Service (Complete)
-- [ ] `IMeetingRepository`: create, findById, findAll, updateStatus
-- [ ] Unit tests for each method (mocked DB)
-- [ ] `MeetingService`: business logic wrapper
-- [ ] Integration tests (real test DB)
+- [x] `IMeetingRepository`: create, findById, findAll, updateStatus
+- [x] Unit tests for each method (mocked DB)
+- [x] `MeetingService`: business logic wrapper
+- [x] Integration tests (real test DB)
 
 **Validation Checkpoint 2.1**:
 ```bash
@@ -332,14 +332,14 @@ decision-logger decisions flag mtg_1 --title "Test" --segments chunk-1,chunk-2
 ```
 
 ### Phase 2 Exit Criteria
-- [ ] All 7 core services implemented and tested (including DecisionFieldService)
-- [ ] Unit test coverage >80%
-- [ ] Integration tests prove DB operations work
-- [ ] **Field library seeded (~25 fields)**
-- [ ] **6 core templates seeded (Standard, Technology, Strategy, Budget, Policy, Proposal)**
-- [ ] Context tagging logic working
-- [ ] **CLI commands available for manual testing**
-- [ ] No LLM dependencies yet (pure data layer)
+- [x] All 7 core services implemented and tested (including DecisionFieldService)
+- [x] Unit test coverage >80%
+- [x] Integration tests prove DB operations work
+- [x] **Field library seeded (~25 fields)**
+- [x] **6 core templates seeded (Standard, Technology, Strategy, Budget, Policy, Proposal)**
+- [x] Context tagging logic working
+- [x] **CLI commands available for manual testing**
+- [x] No LLM dependencies yet (pure data layer)
 
 ---
 
@@ -891,18 +891,18 @@ decision-logger meeting create --help  # Shows usage examples
 
 ## Validation Checkpoint Summary
 
-| Phase | Key Validation | Pass Criteria |
-|-------|----------------|---------------|
-| 0.0 | Infrastructure | Postgres healthy, both DBs accessible |
-| 0 | Vertical slice | API creates meeting, persists in real DB |
-| 1 | Schema pipeline | OpenAPI auto-generated |
-| 2 | Data services | >80% test coverage |
-| 3 | LLM integration | Mock + real API tests |
-| 4 | Decision workflow | Lock/regenerate works |
-| 5 | Expert system | Consultation returns advice |
-| 6 | API complete | All endpoints tested |
-| 7 | CLI complete | Full workflow via CLI |
-| 8 | Production ready | Exports + docs complete |
+| Phase | Key Validation | Pass Criteria | Status |
+|-------|----------------|---------------|---------|
+| 0.0 | Infrastructure | Postgres healthy, both DBs accessible | ✅ |
+| 0 | Vertical slice | API creates meeting, persists in real DB | ✅ |
+| 1 | Schema pipeline | OpenAPI auto-generated | ✅ |
+| 2 | Data services | >80% test coverage | ✅ |
+| 3 | LLM integration | Mock + real API tests | ⏳ |
+| 4 | Decision workflow | Lock/regenerate works | ⏳ |
+| 5 | Expert system | Consultation returns advice | ⏳ |
+| 6 | API complete | All endpoints tested | ⏳ |
+| 7 | CLI complete | Full workflow via CLI | ⏳ |
+| 8 | Production ready | Exports + docs complete | ⏳ |
 
 ---
 
@@ -925,17 +925,17 @@ decision-logger meeting create --help  # Shows usage examples
 
 ## Timeline Summary
 
-| Phase | Duration | Cumulative |
-|-------|----------|------------|
-| 0: Vertical Slice | 1 day | Day 1 |
-| 1: Schema Foundation | 2 days | Day 3 |
-| 2: Core Data Services | 3 days | Day 6 |
-| 3: LLM Integration | 3 days | Day 9 |
-| 4: Decision Workflow | 3 days | Day 12 |
-| 5: Expert System | 3 days | Day 15 |
-| 6: API Layer | 3 days | Day 18 |
-| 7: CLI Application | 3 days | Day 21 |
-| 8: Export & Polish | 3 days | Day 24 |
+| Phase | Duration | Cumulative | Status |
+|-------|----------|------------|---------|
+| 0: Vertical Slice | 1 day | Day 1 | ✅ Complete |
+| 1: Schema Foundation | 2 days | Day 3 | ✅ Complete |
+| 2: Core Data Services | 3 days | Day 6 | ✅ Complete |
+| 3: LLM Integration | 3 days | Day 9 | ⏳ Next |
+| 4: Decision Workflow | 3 days | Day 12 | ⏳ |
+| 5: Expert System | 3 days | Day 15 | ⏳ |
+| 6: API Layer | 3 days | Day 18 | ⏳ |
+| 7: CLI Application | 3 days | Day 21 | ⏳ |
+| 8: Export & Polish | 3 days | Day 24 | ⏳ |
 
 **Total: ~24 working days (5 weeks)**
 
