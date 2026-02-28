@@ -5,6 +5,7 @@ export { FlaggedDecisionService } from './services/flagged-decision-service';
 export { DecisionContextService } from './services/decision-context-service';
 export { DecisionLogService } from './services/decision-log-service';
 export { DecisionFieldService } from './services/decision-field-service';
+export { DecisionTemplateService } from './services/decision-template-service';
 
 // Service Factory
 export { 
@@ -30,6 +31,11 @@ export type { IDecisionLogRepository } from './interfaces/i-decision-log-reposit
 export type { IDecisionLogService } from './interfaces/i-decision-log-service';
 export type { IDecisionFieldRepository } from './interfaces/i-decision-field-repository';
 export type { IDecisionFieldService } from './interfaces/i-decision-field-service';
+export type { 
+  IDecisionTemplateRepository,
+  ITemplateFieldAssignmentRepository 
+} from './interfaces/i-decision-template-repository';
+export type { IDecisionTemplateService } from './interfaces/i-decision-template-service';
 export type {
   IRawTranscriptRepository,
   ITranscriptChunkRepository,
@@ -44,3 +50,9 @@ export type { FlaggedDecision, CreateFlaggedDecision } from '@repo/schema';
 export type { DecisionContext } from '@repo/schema';
 export type { DecisionLog, CreateDecisionLog } from '@repo/schema';
 export type { DecisionField, CreateDecisionField } from '@repo/schema';
+export type { 
+  DecisionTemplate, 
+  CreateDecisionTemplate,
+  TemplateFieldAssignment,
+  CreateTemplateFieldAssignment 
+} from '@repo/schema';

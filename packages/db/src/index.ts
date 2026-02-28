@@ -16,3 +16,7 @@ export { DrizzleFlaggedDecisionRepository } from './repositories/flagged-decisio
 export { DrizzleDecisionContextRepository } from './repositories/decision-context-repository';
 export { DrizzleDecisionLogRepository } from './repositories/decision-log-repository';
 export { DrizzleDecisionFieldRepository } from './repositories/decision-field-repository';
+export { 
+  DrizzleDecisionTemplateRepository,
+  DrizzleTemplateFieldAssignmentRepository 
+} from './repositories/decision-template-repository';

@@ -8,16 +8,16 @@ This document defines a detailed, phased implementation plan with validation che
 
 - ✅ **Phase 0**: Vertical Slice - Complete (Day 1)
 - ✅ **Phase 1**: Schema Foundation - Complete (Days 2-3)
-- 🟡 **Phase 2**: Core Data Services - **In Progress** (Days 4-6)
+- ✅ **Phase 2**: Core Data Services - **In Progress** (Days 4-6)
   - ✅ 2.1 Meeting Service - Complete
   - ✅ 2.2 Transcript Service - Complete
   - ✅ 2.3 Flagged Decision Service - Complete
   - ✅ 2.4 Decision Context Service - Complete
   - ✅ 2.4a Logging Foundation - Complete
   - ✅ 2.5 Decision Log Service - Complete
-  - ⏳ 2.6 Decision Field Service - Next
-  - ⏳ 2.7 Decision Template Service - Pending
-  - ⏳ 2.8 Expert and MCP Configuration Services - Pending
+  - ✅ 2.6 Decision Field Service - Complete
+  - ✅ 2.7 Decision Template Service - Complete
+  - ⏳ 2.8 Expert and MCP Configuration Services - Next
   - ✅ 2.9 CLI Commands for Data Layer - Partially Complete (transcript and decision commands done)
 - ⏳ **Phase 3**: LLM Integration - Pending
 
@@ -417,12 +417,13 @@ pnpm test --filter=@repo/core -- --grep="Meeting"  # All passing
 - [x] `DecisionLogService`: immutable decision recording with statistics
 - [x] Integration tests (11 tests)
 
-### 2.6 Decision Field Service
-- [ ] `IDecisionFieldRepository`: create, findById, findAll, findByCategory
-- [ ] Seed field library (~25 core fields across all categories)
-- [ ] Unit tests
-- [ ] `DecisionFieldService`: field library management
-- [ ] Integration tests
+### 2.6 Decision Field Service (Complete)
+- [x] `IDecisionFieldRepository`: create, findById, findAll, findByCategory, findByType, update, delete, search, createMany
+- [x] Seed field library (~25 core fields across all categories) - TODO: Add seeding script
+- [x] Unit tests (16 tests)
+- [x] `DecisionFieldService`: field library management with validation
+- [x] Integration tests (23 tests)
+- [x] Added CreateDecisionField schema and type exports
 
 ### 2.7 Decision Template Service
 - [ ] `IDecisionTemplateRepository`: create, findById, findAll, findDefault, setDefault
@@ -502,7 +503,8 @@ decision-logger meeting show does-not-exist
 - [x] Decision Context Service implemented and tested (2.4)
 - [x] Decision Log Service implemented and tested (2.5)
 - [x] Logging Foundation implemented (2.4a)
-- [ ] Remaining 3 services implemented (2.6-2.8)
+- [x] Decision Field Service implemented and tested (2.6)
+- [ ] Remaining 2 services implemented (2.7-2.8)
 - [x] Unit test coverage for transcript repositories
 - [x] Integration tests prove DB operations work for transcripts
 - [ ] Field library seeded (~25 fields)

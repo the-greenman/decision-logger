@@ -402,6 +402,19 @@ export const TemplateFieldAssignmentSchema = z.object({
 
 export type TemplateFieldAssignment = z.infer<typeof TemplateFieldAssignmentSchema>;
 
+export const CreateTemplateFieldAssignmentSchema = TemplateFieldAssignmentSchema.omit({}).openapi('CreateTemplateFieldAssignment', {
+  description: 'Schema for creating a new template field assignment',
+  example: {
+    fieldId: '550e8400-e29b-41d4-a716-446655440005',
+    order: 0,
+    required: true,
+    customLabel: 'Decision Statement',
+    customDescription: 'Clear statement of what needs to be decided',
+  },
+});
+
+export type CreateTemplateFieldAssignment = z.infer<typeof CreateTemplateFieldAssignmentSchema>;
+
 export const DecisionTemplateSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -435,6 +448,32 @@ export const DecisionTemplateSchema = z.object({
 });
 
 export type DecisionTemplate = z.infer<typeof DecisionTemplateSchema>;
+
+export const CreateDecisionTemplateSchema = DecisionTemplateSchema.omit({
+  id: true,
+  version: true,
+  isDefault: true,
+  isCustom: true,
+  createdAt: true,
+}).openapi('CreateDecisionTemplate', {
+  description: 'Schema for creating a new decision template',
+  example: {
+    name: 'Technology Selection',
+    description: 'Template for choosing between technical options',
+    category: 'technology',
+    fields: [
+      {
+        fieldId: '550e8400-e29b-41d4-a716-446655440005',
+        order: 0,
+        required: true,
+        customLabel: 'Decision Statement',
+        customDescription: 'Clear statement of what needs to be decided',
+      },
+    ],
+  },
+});
+
+export type CreateDecisionTemplate = z.infer<typeof CreateDecisionTemplateSchema>;
 
 // ============================================================================
 // EXPERT TEMPLATE SCHEMAS
@@ -540,4 +579,8 @@ export type ExpertAdvice = z.infer<typeof ExpertAdviceSchema>;
 export {
   // Re-export for convenience
   z,
+  DecisionTemplateSchema,
+  CreateDecisionTemplateSchema,
+  TemplateFieldAssignmentSchema,
+  CreateTemplateFieldAssignmentSchema,
 };
