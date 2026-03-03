@@ -110,6 +110,13 @@ export class TranscriptService {
     return this.chunkRepo.search(meetingId, query);
   }
 
+  async processTranscript(
+    rawTranscriptId: string,
+    options: ChunkCreationOptions = { strategy: 'fixed' }
+  ): Promise<TranscriptChunk[]> {
+    return this.chunkTranscript(rawTranscriptId, options);
+  }
+
   private async chunkTranscript(
     rawTranscriptId: string,
     options: ChunkCreationOptions
