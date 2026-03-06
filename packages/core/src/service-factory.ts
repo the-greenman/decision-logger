@@ -105,7 +105,8 @@ export function createDraftGenerationService(): DraftGenerationService {
  */
 export function createFlaggedDecisionService(): FlaggedDecisionService {
   return new FlaggedDecisionService(
-    new DrizzleFlaggedDecisionRepository()
+    new DrizzleFlaggedDecisionRepository(),
+    new DrizzleTranscriptChunkRepository()
   );
 }
 
@@ -126,7 +127,10 @@ export function createGlobalContextService(): GlobalContextService {
   return new GlobalContextService(
     new FileGlobalContextStore(),
     new DrizzleMeetingRepository(),
-    new FlaggedDecisionService(new DrizzleFlaggedDecisionRepository()),
+    new FlaggedDecisionService(
+      new DrizzleFlaggedDecisionRepository(),
+      new DrizzleTranscriptChunkRepository()
+    ),
     new DecisionContextService(new DrizzleDecisionContextRepository()),
     new DecisionTemplateService(
       new DrizzleDecisionTemplateRepository(),

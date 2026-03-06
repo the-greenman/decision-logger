@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { FlaggedDecisionService } from '../../src/services/flagged-decision-service';
-import type { FlaggedDecision, CreateFlaggedDecision } from '@repo/schema';
+import type { FlaggedDecision, CreateFlaggedDecision, TranscriptChunk } from '@repo/schema';
 import { randomUUID } from 'crypto';
 
 // Mock repository for testing
@@ -18,14 +18,57 @@ const mockRepository = {
   updateStatus: vi.fn(),
 } as any; // Using any for simplicity since we're testing
 
+const mockTranscriptChunkRepository = {
+  create: vi.fn(),
+  findByMeetingId: vi.fn(),
+  findByContext: vi.fn(),
+  findById: vi.fn(),
+  search: vi.fn(),
+  findByDecisionContext: vi.fn(),
+} as any;
+
 describe('FlaggedDecisionService', () => {
   let service: FlaggedDecisionService;
   let testMeetingId: string;
+  let transcriptChunks: TranscriptChunk[];
 
   beforeEach(() => {
-    service = new FlaggedDecisionService(mockRepository);
     testMeetingId = randomUUID();
+    transcriptChunks = [
+      {
+        id: randomUUID(),
+        meetingId: testMeetingId,
+        rawTranscriptId: randomUUID(),
+        sequenceNumber: 12,
+        text: 'Chunk 12',
+        chunkStrategy: 'fixed',
+        contexts: [`meeting:${testMeetingId}`],
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: randomUUID(),
+        meetingId: testMeetingId,
+        rawTranscriptId: randomUUID(),
+        sequenceNumber: 13,
+        text: 'Chunk 13',
+        chunkStrategy: 'fixed',
+        contexts: [`meeting:${testMeetingId}`],
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: randomUUID(),
+        meetingId: testMeetingId,
+        rawTranscriptId: randomUUID(),
+        sequenceNumber: 14,
+        text: 'Chunk 14',
+        chunkStrategy: 'fixed',
+        contexts: [`meeting:${testMeetingId}`],
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    service = new FlaggedDecisionService(mockRepository, mockTranscriptChunkRepository);
     vi.clearAllMocks();
+    mockTranscriptChunkRepository.findByMeetingId.mockResolvedValue(transcriptChunks);
   });
 
   describe('createFlaggedDecision', () => {
@@ -313,6 +356,97 @@ describe('FlaggedDecisionService', () => {
         service.updateDecision(decisionId, { suggestedTitle: 'New Title' })
       ).rejects.toThrow('Decision not found');
       expect(mockRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('should update chunk IDs when provided', async () => {
+      const decisionId = randomUUID();
+      const existing: FlaggedDecision = {
+        id: decisionId,
+        meetingId: testMeetingId,
+        suggestedTitle: 'Original Title',
+        contextSummary: 'Original Context',
+        confidence: 0.8,
+        chunkIds: [randomUUID()],
+        status: 'pending',
+        priority: 3,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedChunkIds = transcriptChunks.slice(0, 2).map((chunk) => chunk.id);
+      const updated: FlaggedDecision = {
+        ...existing,
+        chunkIds: updatedChunkIds,
+        updatedAt: new Date().toISOString(),
+      };
+
+      mockRepository.findById.mockResolvedValue(existing);
+      mockRepository.update.mockResolvedValue(updated);
+
+      const result = await service.updateDecision(decisionId, {
+        chunkIds: updatedChunkIds,
+      });
+
+      expect(mockRepository.update).toHaveBeenCalledWith(decisionId, {
+        chunkIds: updatedChunkIds,
+      });
+      expect(result).toEqual(updated);
+    });
+
+    it('should reject chunk ID updates when the list is empty', async () => {
+      const decisionId = randomUUID();
+      const existing: FlaggedDecision = {
+        id: decisionId,
+        meetingId: testMeetingId,
+        suggestedTitle: 'Original Title',
+        contextSummary: 'Original Context',
+        confidence: 0.8,
+        chunkIds: [randomUUID()],
+        status: 'pending',
+        priority: 3,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      mockRepository.findById.mockResolvedValue(existing);
+
+      await expect(
+        service.updateDecision(decisionId, { chunkIds: [] })
+      ).rejects.toThrow('At least one chunk ID is required');
+      expect(mockRepository.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resolveChunkIdsFromSequenceSpec', () => {
+    it('should resolve comma-separated sequence ranges to normalized chunk IDs', async () => {
+      const chunkIds = await service.resolveChunkIdsFromSequenceSpec(testMeetingId, '12-13,14');
+
+      expect(mockTranscriptChunkRepository.findByMeetingId).toHaveBeenCalledWith(testMeetingId);
+      expect(chunkIds).toEqual(transcriptChunks.map((chunk) => chunk.id));
+    });
+
+    it('should resolve all to all chunk IDs for the meeting', async () => {
+      const chunkIds = await service.resolveChunkIdsFromSequenceSpec(testMeetingId, 'all');
+
+      expect(chunkIds).toEqual(transcriptChunks.map((chunk) => chunk.id));
+    });
+
+    it('should reject invalid range formats', async () => {
+      await expect(
+        service.resolveChunkIdsFromSequenceSpec(testMeetingId, '12-')
+      ).rejects.toThrow('Invalid segment range format: 12-');
+    });
+
+    it('should reject descending ranges', async () => {
+      await expect(
+        service.resolveChunkIdsFromSequenceSpec(testMeetingId, '14-12')
+      ).rejects.toThrow('Segment range cannot be descending: 14-12');
+    });
+
+    it('should reject out-of-bounds sequence numbers', async () => {
+      await expect(
+        service.resolveChunkIdsFromSequenceSpec(testMeetingId, '99')
+      ).rejects.toThrow('No transcript chunk found for sequence number 99');
     });
   });
 

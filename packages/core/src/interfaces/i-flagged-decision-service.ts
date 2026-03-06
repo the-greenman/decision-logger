@@ -20,9 +20,21 @@ export interface IFlaggedDecisionService {
   getDecisionById(id: string): Promise<FlaggedDecision | null>;
 
   /**
-   * Update a flagged decision (title and status only)
+   * Update a flagged decision
    */
-  updateDecision(id: string, data: { suggestedTitle?: string; status?: FlaggedDecision['status'] }): Promise<FlaggedDecision | null>;
+  updateDecision(
+    id: string,
+    data: {
+      suggestedTitle?: string;
+      status?: FlaggedDecision['status'];
+      chunkIds?: string[];
+    }
+  ): Promise<FlaggedDecision | null>;
+
+  /**
+   * Resolve a sequence-based segment selection spec to persisted transcript chunk IDs.
+   */
+  resolveChunkIdsFromSequenceSpec(meetingId: string, segmentSpec: string): Promise<string[]>;
 
   /**
    * Update the status of a flagged decision

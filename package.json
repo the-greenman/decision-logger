@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "build": "turbo run build",
+    "cli": "pnpm --filter ./apps/cli exec dotenv -e ../../.env -- node dist/index.js",
     "dev": "turbo run dev",
     "up:stack": "bash ./scripts/up-stack.sh",
     "test": "turbo run test",

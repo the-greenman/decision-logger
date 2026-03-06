@@ -72,6 +72,10 @@ class MockFlaggedDecisionService implements IFlaggedDecisionService {
     throw new Error('Not implemented');
   }
 
+  async resolveChunkIdsFromSequenceSpec(): Promise<string[]> {
+    throw new Error('Not implemented');
+  }
+
   async updateDecisionStatus(): Promise<FlaggedDecision> {
     throw new Error('Not implemented');
   }

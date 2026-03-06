@@ -13,6 +13,7 @@ interface IFlaggedDecisionRepository {
   create(data: CreateFlaggedDecision): Promise<FlaggedDecision>;
   findById(id: string): Promise<FlaggedDecision | null>;
   findByMeetingId(meetingId: string): Promise<FlaggedDecision[]>;
+  update(id: string, data: Partial<Omit<CreateFlaggedDecision, 'meetingId'>>): Promise<FlaggedDecision | null>;
   updateStatus(id: string, status: FlaggedDecision['status']): Promise<FlaggedDecision | null>;
 }
 
@@ -61,7 +62,7 @@ export class DrizzleFlaggedDecisionRepository implements IFlaggedDecisionReposit
 
   async update(
     id: string,
-    data: Partial<Omit<CreateFlaggedDecision, 'meetingId' | 'chunkIds'>>
+    data: Partial<Omit<CreateFlaggedDecision, 'meetingId'>>
   ): Promise<FlaggedDecision | null> {
     const updateData: any = {
       ...data,

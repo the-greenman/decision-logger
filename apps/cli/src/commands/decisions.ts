@@ -5,6 +5,18 @@ import { createFlaggedDecisionService } from '@repo/core';
 // Create service instance
 const decisionService = createFlaggedDecisionService();
 
+async function resolveChunkIdsForMeeting(meetingId: string, segmentSpec?: string, includeAll?: boolean): Promise<string[]> {
+  if (includeAll) {
+    return decisionService.resolveChunkIdsFromSequenceSpec(meetingId, 'all');
+  }
+
+  if (!segmentSpec) {
+    return [];
+  }
+
+  return decisionService.resolveChunkIdsFromSequenceSpec(meetingId, segmentSpec);
+}
+
 export const decisionsCommand = new Command('decisions')
   .description('Flagged decision management commands');
 
@@ -57,16 +69,18 @@ decisionsCommand
   .description('Manually flag a decision from transcript segments')
   .argument('<meeting-id>', 'Meeting ID')
   .requiredOption('-t, --title <title>', 'Decision title')
-  .option('-s, --segments <segments>', 'Comma-separated list of chunk IDs')
+  .option('-s, --segments <segments>', 'Sequence ranges like 12-18,22 or the literal value all')
+  .option('--all', 'Include all chunks from the meeting')
   .option('-c, --context <context>', 'Context summary')
   .option('--template <templateId>', 'Suggested template ID')
   .action(async (meetingId, options) => {
     try {
+      const chunkIds = await resolveChunkIdsForMeeting(meetingId, options.segments, options.all);
       const decision = await decisionService.createFlaggedDecision({
         meetingId,
         suggestedTitle: options.title,
-        contextSummary: options.context,
-        chunkIds: options.segments ? options.segments.split(',').map((s: string) => s.trim()) : [],
+        contextSummary: options.context ?? '',
+        chunkIds,
         suggestedTemplateId: options.template,
         templateConfidence: options.template ? 0.8 : undefined,
         confidence: 1.0, // Manual flags have high confidence
@@ -90,11 +104,27 @@ decisionsCommand
   .argument('<id>', 'Decision ID')
   .option('-t, --title <title>', 'New title')
   .option('-s, --status <status>', 'New status')
+  .option('--segments <segments>', 'Sequence ranges like 12-18,22 or the literal value all')
+  .option('--all', 'Replace current source chunks with all chunks from the decision meeting')
   .action(async (id, options) => {
     try {
       const updateData: any = {};
       if (options.title) updateData.suggestedTitle = options.title;
       if (options.status) updateData.status = options.status;
+
+      if (options.segments || options.all) {
+        const existing = await decisionService.getDecisionById(id);
+        if (!existing) {
+          console.error(chalk.red('Decision not found'));
+          process.exit(1);
+        }
+
+        updateData.chunkIds = await resolveChunkIdsForMeeting(
+          existing.meetingId,
+          options.segments,
+          options.all
+        );
+      }
       
       const decision = await decisionService.updateDecision(id, updateData);
       

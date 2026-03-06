@@ -5,10 +5,14 @@
 
 import type { IFlaggedDecisionService } from '../interfaces/i-flagged-decision-service';
 import type { IFlaggedDecisionRepository } from '../interfaces/i-flagged-decision-repository';
+import type { ITranscriptChunkRepository } from '../interfaces/transcript-repositories';
 import type { FlaggedDecision, CreateFlaggedDecision } from '@repo/schema';
 
 export class FlaggedDecisionService implements IFlaggedDecisionService {
-  constructor(private repository: IFlaggedDecisionRepository) {}
+  constructor(
+    private repository: IFlaggedDecisionRepository,
+    private transcriptChunkRepository?: ITranscriptChunkRepository,
+  ) {}
 
   async createFlaggedDecision(data: CreateFlaggedDecision): Promise<FlaggedDecision> {
     // Validate confidence is between 0 and 1
@@ -33,14 +37,20 @@ export class FlaggedDecisionService implements IFlaggedDecisionService {
     return await this.repository.findById(id);
   }
 
-  async updateDecision(id: string, data: { suggestedTitle?: string; status?: FlaggedDecision['status'] }): Promise<FlaggedDecision | null> {
+  async updateDecision(
+    id: string,
+    data: { suggestedTitle?: string; status?: FlaggedDecision['status']; chunkIds?: string[] }
+  ): Promise<FlaggedDecision | null> {
     // Check if decision exists
     const existing = await this.repository.findById(id);
     if (!existing) {
       throw new Error('Decision not found');
     }
 
-    // Only allow updating suggestedTitle and status
+    if (data.chunkIds !== undefined && data.chunkIds.length === 0) {
+      throw new Error('At least one chunk ID is required');
+    }
+
     const updateData: Partial<FlaggedDecision> = {};
     if (data.suggestedTitle !== undefined) {
       updateData.suggestedTitle = data.suggestedTitle;
@@ -48,8 +58,73 @@ export class FlaggedDecisionService implements IFlaggedDecisionService {
     if (data.status !== undefined) {
       updateData.status = data.status;
     }
+    if (data.chunkIds !== undefined) {
+      updateData.chunkIds = data.chunkIds;
+    }
 
     return await this.repository.update(id, updateData);
+  }
+
+  async resolveChunkIdsFromSequenceSpec(meetingId: string, segmentSpec: string): Promise<string[]> {
+    if (!this.transcriptChunkRepository) {
+      throw new Error('Transcript chunk repository is required to resolve segment selections');
+    }
+
+    const normalizedSpec = segmentSpec.trim().toLowerCase();
+    const chunks = await this.transcriptChunkRepository.findByMeetingId(meetingId);
+
+    if (normalizedSpec === 'all') {
+      return chunks.map((chunk) => chunk.id);
+    }
+
+    const chunksBySequence = new Map(chunks.map((chunk) => [chunk.sequenceNumber, chunk.id]));
+    const selectedChunkIds: string[] = [];
+    const seenChunkIds = new Set<string>();
+
+    for (const part of segmentSpec.split(',').map((value) => value.trim()).filter(Boolean)) {
+      const rangeMatch = /^(\d+)-(\d+)$/.exec(part);
+      if (rangeMatch) {
+        const start = Number.parseInt(rangeMatch[1] ?? '', 10);
+        const end = Number.parseInt(rangeMatch[2] ?? '', 10);
+
+        if (end < start) {
+          throw new Error(`Segment range cannot be descending: ${part}`);
+        }
+
+        for (let sequence = start; sequence <= end; sequence += 1) {
+          const chunkId = chunksBySequence.get(sequence);
+          if (!chunkId) {
+            throw new Error(`No transcript chunk found for sequence number ${sequence}`);
+          }
+          if (!seenChunkIds.has(chunkId)) {
+            seenChunkIds.add(chunkId);
+            selectedChunkIds.push(chunkId);
+          }
+        }
+        continue;
+      }
+
+      if (/^\d+$/.test(part)) {
+        const sequence = Number.parseInt(part, 10);
+        const chunkId = chunksBySequence.get(sequence);
+        if (!chunkId) {
+          throw new Error(`No transcript chunk found for sequence number ${sequence}`);
+        }
+        if (!seenChunkIds.has(chunkId)) {
+          seenChunkIds.add(chunkId);
+          selectedChunkIds.push(chunkId);
+        }
+        continue;
+      }
+
+      throw new Error(`Invalid segment range format: ${part}`);
+    }
+
+    if (selectedChunkIds.length === 0) {
+      throw new Error('At least one segment must be selected');
+    }
+
+    return selectedChunkIds;
   }
 
   async updateDecisionStatus(
