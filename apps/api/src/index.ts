@@ -6,9 +6,29 @@ import {
   listMeetingsRoute,
   getMeetingRoute,
 } from './routes/meetings';
-import { MeetingService } from '@repo/core';
+import {
+  createDecisionContextService,
+  createDraftGenerationService,
+  createFlaggedDecisionService,
+  type GuidanceSegment,
+  createLLMInteractionService,
+  createMarkdownExportService,
+  createMeetingService,
+  createTranscriptService,
+  MeetingService,
+} from '@repo/core';
 import { DrizzleMeetingRepository } from '@repo/db';
 import { MockMeetingRepository } from './mock-repository';
+import {
+  createDecisionContextRoute,
+  createFlaggedDecisionRoute,
+  exportMarkdownRoute,
+  generateDraftRoute,
+  listLLMInteractionsRoute,
+  lockFieldRoute,
+  unlockFieldRoute,
+  uploadTranscriptRoute,
+} from './routes/decision-workflow';
 
 // Determine which repository to use
 const useDatabase = process.env.DATABASE_URL !== undefined;
@@ -20,7 +40,35 @@ const repo = useDatabase
 
 console.log(`Using ${useDatabase ? 'Drizzle' : 'Mock'} repository`);
 
-const meetingService = new MeetingService(repo);
+const meetingService = useDatabase ? createMeetingService() : new MeetingService(repo);
+const transcriptService = useDatabase ? createTranscriptService() : null;
+const flaggedDecisionService = useDatabase ? createFlaggedDecisionService() : null;
+const decisionContextService = useDatabase ? createDecisionContextService() : null;
+const draftGenerationService = useDatabase ? createDraftGenerationService() : null;
+const markdownExportService = useDatabase ? createMarkdownExportService() : null;
+const llmInteractionService = useDatabase ? createLLMInteractionService() : null;
+
+function getWorkflowServices() {
+  if (
+    !transcriptService ||
+    !flaggedDecisionService ||
+    !decisionContextService ||
+    !draftGenerationService ||
+    !markdownExportService ||
+    !llmInteractionService
+  ) {
+    return null;
+  }
+
+  return {
+    transcriptService,
+    flaggedDecisionService,
+    decisionContextService,
+    draftGenerationService,
+    markdownExportService,
+    llmInteractionService,
+  };
+}
 
 // Create OpenAPI Hono app
 const app = new OpenAPIHono();
@@ -56,6 +104,235 @@ app.openapi(getMeetingRoute, async (c) => {
   }
   
   return c.json(meeting);
+});
+
+app.openapi(uploadTranscriptRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  try {
+    const { id } = c.req.valid('param');
+    const data = c.req.valid('json');
+    const uploadPayload: {
+      meetingId: string;
+      source: 'upload';
+      format: 'json' | 'txt' | 'vtt' | 'srt';
+      content: string;
+      metadata?: Record<string, any>;
+      uploadedBy?: string;
+    } = {
+      meetingId: id,
+      source: 'upload',
+      format: data.format,
+      content: data.content,
+    };
+    if (data.metadata !== undefined) {
+      uploadPayload.metadata = data.metadata;
+    }
+    if (data.uploadedBy !== undefined) {
+      uploadPayload.uploadedBy = data.uploadedBy;
+    }
+
+    const transcript = await services.transcriptService.uploadTranscript(uploadPayload);
+    const chunkOptions: {
+      strategy: 'fixed' | 'semantic' | 'speaker' | 'streaming';
+      maxTokens?: number;
+      overlap?: number;
+    } = {
+      strategy: data.chunkStrategy,
+    };
+    if (data.chunkSize !== undefined) {
+      chunkOptions.maxTokens = data.chunkSize;
+    }
+    if (data.overlap !== undefined) {
+      chunkOptions.overlap = data.overlap;
+    }
+
+    const chunks = await services.transcriptService.processTranscript(transcript.id, chunkOptions);
+
+    return c.json({ transcript, chunks }, 201);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: message }, 400);
+  }
+});
+
+app.openapi(createFlaggedDecisionRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  try {
+    const { id } = c.req.valid('param');
+    const data = c.req.valid('json');
+    const createDecisionPayload: {
+      meetingId: string;
+      suggestedTitle: string;
+      contextSummary: string;
+      confidence: number;
+      chunkIds: string[];
+      suggestedTemplateId?: string;
+      templateConfidence?: number;
+      priority: number;
+    } = {
+      meetingId: id,
+      suggestedTitle: data.suggestedTitle,
+      contextSummary: data.contextSummary,
+      confidence: data.confidence,
+      chunkIds: data.chunkIds,
+      priority: data.priority,
+    };
+    if (data.suggestedTemplateId !== undefined) {
+      createDecisionPayload.suggestedTemplateId = data.suggestedTemplateId;
+    }
+    if (data.templateConfidence !== undefined) {
+      createDecisionPayload.templateConfidence = data.templateConfidence;
+    }
+
+    const decision = await services.flaggedDecisionService.createFlaggedDecision(createDecisionPayload);
+
+    return c.json(decision, 201);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: message }, 400);
+  }
+});
+
+app.openapi(createDecisionContextRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  try {
+    const data = c.req.valid('json');
+    const context = await services.decisionContextService.createContext(data);
+    return c.json(context, 201);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: message }, 400);
+  }
+});
+
+app.openapi(generateDraftRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  try {
+    const { id } = c.req.valid('param');
+    const data = c.req.valid('json');
+    const guidance: GuidanceSegment[] | undefined = data.guidance?.map((segment) => {
+      if (segment.fieldId !== undefined) {
+        return {
+          fieldId: segment.fieldId,
+          content: segment.content,
+          source: segment.source,
+        };
+      }
+
+      return {
+        content: segment.content,
+        source: segment.source,
+      };
+    });
+    const context = await services.draftGenerationService.generateDraft(id, guidance);
+    return c.json(context);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('not found') ? 404 : 400;
+    return c.json({ error: message }, status as 400 | 404);
+  }
+});
+
+app.openapi(exportMarkdownRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  try {
+    const { id } = c.req.valid('param');
+    const query = c.req.valid('query');
+    const exportOptions: {
+      includeMetadata?: boolean;
+      includeTimestamps?: boolean;
+      includeParticipants?: boolean;
+      fieldOrder?: 'template' | 'alphabetical';
+      lockedFieldIndicator?: 'prefix' | 'suffix' | 'none';
+    } = {};
+    if (query.includeMetadata !== undefined) {
+      exportOptions.includeMetadata = query.includeMetadata;
+    }
+    if (query.includeTimestamps !== undefined) {
+      exportOptions.includeTimestamps = query.includeTimestamps;
+    }
+    if (query.includeParticipants !== undefined) {
+      exportOptions.includeParticipants = query.includeParticipants;
+    }
+    if (query.fieldOrder !== undefined) {
+      exportOptions.fieldOrder = query.fieldOrder;
+    }
+    if (query.lockedFieldIndicator !== undefined) {
+      exportOptions.lockedFieldIndicator = query.lockedFieldIndicator;
+    }
+
+    const markdown = await services.markdownExportService.exportToMarkdown(id, exportOptions);
+    return c.json({ markdown });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('not found') ? 404 : 400;
+    return c.json({ error: message }, status as 400 | 404);
+  }
+});
+
+app.openapi(lockFieldRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  const { id } = c.req.valid('param');
+  const { fieldId } = c.req.valid('json');
+  const context = await services.decisionContextService.lockField(id, fieldId);
+
+  if (!context) {
+    return c.json({ error: 'Decision context not found' }, 404);
+  }
+
+  return c.json(context);
+});
+
+app.openapi(unlockFieldRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  const { id } = c.req.valid('param');
+  const { fieldId } = c.req.valid('json');
+  const context = await services.decisionContextService.unlockField(id, fieldId);
+
+  if (!context) {
+    return c.json({ error: 'Decision context not found' }, 404);
+  }
+
+  return c.json(context);
+});
+
+app.openapi(listLLMInteractionsRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  const { id } = c.req.valid('param');
+  const interactions = await services.llmInteractionService.findByDecisionContext(id);
+  return c.json({ interactions });
 });
 
 // Health check

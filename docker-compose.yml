@@ -12,7 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U decision_logger"]
+      test: ["CMD-SHELL", "pg_isready -U decision_logger -d decision_logger_dev"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -43,12 +43,17 @@ services:
       DATABASE_URL: postgresql://decision_logger:decision_logger@postgres:5432/decision_logger_dev
       PORT: 3000
       NODE_ENV: production
+      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+      LLM_MODEL: ${LLM_MODEL:-claude-opus-4-5}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      USE_TEMPLATE_PROMPT: ${USE_TEMPLATE_PROMPT:-false}
     ports:
-      - "3000:3000"
+      - "${COMPOSE_API_PORT:-3001}:3000"
     depends_on:
       postgres:
         condition: service_healthy
-    command: sh -c "cd packages/db && npx drizzle-kit migrate && cd ../../apps/api && npm start"
+    command: node /app/apps/api/dist/index.js
 
 volumes:
   postgres_data:

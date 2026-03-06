@@ -89,17 +89,39 @@ All fields are text-based:
 
 ```bash
 # Install dependencies
-npm install
+pnpm install
 
 # Set up environment
 cp .env.example .env
 # Edit .env with your DATABASE_URL and ANTHROPIC_API_KEY
 
-# Run migrations
-npm run db:migrate
+# Start a working DB + API stack
+pnpm up:stack
 
 # Build
-npm run build
+pnpm build
+```
+
+### Running the system
+
+```bash
+# One command: start postgres, push schema, build/start API, and wait for health
+pnpm up:stack
+```
+
+This starts:
+
+- PostgreSQL on `localhost:5433`
+- API on `http://localhost:3001`
+
+Useful follow-up commands:
+
+```bash
+# Stop compose services
+docker compose down
+
+# Apply schema changes after DB updates
+pnpm db:push
 ```
 
 ### Usage
@@ -173,6 +195,45 @@ decision-logger decision export log_final_123 --format markdown > decision.md
 
 The system provides a REST API built with Hono. When the API is running, use `/docs` for Swagger UI or `/openapi.json` for the generated OpenAPI document. The checked-in [OpenAPI spec](./docs/openapi.yaml) is a transitional reference until the static file is fully decommissioned.
 
+### Docker Compose
+
+Use Docker Compose when you want PostgreSQL and the built API server running together.
+
+```bash
+# Recommended: one command for a working stack
+pnpm up:stack
+```
+
+Equivalent manual flow:
+
+```bash
+docker compose up -d postgres
+pnpm db:push
+docker compose up --build -d api
+```
+
+Safe LLM configuration examples:
+
+```bash
+# Anthropic
+export ANTHROPIC_API_KEY=your-key-here
+export LLM_PROVIDER=anthropic
+export LLM_MODEL=claude-opus-4-5
+pnpm up:stack
+```
+
+```bash
+# OpenAI
+export OPENAI_API_KEY=your-key-here
+export LLM_PROVIDER=openai
+export LLM_MODEL=gpt-4o
+pnpm up:stack
+```
+
+The compose file reads API keys from your shell environment and does not hardcode secrets.
+
+By default, the compose-based API is exposed on `http://localhost:3001`. Override with `COMPOSE_API_PORT` if needed.
+
 ### Key Endpoints
 
 **Context Management:**
@@ -187,21 +248,15 @@ The system provides a REST API built with Hono. When the API is running, use `/d
 
 **Transcripts:**
 - `POST /api/meetings/{id}/transcripts/upload` - Upload transcript
-- `POST /api/meetings/{id}/transcripts/add` - Add single segment
-- `GET /api/meetings/{id}/segments` - Get segments (with context filter)
 
 **Decisions:**
-- `GET /api/meetings/{id}/flagged-decisions` - Get flagged decisions
-- `POST /api/meetings/{id}/context/decision` - Set decision context (optional templateId)
-- `POST /api/meetings/{id}/context/field` - Set field focus
+- `POST /api/meetings/{id}/flagged-decisions` - Create a flagged decision
+- `POST /api/decision-contexts` - Create decision context
 - `POST /api/decision-contexts/{id}/generate-draft` - Generate draft
-- `POST /api/decision-contexts/{id}/update-field` - Manually update field value
-- `POST /api/decision-contexts/{id}/expert-advice` - Request expert AI advice (with MCP)
-- `POST /api/decision-contexts/{id}/lock-field` - Lock field
-- `POST /api/decision-contexts/{id}/unlock-field` - Unlock field
-- `POST /api/decision-contexts/{id}/log` - Log final decision (immutable)
-- `GET /api/decision-logs/{id}` - Get decision log
-- `GET /api/decision-logs/{id}/export` - Export decision
+- `GET /api/decision-contexts/{id}/export/markdown` - Export markdown
+- `PUT /api/decision-contexts/{id}/lock-field` - Lock field
+- `DELETE /api/decision-contexts/{id}/lock-field` - Unlock field
+- `GET /api/decision-contexts/{id}/llm-interactions` - Inspect stored LLM interactions
 
 **Templates:**
 - `GET /api/templates` - List templates
@@ -239,25 +294,28 @@ decision-logger/
 
 ```bash
 # Run tests
-npm test
+pnpm test
 
 # Run tests in watch mode
-npm run test:watch
+pnpm test:watch
 
 # Type check
-npm run type-check
+pnpm type-check
 
 # Lint
-npm run lint
+pnpm lint
 
 # Format
-npm run format
+pnpm format
 
-# Start API server
-npm run dev
+# Start working stack
+pnpm up:stack
+
+# Start API server only in local dev mode
+pnpm --filter=@repo/api dev
 
 # Build
-npm run build
+pnpm build
 ```
 
 ## Documentation
