@@ -62,6 +62,20 @@ A `PromptBuilder` class assembles prompts as a typed segment list before seriali
 ### Auto-Detection: Deferred to M6
 M1–M5 use manual decision flagging (user specifies the decision). Auto-detection via LLM (implicit decisions, confidence scoring) is introduced in M6 as the first expert persona (the Decision Detector), after the expert system infrastructure exists.
 
+### Modular Foundations (v2-aligned, v1-non-blocking)
+The v2 modular architecture is a direction, not a fixed contract at this stage. During M1–M5, we should add seam-level foundations that keep v1 shipping velocity high while making future extraction easier.
+
+Scope for v1:
+- Introduce interface/barrel boundaries where natural (`transcript`, `draft/log`, `detection`, `expert`, `events`) without forcing a full rewrite.
+- Keep internal implementations swappable (chunking, tagging, context-windowing) behind service interfaces.
+- Prefer additive refactors with parity tests over behavioral rewrites.
+- Avoid introducing mandatory runtime coupling between subsystems before v1 stabilization.
+
+Out of scope for v1:
+- No requirement to finalize the exact subsystem/module shape.
+- No requirement to move to separate packages/processes.
+- No requirement to fully implement advanced transcript structures (graphs, multi-pipeline chunking) before core workflow is stable.
+
 ---
 
 ## Principles (unchanged from original plan)
@@ -72,6 +86,7 @@ M1–M5 use manual decision flagging (user specifies the decision). Auto-detecti
 - **Commit validated chunks**: each commit passes its checkpoint
 - **Checkpoint before continuing**: do not proceed if validation fails
 - **Prompt versioning**: track prompt changes, measure quality
+- **Modular-by-seams**: add stable interfaces now; defer hard module boundaries until justified
 
 ---
 
@@ -550,6 +565,25 @@ draft rollback <version>   — restore draft to version N
 
 ---
 
+### M2.7 — Modular Foundation A (Interfaces + Adapters)
+
+Lay non-breaking seams that allow subsystem extraction later without changing user-visible behavior now.
+
+**Add**:
+- `packages/core/src/transcript-manager/i-transcript-manager.ts` and `index.ts` barrel (interface only).
+- `packages/core/src/decision-log-generator/i-decision-log-generator.ts` and `i-content-creator.ts` (interface only).
+- `packages/core/src/events/decision-events.ts`, `i-event-bus.ts`, `in-process-event-bus.ts` (minimal in-memory implementation).
+
+**Wire (no behavior changes)**:
+- Service factory creates adapter-backed implementations that delegate to existing services (`TranscriptService`, `DraftGenerationService`, `DecisionContextService`).
+- Event bus defaults to in-process and no-op unless subscribers are explicitly registered.
+
+**Constraints**:
+- No endpoint/CLI contract changes in this step.
+- No mandatory runtime dependency on detector/expert subscribers.
+
+---
+
 ### M2 Validation
 
 ```bash
@@ -561,6 +595,11 @@ pnpm cli draft versions                # shows v1, v2
 pnpm cli draft rollback 1              # restore v1
 pnpm cli draft show                    # shows v1 content
 pnpm cli draft debug                   # shows both LLM interactions
+
+# Modular foundation parity checks
+pnpm --filter=@repo/core type-check
+pnpm test --filter=@repo/core
+# Existing transcript/draft/context tests pass unchanged against adapter wiring
 ```
 
 ### M2 Exit Criteria
@@ -570,6 +609,9 @@ pnpm cli draft debug                   # shows both LLM interactions
 - ✅ Field-tagged chunks used preferentially in next generation
 - ✅ `transcript add` works incrementally with existing meetings
 - ✅ Context commands (set-meeting, set-decision, set-field) work end-to-end
+- ✅ Interface/barrel seams for transcript/log/events exist and compile
+- ✅ Adapter wiring preserves existing behavior (no API/CLI regressions)
+- ✅ In-process event bus is optional and non-blocking (no required subscribers)
 
 ---
 
@@ -693,6 +735,44 @@ decision log --type <consensus|vote|authority|defer|reject|manual|ai_assisted> \
 
 ---
 
+### M4.7 — Field/Template Identity Hardening
+
+Move identity-hardening work forward so decision logging and M5 field/template APIs run on stable contracts.
+
+**DB schema updates**:
+- `decision_fields.namespace` (default `core`)
+- Uniqueness constraint: `(namespace, name, version)`
+
+**Definition model updates**:
+- Field identity is stable via UUID at definition time (seed-time for canonical/core registry).
+- `name` is the stable programmatic key within a `namespace` (not the user-facing label).
+- Templates reuse fields by `fieldId` (UUID) and customize presentation via `template_field_assignments.customLabel` / `customDescription`.
+
+**Seed/registry updates**:
+- Canonical fields/templates stored in a registry (constants) with pre-assigned UUIDs.
+- Seeding is idempotent by `id`, with fallback lookup by `(namespace, name, version)`.
+
+**Why here**:
+- M4.5 decision logging needs reliable template identity for accurate `templateVersion` attribution.
+- M5.1 field/template CRUD should launch after identity constraints are in place to avoid migration churn.
+
+---
+
+### M4.8 — Modular Foundation B (Content + Coaching Seams)
+
+Add pluggable draft-content and coaching seams while keeping the current draft path as the active implementation.
+
+**Add**:
+- `IContentCreator` contract and `AIContentCreator` adapter around current LLM draft generation path.
+- `FieldValue` provenance metadata shape (`source`, optional `provenance`, optional `confidence`) stored in a backward-compatible way.
+- `ICoachObserverHook` interface with default no-op implementation wired in service factory.
+
+**Constraints**:
+- Existing `draft generate`/`draft regenerate-field` behavior remains unchanged.
+- Coaching remains opt-in; no synchronous advice generation required before M6.
+
+---
+
 ### M4 Validation
 
 ```bash
@@ -713,6 +793,17 @@ cat final-decision.md  # Complete markdown with all fields
 
 # API test
 curl http://localhost:3000/api/decisions/<id>/export?format=markdown
+
+# Field/template identity checks
+pnpm db:push
+pnpm db:seed
+pnpm cli field list
+pnpm cli template list --fields
+
+# Modular foundation seam checks
+pnpm --filter=@repo/core type-check
+pnpm test --filter=@repo/core
+# Verify no-op coach hook does not change draft generation outputs
 ```
 
 ### M4 Exit Criteria
@@ -722,6 +813,10 @@ curl http://localhost:3000/api/decisions/<id>/export?format=markdown
 - ✅ Decision logging creates immutable record with real template version + source chunk IDs
 - ✅ Cannot log decision with required fields empty
 - ✅ Export works for both draft and logged decisions
+- ✅ Field/template identity hardened (namespace + uniqueness + stable seed UUIDs)
+- ✅ `IContentCreator` seam exists with AI adapter bound to current implementation
+- ✅ Field provenance metadata supported without breaking existing draft_data consumers
+- ✅ No-op coaching hook wired and verified non-disruptive
 
 ---
 
@@ -807,7 +902,7 @@ Complete all remaining API endpoints. All use Zod + `@hono/zod-openapi`.
 - `GET /api/experts` — list registered experts (returns seeded experts from M6 when available)
 - `GET /api/mcp/servers` — list registered MCP servers
 
-**Field/Template endpoints** (add to existing):
+**Field/Template endpoints** (add to existing, after M4.7 identity hardening):
 - `POST /api/fields`, `PATCH /api/fields/:id`, `DELETE /api/fields/:id`
 - `POST /api/templates`, `PATCH /api/templates/:id`, `DELETE /api/templates/:id`
 - `POST /api/templates/:id/set-default`
@@ -818,6 +913,25 @@ pnpm test:e2e   # Full API test suite passes
 curl http://localhost:3000/docs  # OpenAPI spec UI renders all endpoints
 curl http://localhost:3000/api/context  # Returns global context state
 curl http://localhost:3000/api/meetings/<id>/summary  # Returns stats
+```
+
+---
+
+### M5.2 — Modular Activation Gate (v1-safe)
+
+Before broad web/API adoption, verify that modular seams are usable without forcing activation of unfinished v2 behaviors.
+
+**Checks**:
+- Public API contracts do not expose provisional internal module types.
+- Transcript context-windowing remains strategy-extensible (`strategy` values can grow without schema rewrites).
+- Feature-flag or adapter-switch path exists for future activation (e.g. legacy service path vs subsystem facade path).
+- v2 transcript evolution remains optional in v1 (`multi-pipeline chunking`, `graph views`, advanced tagging can be added later).
+
+**Validation**:
+```bash
+pnpm test:e2e
+pnpm --filter=@repo/core test
+curl http://localhost:3000/docs   # OpenAPI remains stable while internals are swappable
 ```
 
 ---
@@ -922,6 +1036,7 @@ open http://localhost:5173  # Decision draft editor, multi-decision switcher
 - ✅ Multiple decisions flagged and worked on independently within one meeting
 - ✅ Switching between active decisions preserves independent draft state
 - ✅ All API endpoints implemented (expert/MCP as stubs), tested, and in OpenAPI spec
+- ✅ Modular activation gate passed (seams present; advanced v2 features still optional)
 - ✅ `apps/cli` has zero `@repo/core` or `@repo/db` imports
 - ✅ CLI works against local and remote API URLs
 - ✅ Web UI: flag → draft → multi-decision switch → export full workflow
@@ -1343,22 +1458,11 @@ pnpm test:llm -- --grep="decision detection mcp"
 
 ---
 
-### M9.1 — Field/Template Definition Registry + Export/Import (Future)
+### M9.1 — Field/Template Export/Import Packages (Future)
 
-**Goal**: Make decision fields and templates portable, reusable, and stable across environments by introducing namespace-scoped uniqueness and seed-time stable UUIDs.
+**Status note**: Field/template identity hardening (namespace, uniqueness, stable UUID seeds) is now tracked in M4.7 so core workflow and APIs rely on stable contracts before M5.
 
-**DB schema**:
-- `decision_fields.namespace` (default `core`)
-- Uniqueness constraint: `(namespace, name, version)`
-
-**Definition model**:
-- Field identity is **stable** via UUID at definition time (seed-time for canonical/core registry).
-- `name` is the stable programmatic key within a `namespace` (not the user-facing label).
-- Templates reuse fields by `fieldId` (UUID) and customize presentation via `template_field_assignments.customLabel` / `customDescription`.
-
-**Seed/registry**:
-- Canonical fields/templates stored in a registry (constants) with pre-assigned UUIDs.
-- Seeding is idempotent by `id`, with fallback lookup by `(namespace, name, version)`.
+**Goal**: Make field/template definitions portable across environments via package export/import.
 
 **Export/import**:
 - Support exporting a “template package” containing:
@@ -1397,8 +1501,8 @@ pnpm cli template list --fields
 | `packages/core/src/services/decision-log-service.ts` | M4 | Fix TODO stubs |
 | `packages/core/src/services/decision-context-service.ts` | M2+M4 | Add snapshot/rollback/setFieldValue |
 | `packages/core/src/services/transcript-service.ts` | M2 | Add auto-tagging |
-| `packages/schema/src/index.ts` | M1+M2 | Add LLMInteractionSchema, draftVersions |
-| `packages/db/src/schema.ts` | M1+M2 | Add llm_interactions, draft_versions column |
+| `packages/schema/src/index.ts` | M1+M2+M4 | Add LLMInteractionSchema, draftVersions, field/template identity constraints |
+| `packages/db/src/schema.ts` | M1+M2+M4 | Add llm_interactions, draft_versions, field/template identity constraints |
 | `packages/db/src/repositories/llm-interaction-repository.ts` | M1 | New |
 | `apps/api/src/routes/transcripts.ts` | M1 | New |
 | `apps/api/src/routes/decision-contexts.ts` | M1 | New |
