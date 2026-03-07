@@ -1,9 +1,17 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { app } from '../index';
-import {
+
+process.env.DATABASE_URL = 'postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_test';
+
+const [{ app }, core] = await Promise.all([
+  import('../index'),
+  import('@repo/core'),
+]);
+
+const {
   createDecisionFieldService,
+  createDecisionContextService,
   createDecisionTemplateService,
-} from '@repo/core';
+} = core;
 
 describe('API E2E Tests', () => {
   let createdMeetingId: string;
@@ -12,6 +20,7 @@ describe('API E2E Tests', () => {
   let createdChunkId: string;
   let createdDecisionId: string;
   let createdContextId: string;
+  let loggedDecisionId: string;
 
   beforeAll(async () => {
     if (!process.env.DATABASE_URL) {
@@ -179,6 +188,139 @@ describe('API E2E Tests', () => {
     expect(data.lockedFields).not.toContain(createdFieldId);
   });
 
+  it('GET /api/decision-contexts/:id/versions - should return saved versions', async () => {
+    await app.request(`/api/decision-contexts/${createdContextId}/generate-draft`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    const response = await app.request(`/api/decision-contexts/${createdContextId}/versions`);
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.versions).toBeInstanceOf(Array);
+  });
+
+  it('POST /api/decision-contexts/:id/rollback - should restore a saved version', async () => {
+    await app.request(`/api/decision-contexts/${createdContextId}/generate-draft`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    const response = await app.request(`/api/decision-contexts/${createdContextId}/rollback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version: 1 }),
+    });
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.id).toBe(createdContextId);
+    expect(data.draftVersions).toBeInstanceOf(Array);
+  });
+
+  it('PATCH /api/decision-contexts/:id/fields/:fieldId - should manually update a field value', async () => {
+    const response = await app.request(`/api/decision-contexts/${createdContextId}/fields/${createdFieldId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: 'Manually edited decision statement' }),
+    });
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.id).toBe(createdContextId);
+    expect(data.draftData?.[createdFieldId]).toBe('Manually edited decision statement');
+  });
+
+  it('GET /api/decision-contexts/:id/fields/:fieldId/transcript - should return field transcript chunks', async () => {
+    const response = await app.request(`/api/decision-contexts/${createdContextId}/fields/${createdFieldId}/transcript`);
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.chunks).toBeInstanceOf(Array);
+  });
+
+  it('POST /api/decision-contexts/:id/fields/:fieldId/regenerate - should regenerate a single field', async () => {
+    const response = await app.request(`/api/decision-contexts/${createdContextId}/fields/${createdFieldId}/regenerate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        guidance: [
+          {
+            fieldId: createdFieldId,
+            content: 'Focus on the migration approval summary',
+            source: 'user_text',
+          },
+        ],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(typeof data.value).toBe('string');
+  });
+
+  it('POST /api/decision-contexts/:id/log - should finalize and log a decision', async () => {
+    const contextUpdateResponse = await app.request(`/api/decision-contexts/${createdContextId}/fields/${createdFieldId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: 'Approved migration plan' }),
+    });
+    expect(contextUpdateResponse.status).toBe(200);
+
+    const decisionContextService = createDecisionContextService();
+    const reviewingContext = await decisionContextService.submitForReview(createdContextId);
+    expect(reviewingContext?.status).toBe('reviewing');
+    const lockedContext = await decisionContextService.approveAndLock(createdContextId);
+    expect(lockedContext?.status).toBe('locked');
+
+    const statusResponse = await app.request(`/api/decision-contexts/${createdContextId}/log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        loggedBy: 'api-e2e-user',
+        decisionMethod: { type: 'manual', details: 'Confirmed in API test' },
+      }),
+    });
+
+    expect(statusResponse.status).toBe(200);
+    const data = await statusResponse.json();
+    expect(data.id).toBeDefined();
+    expect(data.decisionContextId).toBe(createdContextId);
+    expect(data.templateId).toBe(createdTemplateId);
+    loggedDecisionId = data.id;
+  });
+
+  it('GET /api/decisions/:id - should return a decision log', async () => {
+    const response = await app.request(`/api/decisions/${loggedDecisionId}`);
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.id).toBe(loggedDecisionId);
+    expect(data.decisionContextId).toBe(createdContextId);
+  });
+
+  it('GET /api/decisions/:id/export?format=json - should export a decision log as json', async () => {
+    const response = await app.request(`/api/decisions/${loggedDecisionId}/export?format=json`);
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.format).toBe('json');
+    expect(data.content.id).toBe(loggedDecisionId);
+  });
+
+  it('GET /api/decisions/:id/export?format=markdown - should export a decision log as markdown', async () => {
+    const response = await app.request(`/api/decisions/${loggedDecisionId}/export?format=markdown`);
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.format).toBe('markdown');
+    expect(typeof data.content).toBe('string');
+    expect(data.content).toContain('# Decision:');
+  });
+
   it('GET /api/decision-contexts/:id/export/markdown - should export markdown', async () => {
     const response = await app.request(`/api/decision-contexts/${createdContextId}/export/markdown`);
 
@@ -228,9 +370,17 @@ describe('API E2E Tests', () => {
     
     expect(response.status).toBe(200);
     const data = await response.json();
+    const pathKeys = Object.keys(data.paths ?? {});
     expect(data.openapi).toBe('3.0.0');
     expect(data.paths).toHaveProperty('/api/meetings');
-    expect(data.paths).toHaveProperty('/api/meetings/{id}/transcripts/upload');
-    expect(data.paths).toHaveProperty('/api/decision-contexts/{id}/llm-interactions');
+    expect(pathKeys.some((path) => path.includes('/transcripts/upload'))).toBe(true);
+    expect(pathKeys.some((path) => path.includes('/decision-contexts/') && path.endsWith('/versions'))).toBe(true);
+    expect(pathKeys.some((path) => path.includes('/decision-contexts/') && path.endsWith('/rollback'))).toBe(true);
+    expect(pathKeys.some((path) => path.includes('/decision-contexts/') && path.includes('/fields/') && path.endsWith('/regenerate'))).toBe(true);
+    expect(pathKeys.some((path) => path.includes('/decision-contexts/') && path.includes('/fields/') && path.endsWith('/transcript'))).toBe(true);
+    expect(pathKeys.some((path) => path.includes('/decision-contexts/') && path.endsWith('/log'))).toBe(true);
+    expect(pathKeys.some((path) => path.includes('/api/decisions/') && !path.endsWith('/export'))).toBe(true);
+    expect(pathKeys.some((path) => path.includes('/api/decisions/') && path.endsWith('/export'))).toBe(true);
+    expect(pathKeys.some((path) => path.includes('/decision-contexts/') && path.endsWith('/llm-interactions'))).toBe(true);
   });
 });

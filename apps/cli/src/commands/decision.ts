@@ -125,10 +125,12 @@ decisionCommand
 
 // Add decision command
 decisionCommand
-  .command('add')
-  .description('Log a new decision')
+  .command('log')
+  .alias('add')
+  .description('Log a finalized decision from a locked decision context')
   .requiredOption('-c, --context-id <id>', 'Decision context ID')
   .option('-d, --method <method>', 'Decision method', 'manual')
+  .option('--details <text>', 'Optional decision method details')
   .option('-l, --logged-by <user>', 'User logging the decision', 'cli-user')
   .action(async (options) => {
     try {
@@ -136,7 +138,10 @@ decisionCommand
         options.contextId,
         {
           loggedBy: options.loggedBy,
-          decisionMethod: options.method,
+          decisionMethod: {
+            type: options.method,
+            ...(options.details ? { details: options.details } : {}),
+          },
         }
       );
 

@@ -1,5 +1,6 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import {
+  DecisionLogSchema,
   DecisionContextSchema,
   FlaggedDecisionSchema,
   LLMInteractionSchema,
@@ -19,6 +20,11 @@ const GuidanceSegmentSchema = z.object({
 
 const UuidParamSchema = z.object({
   id: z.string().uuid(),
+});
+
+const DecisionFieldParamSchema = z.object({
+  id: z.string().uuid(),
+  fieldId: z.string().uuid(),
 });
 
 const MeetingIdParamSchema = z.object({
@@ -54,6 +60,7 @@ const CreateFlaggedDecisionRequestSchema = FlaggedDecisionSchema.omit({
 const CreateDecisionContextRequestSchema = DecisionContextSchema.omit({
   id: true,
   lockedFields: true,
+  draftVersions: true,
   status: true,
   createdAt: true,
   updatedAt: true,
@@ -78,6 +85,55 @@ const MarkdownExportResponseSchema = z.object({
 const LockFieldRequestSchema = z.object({
   fieldId: z.string(),
 }).openapi('LockFieldRequest');
+
+const DraftVersionSummarySchema = z.object({
+  version: z.number().int().positive(),
+  savedAt: z.string(),
+  fieldCount: z.number().int().min(0),
+}).openapi('DraftVersionSummary');
+
+const DraftVersionsResponseSchema = z.object({
+  versions: z.array(DraftVersionSummarySchema),
+}).openapi('DraftVersionsResponse');
+
+const RollbackDraftRequestSchema = z.object({
+  version: z.number().int().positive(),
+}).openapi('RollbackDraftRequest');
+
+const RegenerateFieldRequestSchema = z.object({
+  guidance: z.array(GuidanceSegmentSchema).optional(),
+}).openapi('RegenerateFieldRequest');
+
+const RegenerateFieldResponseSchema = z.object({
+  value: z.string(),
+}).openapi('RegenerateFieldResponse');
+
+const UpdateFieldValueRequestSchema = z.object({
+  value: z.unknown(),
+}).openapi('UpdateFieldValueRequest');
+
+const FieldTranscriptResponseSchema = z.object({
+  chunks: z.array(TranscriptChunkSchema),
+}).openapi('FieldTranscriptResponse');
+
+const DecisionMethodSchema = z.object({
+  type: z.enum(['consensus', 'vote', 'authority', 'defer', 'reject', 'manual', 'ai_assisted']),
+  details: z.string().optional(),
+});
+
+const LogDecisionRequestSchema = z.object({
+  loggedBy: z.string(),
+  decisionMethod: DecisionMethodSchema,
+}).openapi('LogDecisionRequest');
+
+const DecisionExportQuerySchema = z.object({
+  format: z.enum(['markdown', 'json']).default('markdown'),
+});
+
+const DecisionExportResponseSchema = z.object({
+  format: z.enum(['markdown', 'json']),
+  content: z.union([z.string(), z.record(z.any())]),
+}).openapi('DecisionExportResponse');
 
 const LLMInteractionsResponseSchema = z.object({
   interactions: z.array(LLMInteractionSchema),
@@ -366,6 +422,323 @@ export const unlockFieldRoute = createRoute({
         },
       },
       description: 'Decision context not found',
+    },
+    503: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Database-backed endpoint unavailable',
+    },
+  },
+});
+
+export const listDraftVersionsRoute = createRoute({
+  method: 'get',
+  path: '/api/decision-contexts/:id/versions',
+  tags: ['decision-contexts'],
+  request: {
+    params: UuidParamSchema,
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: DraftVersionsResponseSchema,
+        },
+      },
+      description: 'Saved draft versions for the decision context',
+    },
+    503: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Database-backed endpoint unavailable',
+    },
+  },
+});
+
+export const rollbackDraftRoute = createRoute({
+  method: 'post',
+  path: '/api/decision-contexts/:id/rollback',
+  tags: ['decision-contexts'],
+  request: {
+    params: UuidParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: RollbackDraftRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: DecisionContextSchema,
+        },
+      },
+      description: 'Draft rolled back successfully',
+    },
+    400: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Invalid rollback request',
+    },
+    404: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Decision context or version not found',
+    },
+    503: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Database-backed endpoint unavailable',
+    },
+  },
+});
+
+export const regenerateFieldRoute = createRoute({
+  method: 'post',
+  path: '/api/decision-contexts/:id/fields/:fieldId/regenerate',
+  tags: ['decision-contexts'],
+  request: {
+    params: DecisionFieldParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: RegenerateFieldRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: RegenerateFieldResponseSchema,
+        },
+      },
+      description: 'Field regenerated successfully',
+    },
+    400: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Invalid field regeneration request',
+    },
+    404: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Decision context or field not found',
+    },
+    503: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Database-backed endpoint unavailable',
+    },
+  },
+});
+
+export const updateFieldValueRoute = createRoute({
+  method: 'patch',
+  path: '/api/decision-contexts/:id/fields/:fieldId',
+  tags: ['decision-contexts'],
+  request: {
+    params: DecisionFieldParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: UpdateFieldValueRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: DecisionContextSchema,
+        },
+      },
+      description: 'Field updated successfully',
+    },
+    404: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Decision context not found',
+    },
+    503: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Database-backed endpoint unavailable',
+    },
+  },
+});
+
+export const getFieldTranscriptRoute = createRoute({
+  method: 'get',
+  path: '/api/decision-contexts/:id/fields/:fieldId/transcript',
+  tags: ['decision-contexts', 'transcripts'],
+  request: {
+    params: DecisionFieldParamSchema,
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: FieldTranscriptResponseSchema,
+        },
+      },
+      description: 'Field-tagged transcript chunks for the decision context field',
+    },
+    503: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Database-backed endpoint unavailable',
+    },
+  },
+});
+
+export const logDecisionRoute = createRoute({
+  method: 'post',
+  path: '/api/decision-contexts/:id/log',
+  tags: ['decision-contexts', 'decisions'],
+  request: {
+    params: UuidParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: LogDecisionRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: DecisionLogSchema,
+        },
+      },
+      description: 'Decision logged successfully',
+    },
+    400: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Invalid decision logging request',
+    },
+    404: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Decision context not found',
+    },
+    503: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Database-backed endpoint unavailable',
+    },
+  },
+});
+
+export const getDecisionLogRoute = createRoute({
+  method: 'get',
+  path: '/api/decisions/:id',
+  tags: ['decisions'],
+  request: {
+    params: UuidParamSchema,
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: DecisionLogSchema,
+        },
+      },
+      description: 'Decision log details',
+    },
+    404: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Decision log not found',
+    },
+    503: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Database-backed endpoint unavailable',
+    },
+  },
+});
+
+export const exportDecisionLogRoute = createRoute({
+  method: 'get',
+  path: '/api/decisions/:id/export',
+  tags: ['decisions'],
+  request: {
+    params: UuidParamSchema,
+    query: DecisionExportQuerySchema,
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: DecisionExportResponseSchema,
+        },
+      },
+      description: 'Decision log export',
+    },
+    404: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Decision log not found',
     },
     503: {
       content: {

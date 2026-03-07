@@ -17,6 +17,11 @@ import { GlobalContextService, FileGlobalContextStore } from './services/global-
 import { LLMInteractionService } from './services/llm-interaction-service';
 import { MarkdownExportService } from './services/markdown-export-service';
 import { VercelAILLMService } from './llm/vercel-ai-llm-service';
+import type { ITranscriptManager } from './transcript-manager';
+import type { IDecisionLogGenerator } from './decision-log-generator/i-decision-log-generator';
+import type { IContentCreator } from './decision-log-generator/i-content-creator';
+import { InProcessEventBus } from './events/in-process-event-bus';
+import type { IEventBus } from './events/i-event-bus';
 
 // Import repository implementations from db package
 import {
@@ -44,14 +49,46 @@ export function createMeetingService(): MeetingService {
   );
 }
 
+export function createTranscriptManager(): ITranscriptManager {
+  const transcriptService = createTranscriptService();
+
+  return {
+    uploadTranscript: transcriptService.uploadTranscript.bind(transcriptService),
+    getTranscriptsByMeeting: transcriptService.getTranscriptsByMeeting.bind(transcriptService),
+    addTranscriptText: transcriptService.addTranscriptText.bind(transcriptService),
+    addChunk: transcriptService.addChunk.bind(transcriptService),
+    getChunksByMeeting: transcriptService.getChunksByMeeting.bind(transcriptService),
+    getChunksByContext: transcriptService.getChunksByContext.bind(transcriptService),
+    searchChunks: transcriptService.searchChunks.bind(transcriptService),
+    processTranscript: transcriptService.processTranscript.bind(transcriptService),
+    addStreamEvent: transcriptService.addStreamEvent.bind(transcriptService),
+    getStreamStatus: transcriptService.getStreamStatus.bind(transcriptService),
+    flushStream: transcriptService.flushStream.bind(transcriptService),
+    clearStream: transcriptService.clearStream.bind(transcriptService),
+    tagChunkRelevance: transcriptService.tagChunkRelevance.bind(transcriptService),
+    createContextWindow: transcriptService.createContextWindow.bind(transcriptService),
+  };
+}
+
 /**
  * Creates a DecisionLogService with real repositories
  */
 export function createDecisionLogService(): DecisionLogService {
   return new DecisionLogService(
     new DrizzleDecisionLogRepository(),
-    new DrizzleDecisionContextRepository()
+    new DrizzleDecisionContextRepository(),
+    new DrizzleDecisionTemplateRepository(),
+    new DrizzleTemplateFieldAssignmentRepository(),
+    new DrizzleChunkRelevanceRepository(),
   );
+}
+
+export function createDecisionLogGenerator(): IDecisionLogGenerator {
+  const decisionLogService = createDecisionLogService();
+
+  return {
+    logDecision: decisionLogService.logDecision.bind(decisionLogService),
+  };
 }
 
 /**
@@ -100,6 +137,17 @@ export function createDraftGenerationService(): DraftGenerationService {
   );
 }
 
+export function createContentCreator(): IContentCreator {
+  const draftGenerationService = createDraftGenerationService();
+  const markdownExportService = createMarkdownExportService();
+
+  return {
+    generateDraft: draftGenerationService.generateDraft.bind(draftGenerationService),
+    regenerateField: draftGenerationService.regenerateField.bind(draftGenerationService),
+    exportMarkdown: markdownExportService.exportToMarkdown.bind(markdownExportService),
+  };
+}
+
 /**
  * Creates a FlaggedDecisionService with real repositories
  */
@@ -146,6 +194,10 @@ export function createLLMInteractionService(): LLMInteractionService {
   return new LLMInteractionService(
     new DrizzleLLMInteractionRepository()
   );
+}
+
+export function createEventBus(): IEventBus {
+  return new InProcessEventBus();
 }
 
 /**
@@ -197,11 +249,15 @@ export interface ServiceContainer {
   decisionLogService: DecisionLogService;
   decisionContextService: DecisionContextService;
   transcriptService: TranscriptService;
+  transcriptManager: ITranscriptManager;
   decisionFieldService: DecisionFieldService;
   draftGenerationService: DraftGenerationService;
+  contentCreator: IContentCreator;
   flaggedDecisionService: FlaggedDecisionService;
   decisionTemplateService: DecisionTemplateService;
   globalContextService: GlobalContextService;
+  decisionLogGenerator: IDecisionLogGenerator;
+  eventBus: IEventBus;
 }
 
 /**
@@ -213,10 +269,14 @@ export function createServices(): ServiceContainer {
     decisionLogService: createDecisionLogService(),
     decisionContextService: createDecisionContextService(),
     transcriptService: createTranscriptService(),
+    transcriptManager: createTranscriptManager(),
     decisionFieldService: createDecisionFieldService(),
     draftGenerationService: createDraftGenerationService(),
+    contentCreator: createContentCreator(),
     flaggedDecisionService: createFlaggedDecisionService(),
     decisionTemplateService: createDecisionTemplateService(),
     globalContextService: createGlobalContextService(),
+    decisionLogGenerator: createDecisionLogGenerator(),
+    eventBus: createEventBus(),
   };
 }

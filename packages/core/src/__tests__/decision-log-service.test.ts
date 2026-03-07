@@ -7,6 +7,9 @@ import { DecisionLogService } from '../services/decision-log-service';
 import type { 
   IDecisionLogRepository, 
   IDecisionContextRepository,
+  IDecisionTemplateRepository,
+  ITemplateFieldAssignmentRepository,
+  IChunkRelevanceRepository,
   DecisionLog,
   DecisionContext 
 } from '@repo/core';
@@ -27,6 +30,9 @@ describe('DecisionLogService', () => {
   let service: DecisionLogService;
   let mockDecisionLogRepository: IDecisionLogRepository;
   let mockDecisionContextRepository: IDecisionContextRepository;
+  let mockDecisionTemplateRepository: IDecisionTemplateRepository;
+  let mockTemplateFieldAssignmentRepository: ITemplateFieldAssignmentRepository;
+  let mockChunkRelevanceRepository: IChunkRelevanceRepository;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -50,13 +56,49 @@ describe('DecisionLogService', () => {
       update: vi.fn(),
       lockField: vi.fn(),
       unlockField: vi.fn(),
+      lockAllFields: vi.fn(),
       setActiveField: vi.fn(),
       updateStatus: vi.fn(),
     };
 
+    mockDecisionTemplateRepository = {
+      create: vi.fn(),
+      findById: vi.fn(),
+      findAll: vi.fn(),
+      findDefault: vi.fn(),
+      setDefault: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      findByCategory: vi.fn(),
+      findByName: vi.fn(),
+      search: vi.fn(),
+      createMany: vi.fn(),
+    };
+
+    mockTemplateFieldAssignmentRepository = {
+      create: vi.fn(),
+      findByTemplateId: vi.fn(),
+      findByFieldId: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      deleteByTemplateId: vi.fn(),
+      createMany: vi.fn(),
+      updateOrder: vi.fn(),
+    };
+
+    mockChunkRelevanceRepository = {
+      upsert: vi.fn(),
+      findByDecisionField: vi.fn(),
+      deleteByChunk: vi.fn(),
+      findByChunk: vi.fn(),
+    };
+
     service = new DecisionLogService(
       mockDecisionLogRepository,
-      mockDecisionContextRepository
+      mockDecisionContextRepository,
+      mockDecisionTemplateRepository,
+      mockTemplateFieldAssignmentRepository,
+      mockChunkRelevanceRepository,
     );
   });
 
@@ -75,6 +117,7 @@ describe('DecisionLogService', () => {
         activeField: undefined,
         lockedFields: ['field1'],
         draftData: { decision: 'Approved', reason: 'Good fit' },
+        draftVersions: [],
         status: 'locked',
         createdAt: '2026-02-28T10:00:00Z',
         updatedAt: '2026-02-28T10:30:00Z',
@@ -94,6 +137,14 @@ describe('DecisionLogService', () => {
       };
 
       (mockDecisionContextRepository.findById as any).mockResolvedValue(mockContext);
+      (mockDecisionTemplateRepository.findById as any).mockResolvedValue({ id: 'tpl_123', version: 3 });
+      (mockTemplateFieldAssignmentRepository.findByTemplateId as any).mockResolvedValue([
+        { fieldId: 'decision', required: true },
+        { fieldId: 'reason', required: false },
+      ]);
+      (mockChunkRelevanceRepository.findByDecisionField as any)
+        .mockResolvedValueOnce([{ chunkId: 'chunk_1' }])
+        .mockResolvedValueOnce([{ chunkId: 'chunk_2' }, { chunkId: 'chunk_1' }]);
       (mockDecisionLogRepository.create as any).mockResolvedValue(mockDecisionLog);
 
       const result = await service.logDecision(decisionContextId, {
@@ -106,12 +157,13 @@ describe('DecisionLogService', () => {
         meetingId: 'mtg_123',
         decisionContextId,
         templateId: 'tpl_123',
-        templateVersion: 1,
+        templateVersion: 3,
         fields: { decision: 'Approved', reason: 'Good fit' },
         decisionMethod: { type: 'manual' },
-        sourceChunkIds: [],
+        sourceChunkIds: ['chunk_1', 'chunk_2'],
         loggedBy,
       });
+      expect(mockDecisionContextRepository.updateStatus).toHaveBeenCalledWith(decisionContextId, 'logged');
       expect(result).toEqual(mockDecisionLog);
       expect(logger.info).toHaveBeenCalledWith('Decision logged successfully', {
         decisionLogId: 'log_123',
@@ -150,6 +202,7 @@ describe('DecisionLogService', () => {
         activeField: undefined,
         lockedFields: [],
         draftData: { decision: 'In progress' },
+        draftVersions: [],
         status: 'drafting',
         createdAt: '2026-02-28T10:00:00Z',
         updatedAt: '2026-02-28T10:30:00Z',
@@ -168,6 +221,38 @@ describe('DecisionLogService', () => {
         decisionContextId,
         status: 'drafting',
       });
+      expect(mockDecisionLogRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('should throw when required fields are missing', async () => {
+      const decisionContextId = 'ctx_123';
+
+      (mockDecisionContextRepository.findById as any).mockResolvedValue({
+        id: decisionContextId,
+        meetingId: 'mtg_123',
+        flaggedDecisionId: 'flag_123',
+        title: 'Test Decision',
+        templateId: 'tpl_123',
+        activeField: undefined,
+        lockedFields: [],
+        draftData: { decision: '' },
+        draftVersions: [],
+        status: 'locked',
+        createdAt: '2026-02-28T10:00:00Z',
+        updatedAt: '2026-02-28T10:30:00Z',
+      });
+      (mockDecisionTemplateRepository.findById as any).mockResolvedValue({ id: 'tpl_123', version: 2 });
+      (mockTemplateFieldAssignmentRepository.findByTemplateId as any).mockResolvedValue([
+        { fieldId: 'decision', required: true },
+      ]);
+
+      await expect(
+        service.logDecision(decisionContextId, {
+          loggedBy: 'user_123',
+          decisionMethod: { type: 'manual' },
+        })
+      ).rejects.toThrow('Required fields missing: decision');
+
       expect(mockDecisionLogRepository.create).not.toHaveBeenCalled();
     });
   });

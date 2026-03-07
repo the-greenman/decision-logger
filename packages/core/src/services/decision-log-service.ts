@@ -10,6 +10,8 @@ import type {
   DecisionLog,
   CreateDecisionLog 
 } from '@repo/core';
+import type { IChunkRelevanceRepository } from '../interfaces/transcript-repositories';
+import type { IDecisionTemplateRepository, ITemplateFieldAssignmentRepository } from '../interfaces/i-decision-template-repository';
 import { logger, withContext } from '../logger';
 
 export interface LogDecisionOptions {
@@ -39,7 +41,10 @@ export interface LogDecisionOptions {
 export class DecisionLogService implements IDecisionLogService {
   constructor(
     private decisionLogRepository: IDecisionLogRepository,
-    private decisionContextRepository: IDecisionContextRepository
+    private decisionContextRepository: IDecisionContextRepository,
+    private decisionTemplateRepository: IDecisionTemplateRepository,
+    private templateFieldAssignmentRepository: ITemplateFieldAssignmentRepository,
+    private chunkRelevanceRepository: IChunkRelevanceRepository,
   ) {}
 
   /**
@@ -78,19 +83,55 @@ export class DecisionLogService implements IDecisionLogService {
           throw new Error('Decision context must be locked before logging');
         }
 
+        const template = await this.decisionTemplateRepository.findById(context.templateId);
+        if (!template) {
+          throw new Error('Decision template not found');
+        }
+
+        const draftFields = context.draftData || {};
+        const templateFields = await this.templateFieldAssignmentRepository.findByTemplateId(context.templateId);
+        const missingRequiredFields = templateFields
+          .filter((field) => field.required)
+          .map((field) => field.fieldId)
+          .filter((fieldId) => {
+            const value = draftFields[fieldId];
+            if (value === null || value === undefined) {
+              return true;
+            }
+            if (typeof value === 'string') {
+              return value.trim().length === 0;
+            }
+            if (Array.isArray(value)) {
+              return value.length === 0;
+            }
+            return false;
+          });
+
+        if (missingRequiredFields.length > 0) {
+          throw new Error(`Required fields missing: ${missingRequiredFields.join(', ')}`);
+        }
+
+        const sourceChunkIds = Array.from(new Set((await Promise.all(
+          Object.keys(draftFields).map(async (fieldId) => {
+            const relevance = await this.chunkRelevanceRepository.findByDecisionField(decisionContextId, fieldId);
+            return relevance.map((entry) => entry.chunkId);
+          })
+        )).flat()));
+
         // Create the decision log entry
         const createData: CreateDecisionLog = {
           meetingId: context.meetingId,
           decisionContextId: context.id,
           templateId: context.templateId,
-          templateVersion: 1, // TODO: Get from template when template service is available
-          fields: context.draftData || {},
+          templateVersion: template.version,
+          fields: draftFields,
           decisionMethod: options.decisionMethod,
-          sourceChunkIds: [], // TODO: Extract from decision context window when context window service is available
+          sourceChunkIds,
           loggedBy: options.loggedBy,
         };
 
         const decisionLog = await this.decisionLogRepository.create(createData);
+        await this.decisionContextRepository.updateStatus(decisionContextId, 'logged');
 
         logger.info('Decision logged successfully', { 
           decisionLogId: decisionLog.id,

@@ -48,6 +48,16 @@ Use `ai` + `@ai-sdk/anthropic` + `@ai-sdk/openai`. Existing API keys work unchan
 - M5: CLI rewrites to pure HTTP API client (`DECISION_LOGGER_API_URL`)
 - API is built in parallel throughout M1–M4, ready for M5 web UI
 
+### CLI/API Sync Contract (all milestones)
+
+CLI and API must remain behaviorally aligned while implementation wiring differs.
+
+- Every new CLI workflow must have a matching API contract entry in the same milestone, or an explicit `CLI-only until M5` note.
+- Every new API workflow must have a matching CLI command mapping, or an explicit `API-only (web/UI support)` note.
+- Milestone validation must include at least one parity check where the same operation is executed through CLI and API and produces equivalent state/result.
+- Any intentional mismatch must be documented inline with reason, owner, and planned convergence milestone.
+- The iterative plan is the source-of-truth matrix for command/endpoint parity; keep CLI/API entries adjacent in each milestone section.
+
 ### Observability: Two layers
 
 **Layer 1 — LLM interaction persistence (M1, always on)**:
@@ -87,6 +97,7 @@ Out of scope for v1:
 - **Checkpoint before continuing**: do not proceed if validation fails
 - **Prompt versioning**: track prompt changes, measure quality
 - **Modular-by-seams**: add stable interfaces now; defer hard module boundaries until justified
+- **CLI/API parity**: no undocumented drift between command workflows and API contracts
 
 ---
 
@@ -760,6 +771,8 @@ draft edit-field <field-name>                            — manual edit
 
 ### M4.5 — Decision Logging (Finalization)
 
+**Status**: ✅ COMPLETE
+
 Fix existing TODOs in `DecisionLogService` (currently hardcodes `templateVersion: 1` and `sourceChunkIds: []`).
 
 **Update**: `packages/core/src/services/decision-log-service.ts`
@@ -767,6 +780,13 @@ Fix existing TODOs in `DecisionLogService` (currently hardcodes `templateVersion
 - Creates immutable `DecisionLog` from `DecisionContext.draftData`
 - Updates `DecisionContext.status` to `'logged'`
 - Validation: cannot log if required fields are empty (check against template `required` flag)
+
+**Completed**:
+- `DecisionLogService` now reads real template version from the template repository
+- Required fields are validated against template field assignments before finalization
+- Source chunk IDs are collected from `ChunkRelevanceRepository` and stored on the immutable decision log
+- Successful finalization updates the `DecisionContext` status to `logged`
+- Core service tests were updated to cover constructor wiring, required-field validation, source chunk collection, and logged status transition
 
 **CLI command**:
 ```
@@ -780,13 +800,23 @@ decision log --type <consensus|vote|authority|defer|reject|manual|ai_assisted> \
 
 ### M4.6 — Logging API Endpoints
 
+**Status**: ✅ COMPLETE
+
 - `POST /api/decision-contexts/:id/log` — finalize; body: `{ decisionMethod, actors, loggedBy }`
 - `GET /api/decisions/:id` — show decision log
 - `GET /api/decisions/:id/export?format=markdown|json` — export
 
+**Completed**:
+- Added API handlers for decision finalization, decision-log retrieval, and export
+- Added CLI `decision log` support using the correct `decisionMethod` object shape
+- Added API e2e coverage for finalize, show, and export flows against the real test database
+- Validated `api` and `cli` type-checks after wiring the new decision logging surfaces
+
 ---
 
 ### M4.7 — Field/Template Identity Hardening
+
+**Status**: 🚧 IN PROGRESS
 
 Move identity-hardening work forward so decision logging and M5 field/template APIs run on stable contracts.
 
@@ -806,6 +836,12 @@ Move identity-hardening work forward so decision logging and M5 field/template A
 **Why here**:
 - M4.5 decision logging needs reliable template identity for accurate `templateVersion` attribution.
 - M5.1 field/template CRUD should launch after identity constraints are in place to avoid migration churn.
+
+**Current progress**:
+- DB support is already present for `decision_fields.namespace`
+- DB uniqueness is already present on `(namespace, name, version)`
+- DB seed flow already supports idempotent seeding by `id` with fallback lookup by `(namespace, name, version)`
+- Remaining work is to promote canonical field/template registry constants into a shared stable contract and align service-layer identity semantics before M5 field/template CRUD
 
 ---
 
@@ -1102,6 +1138,8 @@ open http://localhost:5173  # Decision draft editor, multi-decision switcher
 
 **Why experts first, then detection**: The expert system provides the infrastructure (prompt personas, structured output, LLM interaction logging) that the Decision Detector reuses. Building experts first means detection gets a mature, tested foundation.
 
+**Implementation reference**: `docs/decision-detection-implementation-reference.md` defines the candidate persistence model, two-pass segment strategy, and review/promotion lifecycle for this milestone.
+
 ---
 
 ### M6.1 — Expert Service (replaces stub)
@@ -1159,8 +1197,11 @@ The Decision Detector is an expert stored in the experts table. It uses `consult
   - "I don't like these options" → `status: reject`
   - "Let's focus on X instead" → decision to redirect/deprioritize
   - Consensus by silence → implicit approval
-- Returns structured JSON: `Array<{ title, description, type, confidence, implicitType?, suggestedTemplate }>`
-- Confidence threshold: >= 0.5 to include
+- Returns structured JSON for candidate creation:
+  - `title`, `contextSummary`, `confidence`, `suggestedTemplateId`
+  - `startSequenceNumber`, `endSequenceNumber`
+  - `evidenceSegmentIds`
+- Confidence threshold is configurable per run; default include threshold: `>= 0.5`
 
 **Seed**: Decision Detector expert inserted into `experts` table (name: `'decision-detector'`, domain: `'detection'`)
 
@@ -1170,7 +1211,7 @@ The Decision Detector is an expert stored in the experts table. It uses `consult
 
 **New**: `packages/core/src/services/decision-detection-service.ts`
 
-> **Note**: This is a **thin orchestration wrapper** — it contains no LLM calls of its own. All LLM inference goes through `ExpertService.consultStructured()`, which uses the Decision Detector expert persona. This is the expert-persona approach: the class exists purely to fetch transcript, build context, delegate to the expert, and persist `FlaggedDecision` records.
+> **Note**: This is a **thin orchestration wrapper** — it contains no LLM calls of its own. All LLM inference goes through `ExpertService.consultStructured()`, which uses the Decision Detector expert persona. This class fetches transcript chunks, runs two-pass candidate detection, and persists candidate records for human review/promotion.
 
 ```typescript
 export class DecisionDetectionService {
@@ -1180,13 +1221,14 @@ export class DecisionDetectionService {
     private flaggedDecisionService: FlaggedDecisionService,
   ) {}
 
-  async detect(meetingId: string): Promise<FlaggedDecision[]>
+  async detect(meetingId: string, options?: { confidenceThreshold?: number }): Promise<DecisionCandidate[]>
   // 1. Fetch all transcript chunks for meeting
-  // 2. Build context via PromptBuilder
-  // 3. Call expertService.consultStructured('decision-detector', context, DetectionResultSchema)
-  // 4. Filter to confidence >= 0.5
-  // 5. Create FlaggedDecision records for each detected decision
-  // 6. Return created FlaggedDecision[]
+  // 2. Pass 1: call expertService.consultStructured('decision-detector', context, DetectionResultSchema)
+  //    to produce contiguous candidates (span + evidence)
+  // 3. Filter by confidenceThreshold (default 0.5)
+  // 4. Pass 2: link non-contiguous revisit segments per candidate
+  // 5. Persist candidate records (source='ai', status='pending_candidate')
+  // 6. Return candidate list for review
 }
 ```
 
@@ -1215,12 +1257,24 @@ export class DecisionDetectionService {
 ```
 decisions detect [--meeting-id <id>]    — run detection on current meeting's transcript
 ```
-Result displays as a numbered list with confidence scores and suggested templates. User promotes specific ones: `decisions flag --from-detection <index>`.
+Result displays a candidate list with confidence, contiguous span, and evidence/revisit segments.
+
+**Candidate lifecycle commands**:
+```
+decisions candidates [--meeting-id <id>]                     — list pending/manual/ai candidates
+decisions candidates update <candidate-id> [--title ...]     — refine title/summary/segments
+decisions candidates dismiss <candidate-id>                  — mark candidate dismissed
+decisions candidates promote <candidate-id>                  — promote candidate to flagged decision/context
+```
 
 **New API endpoint**:
-- `POST /api/meetings/:id/detect-decisions` — runs detection, returns `FlaggedDecision[]`
+- `POST /api/meetings/:id/detect-decisions` — runs detection, persists and returns `DecisionCandidate[]`
+- `GET /api/meetings/:id/decision-candidates` — list candidates
+- `PATCH /api/decision-candidates/:id` — refine candidate
+- `POST /api/decision-candidates/:id/promote` — promote candidate
+- `DELETE /api/decision-candidates/:id` — dismiss candidate
 
-**Web UI update**: "Detect Decisions" button on transcript view. Results shown with confidence scores; user selects which to promote.
+**Web UI update**: "Detect Decisions" button on transcript view. Results appear as saved candidates; user reviews/refines/promotes.
 
 ---
 
@@ -1235,11 +1289,15 @@ pnpm cli draft expert-advice legal
 # Decision detection (structured)
 pnpm cli transcript upload test-cases/implicit-defer.json --meeting-id <id>
 pnpm cli decisions detect --meeting-id <id>
-# Expected: flags "I want alignment" as defer (confidence >= 0.5)
+# Expected: creates pending AI candidate "defer pending alignment" (confidence >= 0.5)
+
+pnpm cli decisions candidates --meeting-id <id>
+pnpm cli decisions candidates promote <candidate-id>
+# Expected: promoted candidate now available in normal decision workflow
 
 pnpm cli transcript upload test-cases/discussion-not-decision.json --meeting-id <id>
 pnpm cli decisions detect --meeting-id <id>
-# Expected: no decisions flagged
+# Expected: no new candidates above threshold
 
 # Quality check
 pnpm test:llm -- --grep="decision detection"
@@ -1252,8 +1310,13 @@ pnpm cli draft debug   # shows detection expert interaction in llm_interactions
 ### M6 Exit Criteria
 - ✅ Expert consultation (technical, legal, stakeholder) returns domain-specific advice
 - ✅ Decision Detector expert persona seeded and promptable
-- ✅ Structured output: `detectDecisions()` returns typed `FlaggedDecision[]`
+- ✅ Structured output returns typed candidates with span + evidence segments
 - ✅ Implicit decision patterns detected (defer, reject, redirect)
+- ✅ Two-pass detection implemented (contiguous pass + revisit linking pass)
+- ✅ Above-threshold detections persisted as `pending_candidate` records by default
+- ✅ Manual and AI-origin candidates coexist in one candidate lifecycle
+- ✅ Candidate review/refine/dismiss/promote flow works end-to-end
+- ✅ Overlapping segments can be linked to multiple candidates
 - ✅ Negative cases do not generate false positives
 - ✅ Quality: Precision > 0.80, Recall > 0.75, F1 > 0.77
 - ✅ LLM interaction stored per detection call (full prompt segments + response)

@@ -7,6 +7,8 @@ import {
   getMeetingRoute,
 } from './routes/meetings';
 import {
+  createDecisionLogGenerator,
+  createDecisionLogService,
   createDecisionContextService,
   createDraftGenerationService,
   createFlaggedDecisionService,
@@ -22,11 +24,19 @@ import { MockMeetingRepository } from './mock-repository';
 import {
   createDecisionContextRoute,
   createFlaggedDecisionRoute,
+  exportDecisionLogRoute,
   exportMarkdownRoute,
+  getDecisionLogRoute,
+  getFieldTranscriptRoute,
   generateDraftRoute,
+  listDraftVersionsRoute,
   listLLMInteractionsRoute,
+  logDecisionRoute,
   lockFieldRoute,
+  regenerateFieldRoute,
+  rollbackDraftRoute,
   unlockFieldRoute,
+  updateFieldValueRoute,
   uploadTranscriptRoute,
 } from './routes/decision-workflow';
 
@@ -44,6 +54,8 @@ const meetingService = useDatabase ? createMeetingService() : new MeetingService
 const transcriptService = useDatabase ? createTranscriptService() : null;
 const flaggedDecisionService = useDatabase ? createFlaggedDecisionService() : null;
 const decisionContextService = useDatabase ? createDecisionContextService() : null;
+const decisionLogService = useDatabase ? createDecisionLogService() : null;
+const decisionLogGenerator = useDatabase ? createDecisionLogGenerator() : null;
 const draftGenerationService = useDatabase ? createDraftGenerationService() : null;
 const markdownExportService = useDatabase ? createMarkdownExportService() : null;
 const llmInteractionService = useDatabase ? createLLMInteractionService() : null;
@@ -53,6 +65,8 @@ function getWorkflowServices() {
     !transcriptService ||
     !flaggedDecisionService ||
     !decisionContextService ||
+    !decisionLogService ||
+    !decisionLogGenerator ||
     !draftGenerationService ||
     !markdownExportService ||
     !llmInteractionService
@@ -64,6 +78,8 @@ function getWorkflowServices() {
     transcriptService,
     flaggedDecisionService,
     decisionContextService,
+    decisionLogService,
+    decisionLogGenerator,
     draftGenerationService,
     markdownExportService,
     llmInteractionService,
@@ -322,6 +338,184 @@ app.openapi(unlockFieldRoute, async (c) => {
   }
 
   return c.json(context);
+});
+
+app.openapi(listDraftVersionsRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  const { id } = c.req.valid('param');
+  const versions = await services.decisionContextService.listVersions(id);
+  return c.json({ versions });
+});
+
+app.openapi(rollbackDraftRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  try {
+    const { id } = c.req.valid('param');
+    const { version } = c.req.valid('json');
+    const context = await services.decisionContextService.rollback(id, version);
+    if (!context) {
+      return c.json({ error: 'Decision context not found' }, 404);
+    }
+
+    return c.json(context);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('not found') ? 404 : 400;
+    return c.json({ error: message }, status as 400 | 404);
+  }
+});
+
+app.openapi(regenerateFieldRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  try {
+    const { id, fieldId } = c.req.valid('param');
+    const { guidance } = c.req.valid('json');
+    const normalizedGuidance: GuidanceSegment[] | undefined = guidance?.map((segment) => {
+      if (segment.fieldId === undefined) {
+        return {
+          content: segment.content,
+          source: segment.source,
+        };
+      }
+
+      return {
+        fieldId: segment.fieldId,
+        content: segment.content,
+        source: segment.source,
+      };
+    });
+    const value = await services.draftGenerationService.regenerateField(id, fieldId, normalizedGuidance);
+    return c.json({ value });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('not found') ? 404 : 400;
+    return c.json({ error: message }, status as 400 | 404);
+  }
+});
+
+app.openapi(updateFieldValueRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  const { id, fieldId } = c.req.valid('param');
+  const { value } = c.req.valid('json');
+  const context = await services.decisionContextService.setFieldValue(id, fieldId, value);
+
+  if (!context) {
+    return c.json({ error: 'Decision context not found' }, 404);
+  }
+
+  return c.json(context);
+});
+
+app.openapi(getFieldTranscriptRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  const { id, fieldId } = c.req.valid('param');
+  const chunks = await services.transcriptService.getChunksByContext(`decision:${id}:${fieldId}`);
+  return c.json({ chunks });
+});
+
+app.openapi(logDecisionRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  try {
+    const { id } = c.req.valid('param');
+    const payload = c.req.valid('json');
+    const decision = await services.decisionLogGenerator.logDecision(id, {
+      loggedBy: payload.loggedBy,
+      decisionMethod: payload.decisionMethod.details === undefined
+        ? { type: payload.decisionMethod.type }
+        : {
+            type: payload.decisionMethod.type,
+            details: payload.decisionMethod.details,
+          },
+    });
+    if (!decision) {
+      return c.json({ error: 'Decision context not found' }, 404);
+    }
+
+    return c.json(decision);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('not found') ? 404 : 400;
+    return c.json({ error: message }, status as 400 | 404);
+  }
+});
+
+app.openapi(getDecisionLogRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  const { id } = c.req.valid('param');
+  const decision = await services.decisionLogService.getDecisionLog(id);
+  if (!decision) {
+    return c.json({ error: 'Decision log not found' }, 404);
+  }
+
+  return c.json(decision);
+});
+
+app.openapi(exportDecisionLogRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  const { id } = c.req.valid('param');
+  const { format } = c.req.valid('query');
+  const decision = await services.decisionLogService.getDecisionLog(id);
+  if (!decision) {
+    return c.json({ error: 'Decision log not found' }, 404);
+  }
+
+  if (format === 'json') {
+    return c.json({ format, content: decision });
+  }
+
+  const markdown = [
+    `# Decision: ${String(decision.fields.decision_statement ?? decision.fields.decision ?? 'Untitled Decision')}`,
+    '',
+    `**Decision ID:** ${decision.id}`,
+    `**Meeting ID:** ${decision.meetingId}`,
+    `**Decision Context ID:** ${decision.decisionContextId}`,
+    `**Template:** ${decision.templateId} (v${decision.templateVersion})`,
+    `**Logged By:** ${decision.loggedBy}`,
+    `**Logged At:** ${decision.loggedAt}`,
+    '',
+    '---',
+    '',
+    ...Object.entries(decision.fields).flatMap(([fieldId, value]) => [
+      `## ${fieldId}`,
+      '',
+      typeof value === 'string' ? value : JSON.stringify(value, null, 2),
+      '',
+    ]),
+  ].join('\n');
+
+  return c.json({ format, content: markdown });
 });
 
 app.openapi(listLLMInteractionsRoute, async (c) => {
