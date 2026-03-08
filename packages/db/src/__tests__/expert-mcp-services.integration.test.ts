@@ -15,17 +15,20 @@ import {
   DrizzleExpertAdviceHistoryRepository
 } from '../repositories/expert-mcp-repository';
 import { db } from '../client';
+import { meetings, flaggedDecisions, decisionContexts, decisionTemplates } from '../schema';
 import { sql } from 'drizzle-orm';
 import type {
   CreateExpertTemplate,
   CreateMCPServer,
   CreateExpertAdvice
 } from '@repo/core';
+import { randomUUID } from 'crypto';
 
 describe('Expert and MCP Service Integration Tests', () => {
   let expertTemplateService: ExpertTemplateService;
   let mcpServerService: MCPServerService;
   let expertAdviceService: ExpertAdviceService;
+  let testDecisionContextId: string;
 
   beforeAll(async () => {
     const expertRepo = new DrizzleExpertTemplateRepository();
@@ -42,6 +45,48 @@ describe('Expert and MCP Service Integration Tests', () => {
     await db.execute(sql`DELETE FROM expert_advice`);
     await db.execute(sql`DELETE FROM expert_templates`);
     await db.execute(sql`DELETE FROM mcp_servers`);
+
+    const [template] = await db.insert(decisionTemplates).values({
+      namespace: 'test',
+      name: `Expert Advice Service Template ${randomUUID()}`,
+      description: 'Template for expert advice service integration tests',
+      category: 'standard',
+      version: 1,
+      isDefault: false,
+      isCustom: false,
+    }).returning();
+
+    const [meeting] = await db.insert(meetings).values({
+      title: `Expert Advice Service Meeting ${randomUUID()}`,
+      date: '2026-03-01',
+      participants: ['Alice', 'Bob'],
+      status: 'active',
+    }).returning();
+
+    const [flaggedDecision] = await db.insert(flaggedDecisions).values({
+      meetingId: meeting!.id,
+      suggestedTitle: 'Expert advice service decision',
+      contextSummary: 'Decision used for expert advice service tests',
+      confidence: 0.9,
+      chunkIds: [],
+      priority: 0,
+      status: 'pending',
+      suggestedTemplateId: null,
+      templateConfidence: null,
+    }).returning();
+
+    const [context] = await db.insert(decisionContexts).values({
+      meetingId: meeting!.id,
+      flaggedDecisionId: flaggedDecision!.id,
+      title: 'Expert advice service context',
+      templateId: template!.id,
+      activeField: null,
+      lockedFields: [],
+      draftData: {},
+      status: 'drafting',
+    }).returning();
+
+    testDecisionContextId = context!.id;
   });
 
   afterAll(async () => {
@@ -92,11 +137,11 @@ describe('Expert and MCP Service Integration Tests', () => {
 
       const technicalExperts = await expertTemplateService.getTemplatesByType('technical');
       expect(technicalExperts).toHaveLength(1);
-      expect(technicalExperts[0].name).toBe('Technical Expert');
+      expect(technicalExperts[0]!.name).toBe('Technical Expert');
 
       const legalExperts = await expertTemplateService.getTemplatesByType('legal');
       expect(legalExperts).toHaveLength(1);
-      expect(legalExperts[0].name).toBe('Legal Expert');
+      expect(legalExperts[0]!.name).toBe('Legal Expert');
     });
 
     it('should search templates', async () => {
@@ -105,6 +150,7 @@ describe('Expert and MCP Service Integration Tests', () => {
         type: 'technical',
         promptTemplate: 'You are a database architect',
         mcpAccess: [],
+        isActive: true,
       };
 
       const template2: CreateExpertTemplate = {
@@ -112,6 +158,7 @@ describe('Expert and MCP Service Integration Tests', () => {
         type: 'legal',
         promptTemplate: 'You are legal counsel',
         mcpAccess: [],
+        isActive: true,
       };
 
       await expertTemplateService.createTemplate(template1);
@@ -119,7 +166,7 @@ describe('Expert and MCP Service Integration Tests', () => {
 
       const searchResults = await expertTemplateService.searchTemplates('architect');
       expect(searchResults).toHaveLength(1);
-      expect(searchResults[0].name).toBe('Database Architect');
+      expect(searchResults[0]!.name).toBe('Database Architect');
     });
   });
 
@@ -185,11 +232,11 @@ describe('Expert and MCP Service Integration Tests', () => {
 
       const stdioServers = await mcpServerService.getServersByType('stdio');
       expect(stdioServers).toHaveLength(1);
-      expect(stdioServers[0].name).toBe('stdio-server');
+      expect(stdioServers[0]!.name).toBe('stdio-server');
 
       const httpServers = await mcpServerService.getServersByType('http');
       expect(httpServers).toHaveLength(1);
-      expect(httpServers[0].name).toBe('http-server');
+      expect(httpServers[0]!.name).toBe('http-server');
     });
   });
 
@@ -206,7 +253,7 @@ describe('Expert and MCP Service Integration Tests', () => {
       const expert = await expertTemplateService.createTemplate(expertData);
 
       const adviceData: CreateExpertAdvice = {
-        decisionContextId: '550e8400-e29b-41d4-a716-446655440004',
+        decisionContextId: testDecisionContextId,
         expertId: expert.id,
         expertName: expert.name,
         request: 'Is this approach secure?',
@@ -238,7 +285,7 @@ describe('Expert and MCP Service Integration Tests', () => {
       };
       const expert = await expertTemplateService.createTemplate(expertData);
 
-      const decisionContextId = '550e8400-e29b-41d4-a716-446655440004';
+      const decisionContextId = testDecisionContextId;
       const request = 'How can we optimize this query?';
 
       const advice = await expertAdviceService.consultExpert(
@@ -272,7 +319,7 @@ describe('Expert and MCP Service Integration Tests', () => {
         isActive: true,
       });
 
-      const decisionContextId = '550e8400-e29b-41d4-a716-446655440004';
+      const decisionContextId = testDecisionContextId;
 
       // Create advice from both experts
       await expertAdviceService.createAdvice({
@@ -302,9 +349,10 @@ describe('Expert and MCP Service Integration Tests', () => {
         type: 'technical',
         promptTemplate: 'You are a test expert',
         mcpAccess: [],
+        isActive: true,
       });
 
-      const decisionContextId = '550e8400-e29b-41d4-a716-446655440004';
+      const decisionContextId = testDecisionContextId;
 
       // Create multiple advice entries
       for (let i = 0; i < 3; i++) {
@@ -347,7 +395,7 @@ describe('Expert and MCP Service Integration Tests', () => {
 
       // Create advice using the expert
       const advice = await expertAdviceService.createAdvice({
-        decisionContextId: '550e8400-e29b-41d4-a716-446655440004',
+        decisionContextId: testDecisionContextId,
         expertId: expert.id,
         expertName: expert.name,
         request: 'Review this code',

@@ -10,17 +10,20 @@ import {
   DrizzleExpertAdviceHistoryRepository 
 } from '../repositories/expert-mcp-repository';
 import { db } from '../client';
+import { meetings, flaggedDecisions, decisionContexts, decisionTemplates } from '../schema';
 import { sql } from 'drizzle-orm';
 import type {
   CreateExpertTemplate,
   CreateMCPServer,
   CreateExpertAdvice
 } from '@repo/core';
+import { randomUUID } from 'crypto';
 
 describe('Expert and MCP Repository Integration Tests', () => {
   let expertRepo: DrizzleExpertTemplateRepository;
   let mcpRepo: DrizzleMCPServerRepository;
   let adviceRepo: DrizzleExpertAdviceHistoryRepository;
+  let testDecisionContextId: string;
 
   beforeAll(async () => {
     expertRepo = new DrizzleExpertTemplateRepository();
@@ -33,6 +36,48 @@ describe('Expert and MCP Repository Integration Tests', () => {
     await db.execute(sql`DELETE FROM expert_advice`);
     await db.execute(sql`DELETE FROM expert_templates`);
     await db.execute(sql`DELETE FROM mcp_servers`);
+
+    const [template] = await db.insert(decisionTemplates).values({
+      namespace: 'test',
+      name: `Expert Advice Template ${randomUUID()}`,
+      description: 'Template for expert advice integration tests',
+      category: 'standard',
+      version: 1,
+      isDefault: false,
+      isCustom: false,
+    }).returning();
+
+    const [meeting] = await db.insert(meetings).values({
+      title: `Expert Advice Meeting ${randomUUID()}`,
+      date: '2026-03-01',
+      participants: ['Alice', 'Bob'],
+      status: 'active',
+    }).returning();
+
+    const [flaggedDecision] = await db.insert(flaggedDecisions).values({
+      meetingId: meeting!.id,
+      suggestedTitle: 'Expert advice decision',
+      contextSummary: 'Decision used for expert advice tests',
+      confidence: 0.9,
+      chunkIds: [],
+      priority: 0,
+      status: 'pending',
+      suggestedTemplateId: null,
+      templateConfidence: null,
+    }).returning();
+
+    const [context] = await db.insert(decisionContexts).values({
+      meetingId: meeting!.id,
+      flaggedDecisionId: flaggedDecision!.id,
+      title: 'Expert advice context',
+      templateId: template!.id,
+      activeField: null,
+      lockedFields: [],
+      draftData: {},
+      status: 'drafting',
+    }).returning();
+
+    testDecisionContextId = context!.id;
   });
 
   afterAll(async () => {
@@ -204,7 +249,7 @@ describe('Expert and MCP Repository Integration Tests', () => {
       const expert = await expertRepo.create(expertData);
 
       const data: CreateExpertAdvice = {
-        decisionContextId: '550e8400-e29b-41d4-a716-446655440004',
+        decisionContextId: testDecisionContextId,
         expertId: expert.id,
         expertName: expert.name,
         response: { suggestions: ['Test suggestion'] },
@@ -232,7 +277,7 @@ describe('Expert and MCP Repository Integration Tests', () => {
       };
       const expert = await expertRepo.create(expertData);
 
-      const decisionContextId = '550e8400-e29b-41d4-a716-446655440004';
+      const decisionContextId = testDecisionContextId;
 
       // Create multiple advice entries
       const advice1: CreateExpertAdvice = {
@@ -272,7 +317,7 @@ describe('Expert and MCP Repository Integration Tests', () => {
       // Create advice entries
       for (let i = 0; i < 3; i++) {
         const advice: CreateExpertAdvice = {
-          decisionContextId: `550e8400-e29b-41d4-a716-44665544000${i}`,
+          decisionContextId: testDecisionContextId,
           expertId: expert.id,
           expertName: expert.name,
           response: { suggestions: [`Suggestion ${i}`] },

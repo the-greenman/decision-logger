@@ -10,6 +10,11 @@ import { decisionFields } from '../../src/schema';
 import { sql } from 'drizzle-orm';
 import { CreateDecisionField } from '@repo/schema';
 
+const namespace = 'test';
+
+const inNamespace = <T extends { namespace: string }>(rows: T[]): T[] =>
+  rows.filter((row) => row.namespace === namespace);
+
 describe('DrizzleDecisionFieldRepository', () => {
   let repository: DrizzleDecisionFieldRepository;
 
@@ -27,6 +32,7 @@ describe('DrizzleDecisionFieldRepository', () => {
   describe('create', () => {
     it('should create a decision field', async () => {
       const data: CreateDecisionField = {
+        namespace,
         name: 'Test Field',
         description: 'A test field for unit testing',
         category: 'context', // Use valid enum
@@ -54,6 +60,7 @@ describe('DrizzleDecisionFieldRepository', () => {
 
     it('should create a field with minimal required fields', async () => {
       const data: CreateDecisionField = {
+        namespace,
         name: 'Minimal Field',
         description: 'A minimal field for testing',
         category: 'context',
@@ -77,6 +84,7 @@ describe('DrizzleDecisionFieldRepository', () => {
   describe('findById', () => {
     it('should return a field by ID', async () => {
       const created = await repository.create({
+        namespace,
         name: 'Find Me',
         description: 'Field to find',
         category: 'context',
@@ -101,6 +109,7 @@ describe('DrizzleDecisionFieldRepository', () => {
     it('should return all fields ordered by category then name', async () => {
       // Create fields in different categories
       await repository.create({
+        namespace,
         name: 'B Field',
         description: 'Second field',
         category: 'context',
@@ -109,6 +118,7 @@ describe('DrizzleDecisionFieldRepository', () => {
       });
 
       await repository.create({
+        namespace,
         name: 'A Field',
         description: 'First field',
         category: 'evaluation',
@@ -117,7 +127,8 @@ describe('DrizzleDecisionFieldRepository', () => {
       });
 
       await repository.create({
-        name: 'A Field',
+        namespace,
+        name: 'A Field Alpha',
         description: 'First field alpha',
         category: 'context',
         fieldType: 'text',
@@ -125,21 +136,25 @@ describe('DrizzleDecisionFieldRepository', () => {
       });
 
       const results = await repository.findAll();
+      const scopedResults = inNamespace(results).filter((field) =>
+        ['A Field', 'A Field Alpha', 'B Field'].includes(field.name)
+      );
 
-      expect(results).toHaveLength(3);
+      expect(scopedResults).toHaveLength(3);
       // Should be ordered by category then name
-      expect(results[0]!.category).toBe('context');
-      expect(results[0]!.name).toBe('A Field');
-      expect(results[1]!.category).toBe('context');
-      expect(results[1]!.name).toBe('B Field');
-      expect(results[2]!.category).toBe('evaluation');
-      expect(results[2]!.name).toBe('A Field');
+      expect(scopedResults[0]!.category).toBe('context');
+      expect(scopedResults[0]!.name).toBe('A Field Alpha');
+      expect(scopedResults[1]!.category).toBe('context');
+      expect(scopedResults[1]!.name).toBe('B Field');
+      expect(scopedResults[2]!.category).toBe('evaluation');
+      expect(scopedResults[2]!.name).toBe('A Field');
     });
   });
 
   describe('findByCategory', () => {
     it('should return fields for a specific category', async () => {
       await repository.create({
+        namespace,
         name: 'Field 1',
         description: 'First evaluation field',
         category: 'evaluation',
@@ -148,6 +163,7 @@ describe('DrizzleDecisionFieldRepository', () => {
       });
 
       await repository.create({
+        namespace,
         name: 'Field 2',
         description: 'Context field',
         category: 'context',
@@ -156,6 +172,7 @@ describe('DrizzleDecisionFieldRepository', () => {
       });
 
       await repository.create({
+        namespace,
         name: 'Field 3',
         description: 'Number evaluation field',
         category: 'evaluation',
@@ -164,22 +181,26 @@ describe('DrizzleDecisionFieldRepository', () => {
       });
 
       const results = await repository.findByCategory('evaluation');
+      const scopedResults = inNamespace(results).filter((field) =>
+        ['Field 1', 'Field 3'].includes(field.name)
+      );
 
-      expect(results).toHaveLength(2);
-      expect(results.map(r => r.name)).toContain('Field 1');
-      expect(results.map(r => r.name)).toContain('Field 3');
-      expect(results.every(r => r.category === 'evaluation')).toBe(true);
+      expect(scopedResults).toHaveLength(2);
+      expect(scopedResults.map(r => r.name)).toContain('Field 1');
+      expect(scopedResults.map(r => r.name)).toContain('Field 3');
+      expect(scopedResults.every(r => r.category === 'evaluation')).toBe(true);
     });
 
     it('should return empty array for non-existent category', async () => {
       const results = await repository.findByCategory('outcome'); // Use valid enum that won't exist in test data
-      expect(results).toEqual([]);
+      expect(inNamespace(results).filter((field) => field.name.startsWith('Field '))).toEqual([]);
     });
   });
 
   describe('update', () => {
     it('should update a field', async () => {
       const created = await repository.create({
+        namespace,
         name: 'Original Field',
         description: 'Original description',
         category: 'context',
@@ -212,6 +233,7 @@ describe('DrizzleDecisionFieldRepository', () => {
   describe('delete', () => {
     it('should delete a field', async () => {
       const created = await repository.create({
+        namespace,
         name: 'To Delete',
         description: 'Field to delete',
         category: 'context',
@@ -236,6 +258,7 @@ describe('DrizzleDecisionFieldRepository', () => {
     it('should create multiple fields', async () => {
       const fields: CreateDecisionField[] = [
         {
+          namespace,
           name: 'Batch Field 1',
           description: 'First batch field',
           category: 'context',
@@ -243,6 +266,7 @@ describe('DrizzleDecisionFieldRepository', () => {
           extractionPrompt: 'Extract batch field 1',
         },
         {
+          namespace,
           name: 'Batch Field 2',
           description: 'Second batch field',
           category: 'context',
@@ -250,6 +274,7 @@ describe('DrizzleDecisionFieldRepository', () => {
           extractionPrompt: 'Extract batch field 2',
         },
         {
+          namespace,
           name: 'Batch Field 3',
           description: 'Third batch field',
           category: 'outcome',
@@ -270,6 +295,7 @@ describe('DrizzleDecisionFieldRepository', () => {
   describe('search', () => {
     it('should search across name, description, and category', async () => {
       await repository.create({
+        namespace,
         name: 'Risk Assessment',
         description: 'Evaluate potential risks',
         category: 'evaluation',
@@ -278,6 +304,7 @@ describe('DrizzleDecisionFieldRepository', () => {
       });
 
       await repository.create({
+        namespace,
         name: 'Cost Analysis',
         description: 'Analyze financial costs',
         category: 'metadata', // Use valid enum
@@ -286,6 +313,7 @@ describe('DrizzleDecisionFieldRepository', () => {
       });
 
       await repository.create({
+        namespace,
         name: 'Timeline',
         description: 'Project duration',
         category: 'context', // Use valid enum
@@ -294,17 +322,17 @@ describe('DrizzleDecisionFieldRepository', () => {
       });
 
       // Search by name
-      const nameResults = await repository.search('risk');
+      const nameResults = inNamespace(await repository.search('risk'));
       expect(nameResults).toHaveLength(1);
       expect(nameResults[0]!.name).toBe('Risk Assessment');
 
       // Search by description
-      const descResults = await repository.search('costs');
+      const descResults = inNamespace(await repository.search('costs'));
       expect(descResults).toHaveLength(1);
       expect(descResults[0]!.name).toBe('Cost Analysis');
 
       // Search by category
-      const catResults = await repository.search('context');
+      const catResults = inNamespace(await repository.search('context')).filter((field) => field.name === 'Timeline');
       expect(catResults).toHaveLength(1); // Only Timeline has 'context' in category from this test
       expect(catResults.every(r => r.category.includes('context'))).toBe(true);
     });
@@ -318,6 +346,7 @@ describe('DrizzleDecisionFieldRepository', () => {
   describe('findByType', () => {
     it('should return fields of a specific type', async () => {
       await repository.create({
+        namespace,
         name: 'Text Field 1',
         description: 'First text field',
         category: 'context',
@@ -326,6 +355,7 @@ describe('DrizzleDecisionFieldRepository', () => {
       });
 
       await repository.create({
+        namespace,
         name: 'Number Field',
         description: 'Number field',
         category: 'context',
@@ -334,6 +364,7 @@ describe('DrizzleDecisionFieldRepository', () => {
       });
 
       await repository.create({
+        namespace,
         name: 'Text Field 2',
         description: 'Second text field',
         category: 'context',
@@ -342,16 +373,19 @@ describe('DrizzleDecisionFieldRepository', () => {
       });
 
       const results = await repository.findByType('text');
+      const scopedResults = inNamespace(results).filter((field) =>
+        ['Text Field 1', 'Text Field 2'].includes(field.name)
+      );
 
-      expect(results).toHaveLength(2); // Two text fields created in this test
-      expect(results.every(r => r.fieldType === 'text')).toBe(true);
-      expect(results.map(r => r.name)).toContain('Text Field 1');
-      expect(results.map(r => r.name)).toContain('Text Field 2');
+      expect(scopedResults).toHaveLength(2); // Two text fields created in this test
+      expect(scopedResults.every(r => r.fieldType === 'text')).toBe(true);
+      expect(scopedResults.map(r => r.name)).toContain('Text Field 1');
+      expect(scopedResults.map(r => r.name)).toContain('Text Field 2');
     });
 
     it('should return empty array for non-existent type', async () => {
       const results = await repository.findByType('textarea'); // Use valid enum value that won't exist in test data
-      expect(results).toEqual([]);
+      expect(inNamespace(results).filter((field) => field.name.startsWith('Text Field') || field.name === 'Number Field')).toEqual([]);
     });
   });
 });

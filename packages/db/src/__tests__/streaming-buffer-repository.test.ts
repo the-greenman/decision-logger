@@ -126,8 +126,8 @@ describe('DrizzleStreamingBufferRepository', () => {
       expect(chunks).toHaveLength(1);
       expect(chunks[0]!.text).toBe('This is a streamed message');
       expect(chunks[0]!.speaker).toBe('Bob');
-      expect(chunks[0]!.startTime).toBe('2026-03-01T00:02:00.000Z');
-      expect(chunks[0]!.endTime).toBe('2026-03-01T00:02:05.000Z');
+      expect(chunks[0]!.startTime).toBe('2026-03-01T00:02:00Z');
+      expect(chunks[0]!.endTime).toBe('2026-03-01T00:02:05Z');
       expect(chunks[0]!.chunkStrategy).toBe('streaming');
       expect(chunks[0]!.contexts).toContain('meeting:' + testMeetingId);
       expect(chunks[0]!.topics).toEqual(['streaming']);

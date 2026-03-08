@@ -347,16 +347,19 @@ export class DrizzleMCPServerRepository implements IMCPServerRepository {
   }
 
   async checkHealth(): Promise<Record<string, boolean>> {
-    const servers = await this.findActive();
-    const health: Record<string, boolean> = {};
-    
-    // For now, return all active servers as healthy
-    // In a real implementation, this would ping each server
+    const servers = await this.findAll();
+    const result: Record<string, boolean> = {};
+
+    // Basic health check - in a real implementation this would actually ping the servers
     for (const server of servers) {
-      health[server.name] = true;
+      result[server.name] = true;
     }
     
-    return health;
+    return result;
+  }
+
+  async healthCheck(): Promise<Record<string, boolean>> {
+    return this.checkHealth();
   }
 }
 

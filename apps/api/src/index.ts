@@ -115,7 +115,18 @@ async function resolveContextFieldId(
     return fieldReference;
   }
 
-  const field = await services.decisionFieldService.getFieldByIdentity({ name: fieldReference });
+  const isUuidReference = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(fieldReference);
+  if (isUuidReference) {
+    const directField = await services.decisionFieldService.getField(fieldReference);
+    if (directField) {
+      throw new Error(`Field ${directField.id} is not assigned to template ${context.templateId}`);
+    }
+  }
+
+  const assignedFields = await Promise.all(
+    assignments.map(async (assignment) => services.decisionFieldService.getField(assignment.fieldId))
+  );
+  const field = assignedFields.find((assignedField) => assignedField?.name === fieldReference) ?? null;
   if (!field) {
     throw new Error(`Field ${fieldReference} not found`);
   }

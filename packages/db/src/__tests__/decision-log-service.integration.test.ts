@@ -6,9 +6,12 @@ import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import { DecisionLogService } from '@repo/core';
 import { DrizzleDecisionLogRepository } from '../repositories/decision-log-repository';
 import { DrizzleDecisionContextRepository } from '../repositories/decision-context-repository';
+import { DrizzleDecisionTemplateRepository, DrizzleTemplateFieldAssignmentRepository } from '../repositories/decision-template-repository';
+import { DrizzleChunkRelevanceRepository } from '../repositories/chunk-relevance-repository';
 import { db, client } from '../client';
-import { decisionLogs, decisionContexts, meetings, flaggedDecisions, decisionTemplates } from '../schema';
+import { decisionLogs, decisionContexts, meetings, flaggedDecisions, decisionTemplates, decisionFields, templateFieldAssignments } from '../schema';
 import { eq } from 'drizzle-orm';
+import { randomUUID } from 'crypto';
 
 describe('Decision Log Service Integration Tests', () => {
   let decisionLogService: DecisionLogService;
@@ -18,6 +21,9 @@ describe('Decision Log Service Integration Tests', () => {
   let testFlaggedDecisionId: string;
   let testDecisionContextId: string;
   let testTemplateId: string;
+  let decisionFieldId: string;
+  let reasonFieldId: string;
+  let impactFieldId: string;
 
   beforeAll(async () => {
     // Initialize repositories and service
@@ -25,14 +31,18 @@ describe('Decision Log Service Integration Tests', () => {
     decisionContextRepository = new DrizzleDecisionContextRepository();
     decisionLogService = new DecisionLogService(
       decisionLogRepository,
-      decisionContextRepository
+      decisionContextRepository,
+      new DrizzleDecisionTemplateRepository(),
+      new DrizzleTemplateFieldAssignmentRepository(),
+      new DrizzleChunkRelevanceRepository(),
     );
 
     // Create test template
     const [template] = await db
       .insert(decisionTemplates)
       .values({
-        name: 'Test Decision Template',
+        namespace: 'test',
+        name: `Test Decision Template ${randomUUID()}`,
         description: 'Template for testing',
         category: 'standard',
         version: 1,
@@ -70,6 +80,46 @@ describe('Decision Log Service Integration Tests', () => {
       .returning();
     testFlaggedDecisionId = flaggedDecision!.id;
 
+    const [decisionField, reasonField, impactField] = await db
+      .insert(decisionFields)
+      .values([
+        {
+          namespace: 'test',
+          name: `decision_${randomUUID()}`,
+          description: 'Decision field for testing',
+          category: 'outcome',
+          fieldType: 'text',
+          extractionPrompt: 'Extract the decision',
+        },
+        {
+          namespace: 'test',
+          name: `reason_${randomUUID()}`,
+          description: 'Reason field for testing',
+          category: 'context',
+          fieldType: 'text',
+          extractionPrompt: 'Extract the reason',
+        },
+        {
+          namespace: 'test',
+          name: `impact_${randomUUID()}`,
+          description: 'Impact field for testing',
+          category: 'evaluation',
+          fieldType: 'text',
+          extractionPrompt: 'Extract the impact',
+        },
+      ])
+      .returning();
+
+    decisionFieldId = decisionField!.id;
+    reasonFieldId = reasonField!.id;
+    impactFieldId = impactField!.id;
+
+    await db.insert(templateFieldAssignments).values([
+      { templateId: testTemplateId, fieldId: decisionFieldId, order: 0, required: true },
+      { templateId: testTemplateId, fieldId: reasonFieldId, order: 1, required: true },
+      { templateId: testTemplateId, fieldId: impactFieldId, order: 2, required: true },
+    ]);
+
     // Create test decision context
     const [decisionContext] = await db
       .insert(decisionContexts)
@@ -79,11 +129,11 @@ describe('Decision Log Service Integration Tests', () => {
         title: 'Test Decision Context',
         templateId: testTemplateId,
         activeField: null,
-        lockedFields: ['decision'],
+        lockedFields: [decisionFieldId, reasonFieldId, impactFieldId],
         draftData: {
-          decision: 'Approved',
-          reason: 'Meets all criteria',
-          impact: 'Low',
+          [decisionFieldId]: 'Approved',
+          [reasonFieldId]: 'Meets all criteria',
+          [impactFieldId]: 'Low',
         },
         status: 'locked',
       })
@@ -95,6 +145,10 @@ describe('Decision Log Service Integration Tests', () => {
     // Clean up test data
     await db.delete(decisionLogs).where(eq(decisionLogs.meetingId, testMeetingId));
     await db.delete(decisionContexts).where(eq(decisionContexts.meetingId, testMeetingId));
+    await db.delete(templateFieldAssignments).where(eq(templateFieldAssignments.templateId, testTemplateId));
+    await db.delete(decisionFields).where(eq(decisionFields.id, decisionFieldId));
+    await db.delete(decisionFields).where(eq(decisionFields.id, reasonFieldId));
+    await db.delete(decisionFields).where(eq(decisionFields.id, impactFieldId));
     await db.delete(flaggedDecisions).where(eq(flaggedDecisions.meetingId, testMeetingId));
     await db.delete(meetings).where(eq(meetings.id, testMeetingId));
     await db.delete(decisionTemplates).where(eq(decisionTemplates.id, testTemplateId));
@@ -104,6 +158,10 @@ describe('Decision Log Service Integration Tests', () => {
   beforeEach(async () => {
     // Clean up decision logs before each test
     await db.delete(decisionLogs).where(eq(decisionLogs.meetingId, testMeetingId));
+    await db
+      .update(decisionContexts)
+      .set({ status: 'locked' })
+      .where(eq(decisionContexts.id, testDecisionContextId));
   });
 
   describe('logDecision', () => {
@@ -124,9 +182,9 @@ describe('Decision Log Service Integration Tests', () => {
       expect(result!.decisionMethod).toEqual({ type: 'manual' });
       expect(result!.loggedBy).toBe('test-user');
       expect(result!.fields).toEqual({
-        decision: 'Approved',
-        reason: 'Meets all criteria',
-        impact: 'Low',
+        [decisionFieldId]: 'Approved',
+        [reasonFieldId]: 'Meets all criteria',
+        [impactFieldId]: 'Low',
       });
 
       // Verify it's in the database
@@ -152,7 +210,7 @@ describe('Decision Log Service Integration Tests', () => {
           templateId: testTemplateId,
           activeField: null,
           lockedFields: [],
-          draftData: { decision: 'Pending' },
+          draftData: { [decisionFieldId]: 'Pending' },
           status: 'drafting',
         })
         .returning();

@@ -51,9 +51,10 @@ describe('DecisionContextService Integration', () => {
 
     // Create test template
     testTemplateId = randomUUID();
+    const templateName = `Test Template ${testTemplateId}`;
     await db.execute(sql`
       INSERT INTO decision_templates (id, name, category, description)
-      VALUES (${testTemplateId}, 'Test Template', 'standard', 'A test template')
+      VALUES (${testTemplateId}, ${templateName}, 'standard', 'A test template')
     `);
   });
 

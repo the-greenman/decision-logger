@@ -77,8 +77,8 @@ describe('DrizzleTranscriptChunkRepository', () => {
       expect(result.sequenceNumber).toBe(1);
       expect(result.text).toBe('This is a test chunk');
       expect(result.speaker).toBe('Alice');
-      expect(result.startTime).toBe('2026-03-01T00:01:00.000Z');
-      expect(result.endTime).toBe('2026-03-01T00:01:10.000Z');
+      expect(result.startTime).toBe('2026-03-01T00:01:00Z');
+      expect(result.endTime).toBe('2026-03-01T00:01:10Z');
       expect(result.chunkStrategy).toBe('semantic');
       expect(result.tokenCount).toBe(10);
       expect(result.wordCount).toBe(6);

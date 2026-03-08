@@ -61,9 +61,10 @@ describe('DrizzleDecisionContextRepository', () => {
 
     // Create test template
     testTemplateId = randomUUID();
+    const templateName = `Test Template ${testTemplateId}`;
     await db.execute(sql`
       INSERT INTO decision_templates (id, name, category, description)
-      VALUES (${testTemplateId}, 'Test Template', 'standard', 'A test template')
+      VALUES (${testTemplateId}, ${templateName}, 'standard', 'A test template')
     `);
   });
 
@@ -332,19 +333,18 @@ describe('DrizzleDecisionContextRepository', () => {
         templateId: testTemplateId,
       });
 
-      // Create a decision field
       const fieldId = randomUUID();
+      const fieldName = `Test Field ${fieldId}`;
       await db.execute(sql`
-        INSERT INTO decision_fields (id, name, category, description, extraction_prompt, field_type)
-        VALUES (${fieldId}, 'Test Field', 'context', 'A test field', 'Extract this field', 'text')
+        INSERT INTO decision_fields (id, namespace, name, category, description, extraction_prompt, field_type)
+        VALUES (${fieldId}, 'test', ${fieldName}, 'context', 'A test field', 'Extract this field', 'text')
       `);
 
       const updated = await repository.setActiveField(created.id, fieldId);
 
       expect(updated).toBeDefined();
       expect(updated!.activeField).toBe(fieldId);
-      
-      // Re-query to verify it was actually written to the database
+
       const persisted = await repository.findById(created.id);
       expect(persisted).toBeDefined();
       expect(persisted!.activeField).toBe(fieldId);
@@ -360,9 +360,10 @@ describe('DrizzleDecisionContextRepository', () => {
 
       // Create a decision field
       const fieldId = randomUUID();
+      const fieldName = `Test Field ${fieldId}`;
       await db.execute(sql`
-        INSERT INTO decision_fields (id, name, category, description, extraction_prompt, field_type)
-        VALUES (${fieldId}, 'Test Field', 'context', 'A test field', 'Extract this field', 'text')
+        INSERT INTO decision_fields (id, namespace, name, category, description, extraction_prompt, field_type)
+        VALUES (${fieldId}, 'test', ${fieldName}, 'context', 'A test field', 'Extract this field', 'text')
       `);
 
       await repository.setActiveField(created.id, fieldId);
