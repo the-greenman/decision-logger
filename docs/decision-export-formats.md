@@ -1,14 +1,26 @@
 # Decision Export Formats
 
+**Status**: authoritative
+**Owns**: export targets, rendering expectations, and export-format concerns for finalized decision logs
+**Must sync with**: `packages/schema`, `docs/OVERVIEW.md`, `docs/versioning-architecture.md`, `docs/field-template-versioning-explainer.md`, `docs/plans/iterative-implementation-plan.md`
+
 ## Overview
 
 Decision logs can be exported in multiple formats for different use cases: documentation, compliance, integration, presentation, and archival. Each format supports customization through templates and options.
+
+Exact field names and transport contracts must follow `packages/schema` and implemented API contracts.
+
+The examples in this document are illustrative of export behavior and content shape, not a second canonical schema definition.
+
+If export behavior depends on not-yet-canonical schema or API changes, reference the relevant proposal docs in `docs/plans/` instead of treating those example payloads as authoritative.
 
 ## Supported Export Formats
 
 ### 1. JSON (Machine-Readable)
 
 **Use case:** API integration, data processing, archival
+
+The exported participant list should reflect the authority participants recorded on the final decision log, not the full contributor history for the underlying preparation context.
 
 ```json
 {
@@ -61,6 +73,8 @@ Decision logs can be exported in multiple formats for different use cases: docum
 ### 2. Markdown (Human-Readable Documentation)
 
 **Use case:** Documentation, wikis, reports
+
+Rendered participant sections should present the authority participants for the final decision event.
 
 ```markdown
 # Approve roof repair budget
@@ -562,6 +576,12 @@ POST /api/decision-logs/export/batch
 ```
 
 ## Implementation Notes
+
+The implementation sketches below are illustrative only.
+
+Exact export contracts, response models, and persistence relations should follow `packages/schema` and the implemented service/API layers.
+
+Where export needs fields that depend on not-yet-canonical schema changes, reference the appropriate proposal docs instead of extending this document into a speculative schema source.
 
 ### Server-Side Rendering
 

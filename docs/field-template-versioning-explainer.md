@@ -38,6 +38,7 @@ This means:
 
 - a decision does **not** primarily version as one giant document
 - each field versions independently inside one `DecisionContext`
+- each `DecisionContext` binds to a specific template definition version and its resolved field-definition set at creation time
 - one `DecisionContext` may accumulate work from multiple meetings before finalization
 - meetings select from open decision contexts for agenda management
 - automatically detected candidates do **not** become decision contexts until explicitly promoted
@@ -99,12 +100,17 @@ Meetings may place an existing open context onto an ordered agenda without becom
 It owns:
 
 - the active template reference
+- the active template definition version binding
 - active/locked field state
 - transcript associations and guidance context
 - field visibility state
 - field version history within that context
 
 It may also be associated with transcript evidence from many meetings.
+
+It does not own field-definition or template-definition editing.
+
+Those configuration artifacts are managed independently and may later publish new versions without automatically changing already-open contexts.
 
 Think of it as:
 
@@ -171,6 +177,27 @@ Recommended `source` values:
 - `regen`
 - `template_transform`
 - `rollback`
+
+## Context creation and template-version binding
+
+When a `DecisionContext` is created:
+
+1. choose a specific template definition version
+2. resolve the field-definition set referenced by that template version
+3. bind the context to that template/version combination
+4. initialize visibility/working state for the resolved field set
+
+This does not mean copying field-library configuration into the context as editable template metadata.
+
+Instead, it means the context pins the configuration it is using for drafting while keeping field/template management outside the context lifecycle.
+
+If the context later adopts a newer version of the same template definition, that should be treated as an explicit template migration using the same semantics as any other template change:
+
+- update the active template version binding
+- recompute visibility
+- preserve values
+- optionally transform or regenerate unlocked fields when needed
+- avoid writing synthetic field versions for unchanged values
 
 ## Relationship model
 

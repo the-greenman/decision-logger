@@ -2,7 +2,7 @@
 
 **Status**: authoritative
 **Owns**: field regeneration behavior, prompt-source rules, field-specific weighting and regeneration flow
-**Must sync with**: `packages/schema`, `docs/field-library-architecture.md`, `docs/plans/PLAN.md`, `docs/plans/iterative-implementation-plan.md`
+**Must sync with**: `packages/schema`, `docs/field-library-architecture.md`, `docs/OVERVIEW.md`, `docs/plans/iterative-implementation-plan.md`
 
 ## Architecture Decision: Field-Specific Prompts
 
@@ -12,68 +12,41 @@ When regenerating a single field, we use **field-specific prompts** rather than 
 
 ### 1. Token Efficiency
 **Shared Prompt Approach** (rejected):
-```typescript
-// Generates ALL fields, discards most
-const draft = await generateDraft(contextId); // 500 tokens output
-return draft.fields[fieldId]; // Use 50 tokens, waste 450
-```
+- generate the full draft
+- discard most of the returned content
+- pay unnecessary token cost
 
 **Field-Specific Approach** (chosen):
-```typescript
-// Generates ONLY the needed field
-const value = await regenerateField(contextId, fieldId); // 50 tokens output
-return value; // Use all 50 tokens
-```
+- generate only the requested field
+- use field-specific prompt guidance
+- return only the value needed for that field
 
 **Cost savings**: ~80% fewer output tokens per regeneration.
 
 ### 2. Prompt Clarity
 Different fields require different extraction strategies:
 
-The file snippets below are illustrative only. The canonical field extraction prompts live in the field library (`DecisionField.extractionPrompt`) and are loaded from the database.
+Canonical prompt structure belongs to the field-library definitions in `packages/schema` and the persisted field records, not to this document.
 
-```markdown
-# prompts/fields/decision_statement.md
-Extract a single, clear statement of the decision being made.
-Format: One sentence, active voice.
-Example: "Approve £45,000 budget for roof replacement"
+This document only owns the rule that regeneration must use field-specific extraction guidance, for example:
 
-# prompts/fields/options.md
-Extract all available options discussed.
-Format: Numbered list with brief description.
-Include trade-offs if mentioned.
-
-# prompts/fields/assumptions.md
-Extract underlying assumptions.
-Focus on unstated premises and preconditions.
-Ignore explicit facts.
-```
+- `decision_statement` emphasizes a clear single decision statement
+- `options` emphasizes enumerating alternatives and tradeoffs
+- `assumptions` emphasizes unstated premises and preconditions
 
 ### 3. Segment Weighting
 Field-specific regeneration uses prioritized segments:
 
-```typescript
-async function regenerateField(contextId: string, fieldId: string) {
-  // 1. Field-specific segments (highest priority)
-  const fieldSegments = await getSegmentsByContext(`decision:${contextId}:${fieldId}`);
-  
-  // 2. Decision-wide segments (medium priority)
-  const decisionSegments = await getSegmentsByContext(`decision:${contextId}`);
-  
-  // 3. Meeting-wide segments (lowest priority)
-  const meetingSegments = await getSegmentsByContext(`meeting:${meetingId}`);
-  
-  // Weight by recency and specificity
-  const weightedSegments = [
-    ...fieldSegments.map(s => ({ ...s, weight: 3 })),
-    ...decisionSegments.map(s => ({ ...s, weight: 2 })),
-    ...meetingSegments.map(s => ({ ...s, weight: 1 }))
-  ].sort((a, b) => b.weight - a.weight || b.sequenceNumber - a.sequenceNumber);
-  
-  // Generate using field-specific prompt
-  return await llm.generateField(fieldId, weightedSegments);
-}
-```
+- field-tagged transcript evidence has highest priority
+- decision-context evidence has medium priority
+- meeting-wide evidence has lower priority
+- recency and specificity should both influence ordering
+
+See:
+
+- `docs/context-tagging-strategy.md`
+- `docs/transcript-context-management.md`
+- `docs/plans/iterative-implementation-plan.md` (`M4.1`, `M4.2`)
 
 ## Prompt Organization
 
@@ -90,140 +63,49 @@ prompts/
 ```
 
 Each `DecisionField` in the database contains its own `extractionPrompt`:
-```typescript
-{
-  id: "options",
-  name: "Options",
-  extractionPrompt: {
-    system: "List all options discussed. Include brief description of each.",
-    examples: [...],
-    constraints: ["Format as numbered list", "Include pros/cons if mentioned"]
-  }
-}
-```
+
+For the exact field structure, use the canonical field schema in `packages/schema/src/index.ts` and the field-library semantics in `docs/field-library-architecture.md`.
 
 ## Implementation
 
 ### Service Layer
-```typescript
-// packages/core/src/services/draft-generation.service.ts
-export class DraftGenerationService {
-  async generateDraft(contextId: string): Promise<Record<string, string>> {
-    // Use draft-generation.md prompt
-    // Generates ALL fields at once (initial draft only)
-    const context = await this.contextRepo.findById(contextId);
-    const segments = await this.getRelevantSegments(contextId);
-    
-    const { object } = await generateObject({
-      model: anthropic('claude-3-5-sonnet-latest'),
-      schema: DecisionDraftSchema,
-      system: PROMPTS.draftGeneration.system,
-      prompt: PROMPTS.draftGeneration.user({ segments, template })
-    });
-    
-    return object.fields;
-  }
-  
-  async regenerateField(
-    contextId: string, 
-    fieldId: string
-  ): Promise<string> {
-    // Use field-specific prompt from the field library record
-    const context = await this.contextRepo.findById(contextId);
-    const segments = await this.getWeightedSegments(contextId, fieldId);
-    const template = await this.templateRepo.findById(context.templateId);
-    const field = template.fields.find(f => f.id === fieldId);
-    
-    const { object } = await generateObject({
-      model: anthropic('claude-3-5-sonnet-latest'),
-      schema: z.object({ value: z.string() }),
-      system: field.extractionPrompt.system,
-      prompt: buildFieldPrompt({ 
-        segments, 
-        field,
-        currentValue: context.draftData[fieldId] 
-      })
-    });
-    
-    return object.value;
-  }
-  
-  async regenerateDraft(contextId: string): Promise<Record<string, string>> {
-    // Regenerate ONLY unlocked fields
-    const context = await this.contextRepo.findById(contextId);
-    const template = await this.templateRepo.findById(context.templateId);
-    
-    const newDraft = { ...context.draftData };
-    
-    for (const field of template.fields) {
-      // Skip locked fields
-      if (context.lockedFields[field.id]) {
-        continue;
-      }
-      
-      // Regenerate unlocked field
-      newDraft[field.id] = await this.regenerateField(contextId, field.id);
-    }
-    
-    return newDraft;
-  }
-}
-```
+The canonical implementation lives in core services, not in this document.
+
+Use these sources for exact implementation details:
+
+- `packages/core/src/services/draft-generation-service.ts`
+- `docs/plans/iterative-implementation-plan.md`
+
+This document owns the behavioral contract:
+
+- initial draft generation may generate multiple fields together
+- field regeneration must use field-specific prompt guidance
+- full regenerate must process unlocked fields only
+- locked fields must remain unchanged
+- field-specific transcript evidence should outrank broader decision/meeting evidence
 
 ### Field Prompt Loading
-```typescript
-// packages/core/src/services/draft-generation.service.ts
-export class DraftGenerationService {
-  constructor(
-    private readonly fieldRepo: IDecisionFieldRepository,
-    // ...
-  ) {}
-  
-  async regenerateField(contextId: string, fieldId: string): Promise<string> {
-    // Load field definition from database (includes prompt)
-    const field = await this.fieldRepo.findById(fieldId);
-    
-    // Field contains its own extraction prompt
-    const { object } = await generateObject({
-      model: anthropic('claude-3-5-sonnet-latest'),
-      schema: z.object({ value: z.string() }),
-      system: field.extractionPrompt.system,
-      prompt: this.buildPrompt(field, segments)
-    });
-    
-    return object.value;
-  }
-}
-```
+
+Field prompt loading should follow these rules:
+
+- load the canonical field definition from the field library
+- use the field's own extraction guidance
+- avoid template-local prompt duplication
+- keep prompts as data rather than hardcoded service logic
 
 Prompts are **data**, not code. They live in the database and can be updated without code changes.
 
 ## Testing Strategy
 
 ### Unit Tests (Mocked)
-```typescript
-describe('DraftGenerationService', () => {
-  it('should regenerate only unlocked fields', async () => {
-    const context = {
-      draftData: { 
-        decision_statement: 'Old statement',
-        options: 'Old options' 
-      },
-      lockedFields: { 
-        decision_statement: { value: 'Old statement', lockedAt: new Date() } 
-      }
-    };
-    
-    const mock = new MockLLMService();
-    mock.setFieldResponse('options', 'New options');
-    
-    const result = await service.regenerateDraft(contextId);
-    
-    expect(result.decision_statement).toBe('Old statement'); // Unchanged
-    expect(result.options).toBe('New options'); // Regenerated
-  });
-});
-```
+
+Core test coverage should prove at least:
+
+- locked fields are not regenerated
+- field-specific evidence outranks broader context evidence
+- field assignment is validated against the active template
+- failed persistence does not silently succeed
+- full regenerate processes each unlocked target independently
 
 ### Manual Testing (CLI)
 ```bash
@@ -257,7 +139,7 @@ When a specific field generates poor results:
 
 2. **Review the prompt**
    ```bash
-   cat prompts/fields/options.md
+   inspect the field-library definition for the field prompt
    ```
 
 3. **Refine the prompt**
@@ -275,8 +157,8 @@ When a specific field generates poor results:
 
 5. **Commit**
    ```bash
-   git add prompts/fields/options.md
-   git commit -m "refactor(prompts): improve options field extraction"
+   git add packages/schema docs/field-library-architecture.md
+   git commit -m "refactor(field-library): improve options extraction guidance"
    ```
 
 ## Benefits Summary

@@ -2,7 +2,7 @@
 
 **Status**: authoritative
 **Owns**: decision-detection prompt design, classification rules, prompt refinement workflow
-**Must sync with**: `packages/schema`, `docs/plans/PLAN.md`, `docs/plans/iterative-implementation-plan.md`, `docs/decision-detection-implementation-reference.md`
+**Must sync with**: `packages/schema`, `docs/OVERVIEW.md`, `docs/plans/iterative-implementation-plan.md`, `docs/decision-detection-implementation-reference.md`
 
 > **Implementation note (see `docs/plans/iterative-implementation-plan.md` M6)**:
 > Decision detection is **deferred to Milestone 6**. M1–M5 use manual decision flagging only.

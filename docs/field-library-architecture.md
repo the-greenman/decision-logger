@@ -2,7 +2,7 @@
 
 **Status**: authoritative
 **Owns**: field-library schema, template composition model, field-level extraction prompt structure
-**Must sync with**: `packages/schema`, `docs/plans/PLAN.md`, `docs/plans/iterative-implementation-plan.md`
+**Must sync with**: `packages/schema`, `docs/OVERVIEW.md`, `docs/plans/iterative-implementation-plan.md`
 
 ## Core Concept
 
@@ -14,67 +14,70 @@
 
 ## Architecture
 
-### 1. Decision Field Schema
+### 1. Canonical schema ownership
 
-```typescript
-interface DecisionField {
-  id: string; // e.g., "decision_statement", "options", "roi_analysis"
-  name: string; // e.g., "Decision Statement", "Options", "ROI Analysis"
-  description: string; // What this field captures
-  category: 'core' | 'evaluation' | 'impact' | 'risk' | 'financial' | 'stakeholder' | 'implementation' | 'governance';
-  
-  // LLM extraction guidance
-  extractionPrompt: {
-    system: string; // How to extract this field
-    examples: Array<{ input: string; output: string }>; // Few-shot examples
-    constraints: string[]; // Rules (e.g., "max 2 sentences", "bullet list only")
-  };
-  
-  // UI/validation hints
-  fieldType: 'short_text' | 'long_text' | 'list' | 'structured' | 'numeric' | 'date';
-  placeholder?: string; // Example content
-  validationRules?: {
-    maxLength?: number;
-    minLength?: number;
-    pattern?: string; // regex
-    required?: boolean;
-  };
-  
-  // Metadata
-  version: number;
-  isCustom: boolean; // System field vs user-created
-  createdAt: Date;
-  updatedAt?: Date;
-}
-```
+The canonical structural definitions for field-library entities live in `packages/schema/src/index.ts`.
 
-### 2. Decision Template Schema (Updated)
+Use those source-of-truth schema symbols when you need the exact shape of:
 
-```typescript
-interface DecisionTemplate {
-  id: string;
-  name: string;
-  description: string;
-  category: 'general' | 'technical' | 'strategic' | 'financial' | 'governance' | 'operational';
-  
-  // Template is just a collection of field references
-  fields: TemplateFieldAssignment[];
-  
-  version: number;
-  isDefault: boolean;
-  isCustom: boolean;
-  createdAt: Date;
-  updatedAt?: Date;
-}
+- `DecisionFieldSchema`
+- `DecisionTemplateSchema`
+- template field-assignment shapes
 
-interface TemplateFieldAssignment {
-  fieldId: string; // Reference to DecisionField
-  order: number; // Display order in this template
-  required: boolean; // Required in this template (field may be optional elsewhere)
-  customLabel?: string; // Override field name for this template
-  customDescription?: string; // Override description for this template
-}
-```
+This document owns the semantics of the field library, not the full structural definitions.
+
+### 2. Semantic model
+
+#### Decision fields
+
+A decision field is an atomic reusable definition that should carry:
+
+- stable identity
+- semantic intent
+- extraction guidance
+- field-type and validation hints
+- versioned metadata
+
+Important architectural rules:
+
+- field identity is definition-level and stable
+- field `name` is a programmatic key, not a user-facing label
+- field prompts belong to the field definition, not the template
+- templates reuse fields rather than duplicating them
+
+#### Decision templates
+
+A template is a curated composition of reusable fields.
+
+Important architectural rules:
+
+- templates reference fields by `fieldId`
+- templates are versioned configuration artifacts
+- template assignments control order and requiredness
+- templates may provide broader workflow framing or grouping without changing field meaning
+- templates do not own field history; they control active presentation
+- decision contexts should bind to a specific template version rather than editing template structure in place
+
+#### Template field assignments
+
+A template field assignment should be treated as the place where template composition is configured.
+
+Typical responsibilities include:
+
+- field reference
+- display order
+- required flag
+- optional grouping or layout metadata that does not redefine field semantics
+
+#### Runtime boundary
+
+Field definitions and template definitions should be managed independently from decision drafting.
+
+When a `DecisionContext` is created, it should resolve and bind one specific template version plus the field-definition set referenced by that template version.
+
+From that point onward, the context manages working state such as field values, locks, and visibility, but it should not directly edit field-library records or template-definition structure.
+
+If an open context needs to adopt a newer version of the same template definition, that should be treated as an explicit template migration rather than an in-context template edit.
 
 ### 3. Field Library
 
@@ -403,84 +406,43 @@ interface TemplateFieldAssignment {
 }
 ```
 
-### 5. Database Schema
+### 5. Persistence ownership
 
-```sql
--- Decision Fields Library
-CREATE TABLE decision_fields (
-  id TEXT PRIMARY KEY, -- e.g., 'decision_statement'
-  name TEXT NOT NULL,
-  description TEXT NOT NULL,
-  category TEXT NOT NULL CHECK (category IN ('core', 'evaluation', 'impact', 'risk', 'financial', 'stakeholder', 'implementation', 'governance')),
-  
-  -- LLM extraction
-  extraction_prompt JSONB NOT NULL, -- { system, examples, constraints }
-  
-  -- UI/validation
-  field_type TEXT NOT NULL CHECK (field_type IN ('short_text', 'long_text', 'list', 'structured', 'numeric', 'date')),
-  placeholder TEXT,
-  validation_rules JSONB, -- { maxLength, minLength, pattern, required }
-  
-  -- Metadata
-  version INTEGER NOT NULL DEFAULT 1,
-  is_custom BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ
-);
+The canonical structural definitions for field-library persistence belong in:
 
--- Decision Templates
-CREATE TABLE decision_templates (
-  id TEXT PRIMARY KEY, -- e.g., 'technology-selection'
-  name TEXT NOT NULL,
-  description TEXT,
-  category TEXT NOT NULL CHECK (category IN ('general', 'technical', 'strategic', 'financial', 'governance', 'operational')),
-  version INTEGER NOT NULL DEFAULT 1,
-  is_default BOOLEAN DEFAULT false,
-  is_custom BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ
-);
+- `packages/schema/src/index.ts`
+- `packages/db`
 
--- Template-Field Assignments (many-to-many)
-CREATE TABLE template_field_assignments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  template_id TEXT NOT NULL REFERENCES decision_templates(id) ON DELETE CASCADE,
-  field_id TEXT NOT NULL REFERENCES decision_fields(id) ON DELETE RESTRICT,
-  order_index INTEGER NOT NULL,
-  required BOOLEAN NOT NULL DEFAULT false,
-  custom_label TEXT,
-  custom_description TEXT,
-  UNIQUE(template_id, field_id),
-  UNIQUE(template_id, order_index)
-);
+This document should not restate the exact SQL or full structural shape.
 
--- Indexes
-CREATE INDEX idx_template_fields ON template_field_assignments(template_id, order_index);
-CREATE INDEX idx_field_category ON decision_fields(category);
-CREATE INDEX idx_field_custom ON decision_fields(is_custom);
-```
+Instead, the field-library persistence model must support:
+
+- durable field definitions with stable identity and versioning
+- durable template definitions with stable identity and versioning
+- many-to-many template field assignments
+- template-local ordering and requiredness
+- template-local label/description overrides
+- prompt/configuration data attached to fields rather than duplicated across templates
 
 ### 6. Prompt Organization
 
 ```
 prompts/
 ├── decision-detection.md           # Includes template classification
-├── fields/
-│   ├── decision_statement.md       # One prompt per field
-│   ├── decision_context.md
-│   ├── evaluation_criteria.md
-│   ├── options.md
-│   ├── evaluation_matrix.md
-│   ├── selected_option.md
-│   ├── consequences_positive.md
-│   ├── roi_analysis.md
-│   └── ... (one per field in library)
 └── templates/
-    ├── standard-decision.json      # Template definitions
+    ├── standard-decision.json      # Template field references and ordering
     ├── technology-selection.json
     ├── budget-approval.json
     └── ...
 ```
+
+Field extraction prompts should not be maintained as separate per-field prompt files.
+
+Instead:
+
+- the canonical prompt guidance lives on the field definition itself
+- templates select fields, but do not duplicate their extraction prompts
+- prompt refinement should update the field-library record rather than a parallel prompt-file tree
 
 ### 7. Benefits
 

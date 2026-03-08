@@ -2,7 +2,7 @@
 
 **Status**: authoritative
 **Owns**: expert-system scope, expert data model, MCP integration detail, expert/MCP API and CLI surface
-**Must sync with**: `packages/schema`, `docs/plans/PLAN.md`, `docs/plans/iterative-implementation-plan.md`
+**Must sync with**: `packages/schema`, `docs/OVERVIEW.md`, `docs/plans/iterative-implementation-plan.md`
 
 > **Implementation Note (see `docs/plans/iterative-implementation-plan.md` M5-M7)**:
 > The expert system is implemented in stages.
@@ -18,62 +18,34 @@ The system supports two types of experts:
 1. **Core Experts** - Baked into the application, always available
 2. **Custom Experts** - User-defined, stored in database, fully configurable
 
+Exact domain shapes and implemented route contracts must follow `packages/schema` and the implemented API/core layers.
+
+Inline interfaces and code sketches in this document are illustrative architecture examples, not a second canonical schema source.
+
+If this architecture depends on schema or API changes that are not yet canonical, those changes should be referenced through the relevant documents in `docs/plans/`.
+
 ## MCP Integration with Configurable Experts
 
 ### MCP Server Registry
 
-Each MCP server is registered with capabilities:
+Each MCP server should be treated as a registry-backed integration point with:
 
-```typescript
-interface MCPServer {
-  name: string;
-  type: 'policy-database' | 'decision-archive' | 'custom';
-  connection: {
-    url?: string;
-    database?: string;
-    // ... connection details
-  };
-  capabilities: {
-    resources: string[];  // e.g., ['policy://*', 'archive://*']
-    tools: MCPTool[];
-  };
-  status: 'active' | 'inactive';
-}
+- stable identity
+- server type and connection configuration
+- discoverable tools and resources
+- lifecycle status
 
-interface MCPTool {
-  name: string;
-  description: string;
-  inputSchema: JSONSchema;
-}
-```
+Exact MCP registry structure remains planning-owned until it exists canonically in `packages/schema`.
+
+See `docs/plans/iterative-implementation-plan.md` for preserved future registry/detail notes.
 
 ### Expert MCP Access Configuration
 
-Experts specify which MCP servers they need:
+Experts should be able to declare which MCP servers they can use, and may later support finer restrictions such as allowed tools, allowed resources, and structured-output configuration.
 
-```typescript
-// packages/schema/src/expert.ts
-interface ExpertTemplate {
-  id: string;
-  name: string;
-  type: 'core' | 'custom';
-  promptTemplate: string;
-  
-  // MCP Configuration
-  mcpAccess: {
-    servers: string[];           // ['policy-database', 'decision-archive']
-    allowedTools?: string[];     // Optional: restrict to specific tools
-    allowedResources?: string[]; // Optional: restrict to specific resources
-  };
-  
-  // Output schema (Zod or JSON Schema)
-  outputSchema?: Record<string, any>;
-  
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt?: Date;
-}
-```
+Exact expert-template structure remains canonical only when defined in `packages/schema`.
+
+Planning-level future detail is preserved in `docs/plans/iterative-implementation-plan.md`.
 
 ### How MCP Works with Custom Experts (Vercel AI SDK)
 
@@ -115,75 +87,24 @@ async function executeExpert(
 
 #### 3. MCP Tool Discovery
 
-Custom experts can discover available tools:
-
-```typescript
-GET /api/mcp/servers
-  Returns: List of registered MCP servers
-
-GET /api/mcp/servers/{name}/tools
-  Returns: Available tools for that server
-
-GET /api/mcp/servers/{name}/resources
-  Returns: Available resources for that server
-```
+Custom experts should be able to discover available MCP servers, tools, and resources through a registry/discovery surface.
 
 This allows users to:
 - See what MCP capabilities are available
 - Configure custom experts to use specific tools
 - Test MCP access before creating experts
 
-## Database Schema
+## Persistence ownership
 
-```sql
--- Expert Templates
-CREATE TABLE expert_templates (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL UNIQUE,
-  display_name TEXT NOT NULL,
-  description TEXT,
-  type TEXT NOT NULL CHECK (type IN ('core', 'custom')),
-  prompt_template TEXT NOT NULL,
-  
-  -- MCP Configuration (JSONB)
-  mcp_access JSONB NOT NULL DEFAULT '{"servers": [], "allowedTools": null, "allowedResources": null}',
-  
-  -- Output schema (Zod Schema stored as JSONB)
-  output_schema JSONB,
-  
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ,
-  created_by TEXT
-);
+Expert-system persistence should support at least:
 
--- MCP Server Registry
-CREATE TABLE mcp_servers (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL UNIQUE,
-  type TEXT NOT NULL,
-  connection_config JSONB NOT NULL,
-  capabilities JSONB NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('active', 'inactive')),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ
-);
+- expert template records
+- MCP server registry records
+- expert advice history with enough auditability to understand what context was consulted and which MCP tools were used
 
--- Expert Advice History (for caching and audit)
-CREATE TABLE expert_advice_history (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  decision_context_id UUID NOT NULL REFERENCES decision_contexts(id),
-  expert_id UUID NOT NULL REFERENCES expert_templates(id),
-  expert_name TEXT NOT NULL,
-  request JSONB NOT NULL,
-  response JSONB NOT NULL,
-  mcp_tools_used TEXT[],
-  requested_at TIMESTAMPTZ DEFAULT NOW()
-);
+Exact persistence structure belongs in `packages/schema` and `packages/db` once canonical.
 
-CREATE INDEX idx_advice_context ON expert_advice_history(decision_context_id);
-CREATE INDEX idx_advice_expert ON expert_advice_history(expert_id);
-```
+Future persistence direction is preserved in `docs/plans/iterative-implementation-plan.md`.
 
 ## Core Experts (Baked In)
 
@@ -222,52 +143,16 @@ Check alignment with policies via MCP tools.`,
 
 ## Custom Expert Creation
 
-### API Endpoints
+### API ownership
 
-```typescript
-// List all experts (core + custom)
-GET /api/experts
-Response: {
-  experts: ExpertTemplate[]
-}
+Custom expert creation/update/deletion, consultation, and test flows are valid parts of the planned expert API surface.
 
-// Get expert details
-GET /api/experts/{id}
-Response: ExpertTemplate
+Exact route contracts should be treated as planning-owned until implemented canonically.
 
-// Create custom expert
-POST /api/experts
-Body: {
-  name: string,
-  displayName: string,
-  description: string,
-  promptTemplate: string,
-  mcpAccess: {
-    servers: string[],
-    allowedTools?: string[],
-    allowedResources?: string[]
-  },
-  outputSchema?: z.ZodSchema<any>
-}
-Response: ExpertTemplate
+See:
 
-// Update custom expert (core experts cannot be updated)
-PATCH /api/experts/{id}
-Body: Partial<ExpertTemplate>
-Response: ExpertTemplate
-
-// Delete custom expert (core experts cannot be deleted)
-DELETE /api/experts/{id}
-Response: {deleted: true}
-
-// Test expert prompt
-POST /api/experts/{id}/test
-Body: {
-  decisionContextId: string,
-  focusArea?: string
-}
-Response: ExpertAdviceResponse
-```
+- `docs/plans/iterative-implementation-plan.md`
+- `packages/schema`
 
 ## MCP Configuration for Custom Experts
 
@@ -312,27 +197,7 @@ decision-logger expert create vendor-selection \
 
 ### Scenario 3: Restricting MCP Access
 
-User creates expert with limited access:
-
-```typescript
-POST /api/experts
-{
-  "name": "budget-reviewer",
-  "displayName": "Budget Reviewer",
-  "promptTemplate": "...",
-  "mcpAccess": {
-    "servers": ["policy-database", "decision-archive"],
-    "allowedTools": [
-      "search_policies",      // Can search policies
-      "get_budget_tracking"   // Can get budget data
-    ],
-    "allowedResources": [
-      "policy://financial/*", // Only financial policies
-      "archive://decisions/*" // All decisions
-    ]
-  }
-}
-```
+Experts may later support restricted MCP access by limiting which servers, tools, or resources they can use.
 
 This expert can:
 - ✅ Search policies (but only financial ones via resource filter)
@@ -381,146 +246,36 @@ Focus particularly on: {focus_area}
 
 ### Registering MCP Servers
 
-```typescript
-POST /api/mcp/servers
-Body: {
-  name: string,
-  type: 'postgresql' | 'sqlite' | 'http' | 'custom',
-  connectionConfig: {
-    // Type-specific connection details
-  },
-  capabilities: {
-    resources: string[],
-    tools: MCPTool[]
-  }
-}
-```
+MCP server registration should capture enough information to connect to the server, understand its capabilities, and make those capabilities available for discovery and expert access control.
 
 ### MCP Server Types
 
-**1. PostgreSQL MCP Server**
-```json
-{
-  "name": "decision-archive",
-  "type": "postgresql",
-  "connectionConfig": {
-    "host": "localhost",
-    "database": "decision_logger",
-    "table": "decision_logs"
-  },
-  "capabilities": {
-    "resources": ["archive://decisions/*"],
-    "tools": [
-      {
-        "name": "search_decisions",
-        "description": "Semantic search for decisions",
-        "inputSchema": {...}
-      }
-    ]
-  }
-}
-```
+MCP server registrations may eventually support different backing integration types such as database-backed servers and HTTP-backed servers.
 
-**2. SQLite MCP Server**
-```json
-{
-  "name": "policy-database",
-  "type": "sqlite",
-  "connectionConfig": {
-    "database": "./data/policies.db"
-  },
-  "capabilities": {
-    "resources": ["policy://*"],
-    "tools": [...]
-  }
-}
-```
-
-**3. HTTP MCP Server** (for external APIs)
-```json
-{
-  "name": "vendor-api",
-  "type": "http",
-  "connectionConfig": {
-    "baseUrl": "https://api.vendors.example.com",
-    "auth": {
-      "type": "bearer",
-      "tokenEnv": "VENDOR_API_TOKEN"
-    }
-  },
-  "capabilities": {
-    "resources": ["vendor://*"],
-    "tools": [
-      {
-        "name": "search_vendors",
-        "description": "Search vendor database",
-        "inputSchema": {...}
-      }
-    ]
-  }
-}
-```
+The important architectural requirement is that server type differences remain hidden behind one discovery and execution model for experts.
 
 ## Security & Permissions
 
 ### MCP Access Control
 
-```typescript
-interface MCPAccessControl {
-  // Which experts can use this server
-  allowedExperts?: string[]; // null = all experts
-  
-  // Rate limiting
-  rateLimit?: {
-    requestsPerMinute: number;
-    requestsPerHour: number;
-  };
-  
-  // Resource restrictions
-  resourcePatterns?: string[]; // glob patterns
-  
-  // Tool restrictions
-  allowedTools?: string[];
-}
-```
+MCP access control may later include expert allowlists, rate limiting, and audit requirements.
 
 ### Expert Permissions
 
-```typescript
-interface ExpertPermissions {
-  // Who can create/modify this expert
-  createdBy: string;
-  
-  // Who can use this expert
-  allowedUsers?: string[]; // null = all users
-  
-  // Visibility
-  isPublic: boolean; // false = only creator can see/use
-}
-```
+Expert permissions may later include ownership/edit rights and context-specific usage restrictions.
+
+Those details remain planning-level until they are defined canonically.
 
 ## CLI Commands
 
-```bash
-# Expert management
-decision-logger expert list
-decision-logger expert show <expert-id>
-decision-logger expert create <name> --prompt-file <file> --mcp-servers <servers>
-decision-logger expert update <expert-id> --prompt-file <file>
-decision-logger expert delete <expert-id>
-decision-logger expert test <expert-id> --decision-context <id>
+The CLI surface should cover:
 
-# MCP server management
-decision-logger mcp list
-decision-logger mcp show <server-name>
-decision-logger mcp register <name> --type <type> --config <file>
-decision-logger mcp test <server-name>
-decision-logger mcp tools <server-name>
-decision-logger mcp resources <server-name>
+- expert discovery and inspection
+- expert creation/update/deletion where supported
+- expert consultation/testing flows
+- MCP server discovery, registration, testing, and capability inspection where implemented
 
-# Request expert advice (uses hybrid system)
-decision-logger draft expert-advice <expert-name> [--focus <area>]
-```
+Exact CLI command surfaces remain planning-owned until implemented canonically.
 
 
 ## Benefits of Hybrid Approach
@@ -535,36 +290,11 @@ decision-logger draft expert-advice <expert-name> [--focus <area>]
 
 ## Example: Creating a Custom Expert
 
-```bash
-# 1. Check available MCP servers
-$ decision-logger mcp list
-policy-database (active) - Organizational policies
-decision-archive (active) - Historical decisions
-vendor-api (active) - Vendor database
+Typical workflow:
 
-# 2. Check available tools
-$ decision-logger mcp tools vendor-api
-- search_vendors(query, category)
-- get_vendor(id)
-- get_vendor_ratings(id)
+1. Discover available MCP servers and capabilities.
+2. Create or configure a custom expert with access to the relevant servers.
+3. Test the expert against a decision context.
+4. Use the expert as part of the normal decision-refinement workflow.
 
-# 3. Create custom expert
-$ decision-logger expert create procurement-advisor \
-  --display-name "Procurement Advisor" \
-  --description "Advises on vendor selection and procurement" \
-  --mcp-servers "vendor-api,decision-archive,policy-database" \
-  --mcp-tools "search_vendors,get_vendor_ratings,search_decisions,search_policies" \
-  --prompt-file ./prompts/procurement.txt
-
-# 4. Test it
-$ decision-logger draft expert-advice procurement-advisor \
-  --focus "contractor selection"
-
-# 5. Use in workflow
-$ decision-logger draft expert-advice procurement-advisor
-Expert advice: Based on past decisions and vendor ratings...
-Recommendations:
-- Request quotes from vendors with rating > 4.5
-- Review Policy 4.3 for procurement thresholds
-- Similar decision (2024-06-12) chose Vendor A with good results
-```
+For milestone-specific command and route detail, see `docs/plans/iterative-implementation-plan.md`.

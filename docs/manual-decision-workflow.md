@@ -2,7 +2,7 @@
 
 **Status**: authoritative
 **Owns**: manual flagged-decision workflow, triage/prioritization behavior, flagged-decision management APIs and CLI
-**Must sync with**: `packages/schema`, `docs/plans/PLAN.md`, `docs/plans/iterative-implementation-plan.md`
+**Must sync with**: `packages/schema`, `docs/OVERVIEW.md`, `docs/plans/iterative-implementation-plan.md`
 
 ## Overview
 

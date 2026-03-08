@@ -16,16 +16,7 @@ This document defines the implementation reference for decision detection and re
 
 Detection operates on transcript chunks for a meeting:
 
-```typescript
-type DetectionInputChunk = {
-  id: string;
-  meetingId: string;
-  sequenceNumber: number;
-  speaker?: string;
-  text: string;
-  contexts: string[]; // e.g. meeting:<id>, decision:<id>, decision:<id>:<field>
-};
-```
+Detection input should include enough transcript metadata to preserve meeting identity, sequence ordering, optional speaker metadata, raw text, and any existing context tags.
 
 Assumption: most relevant context is contiguous in sequence, but the same decision may be revisited later in non-contiguous spans.
 
@@ -54,24 +45,18 @@ This pass must not force contiguity. It is designed to capture repeated discussi
 
 ## Candidate Output Contract
 
-Decision detector output should map to this canonical candidate shape:
+Decision detector output should map to a candidate record that preserves:
 
-```typescript
-type DecisionCandidate = {
-  id: string;
-  meetingId: string;
-  title: string;
-  contextSummary: string;
-  confidence: number; // 0..1
-  suggestedTemplateId: string;
-  startSequenceNumber: number;
-  endSequenceNumber: number;
-  evidenceSegmentIds: string[];
-  revisitSegmentIds: string[];
-  source: 'ai' | 'manual';
-  status: 'pending_candidate' | 'promoted' | 'dismissed';
-};
-```
+- meeting identity
+- human-readable title and summary
+- confidence
+- suggested template when available
+- contiguous primary span
+- linked evidence segments
+- any revisit links added during orchestration
+- source and lifecycle status
+
+Exact candidate structure should follow `packages/schema` when canonical, with future contract detail preserved in `docs/plans/iterative-implementation-plan.md`.
 
 Notes:
 - `source='manual'` and `source='ai'` must coexist in one candidate list.
@@ -111,16 +96,10 @@ Notes:
 
 Detection candidate lifecycle must expose equivalent CLI and API workflows.
 
-| Workflow | CLI | API |
-|---|---|---|
-| Run detection | `decisions detect --meeting-id <id>` | `POST /api/meetings/:id/detect-decisions` |
-| List candidates | `decisions candidates --meeting-id <id>` | `GET /api/meetings/:id/decision-candidates` |
-| Refine candidate | `decisions candidates update <candidate-id> ...` | `PATCH /api/decision-candidates/:id` |
-| Promote candidate | `decisions candidates promote <candidate-id>` | `POST /api/decision-candidates/:id/promote` |
-| Dismiss candidate | `decisions candidates dismiss <candidate-id>` | `DELETE /api/decision-candidates/:id` |
-
 Parity rule:
 - If one side ships first, document the temporary asymmetry in milestone notes and add the missing side in the next planned milestone checkpoint.
+
+Milestone-specific command and route detail belongs in `docs/plans/iterative-implementation-plan.md`.
 
 ## Confidence and Deduplication Guidance
 
@@ -144,17 +123,12 @@ The detector service should not contain prompt business logic beyond selecting e
 
 The detector expert must return structured data sufficient for candidate persistence:
 
-```typescript
-type DetectorStructuredResult = Array<{
-  title: string;
-  contextSummary: string;
-  confidence: number;
-  suggestedTemplateId: string;
-  startSequenceNumber: number;
-  endSequenceNumber: number;
-  evidenceSegmentIds: string[];
-}>;
-```
+- title
+- context summary
+- confidence
+- suggested template when available
+- primary span boundaries
+- primary evidence segment references
 
 `revisitSegmentIds` are appended by Pass 2 orchestration and stored on the final candidate records.
 

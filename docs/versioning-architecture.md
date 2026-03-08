@@ -44,6 +44,14 @@ It may span:
 
 Meetings may select existing open decision contexts into an ordered agenda, but that meeting agenda relationship does not define the lifetime of the context.
 
+When a `DecisionContext` is created, it should bind to a specific template definition version and the corresponding field-definition set resolved by that template version at creation time.
+
+That version binding is part of the context's working configuration and should remain stable until the context explicitly migrates to a different template or template version.
+
+Field definitions and template definitions are configuration artifacts managed outside the `DecisionContext` lifecycle.
+
+The context may edit field values, locks, and visibility state derived from its active template version, but it should not mutate field-library or template-definition records from within the decision workflow.
+
 Automatically detected decision candidates are not decision contexts by default.
 
 Promotion is the boundary where:
@@ -58,40 +66,44 @@ It should capture the meeting/event context and the participant set with authori
 
 Contributor history can be inferred separately from transcript relations if needed; it is not the same as the final authority participant list.
 
-`FieldVersion` is the canonical history record:
+`FieldVersion` is the canonical history record.
 
-```typescript
-type FieldVersion = {
-  id: string;
-  decisionContextId: string;
-  fieldId: string;
-  version: number;
-  value: unknown;
-  source: 'ai_generated' | 'manual_edit' | 'regen' | 'template_transform' | 'rollback';
-  sourceInteractionId?: string;
-  createdAt: string;
-  createdBy?: string;
-  notes?: string;
-  isActive: boolean;
-};
-```
+For the exact structural definition, use the canonical schema and proposal sources:
 
-`FieldVisibilityState` tracks template-driven visibility without deleting content:
+- `packages/schema/src/index.ts`
+- `docs/plans/field-versioning-schema-proposal.md`
 
-```typescript
-type FieldVisibilityState = {
-  decisionContextId: string;
-  fieldId: string;
-  visibleInTemplate: boolean;
-  hiddenReason?: 'not_in_template' | 'manual_hide';
-  updatedAt: string;
-};
-```
+Semantically, `FieldVersion` must capture at least:
+
+- decision-context identity
+- field identity
+- monotonically increasing per-field version
+- value payload
+- provenance/source information
+- created-at / created-by metadata where applicable
+- active-version status
+
+`FieldVisibilityState` tracks template-driven visibility without deleting content.
+
+For the exact structural definition, use the canonical schema and proposal sources:
+
+- `packages/schema/src/index.ts`
+- `docs/plans/field-versioning-schema-proposal.md`
+
+Semantically, `FieldVisibilityState` must capture at least:
+
+- decision-context identity
+- field identity
+- whether the field is currently visible in the active template
+- why a field is hidden when applicable
+- last-updated metadata
 
 ### Invariants
 
 - Each field has a strictly increasing `version` per `decisionContextId`.
 - Exactly one active version per field per context.
+- Each `DecisionContext` is pinned to one active template definition version at a time.
+- The active field set for a `DecisionContext` is derived from the pinned template definition version rather than by mutating template configuration inside the context.
 - Template switch never deletes field versions.
 - Hidden fields are excluded from exports and required-field checks for the active template.
 - Locked fields cannot receive new versions from regenerate or template transform.
@@ -120,11 +132,16 @@ type FieldVisibilityState = {
 ### Template Transform
 
 - Update active template reference on context.
+- Update the pinned template definition version on context when migrating to a newer version of the same template definition.
 - Recompute visibility state for fields.
 - Preserve all values.
 - For unlocked fields entering active template, optional transform/regenerate writes new versions.
 - Locked fields remain unchanged.
 - Template change by itself does not create new `FieldVersion` rows for unchanged values.
+
+Migration from one version of a template definition to another should use these same semantics.
+
+Version-to-version migration is therefore treated as an explicit template migration event, not as an in-place mutation of the context's bound configuration.
 
 ### Field Restore
 
@@ -153,6 +170,7 @@ type FieldVisibilityState = {
 - Export includes only fields visible in active template.
 - Hidden fields remain stored and recoverable but are not exported.
 - Completion export is based on active field versions at lock/finalize time.
+- Completion export should preserve the template definition/version identity used for the finalized context so exported output can be traced back to the configuration that shaped it.
 
 ## Meeting Scope And Decision Scope
 

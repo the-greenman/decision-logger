@@ -85,6 +85,7 @@ Out of scope for v1:
 - No requirement to finalize the exact subsystem/module shape.
 - No requirement to move to separate packages/processes.
 - No requirement to fully implement advanced transcript structures (graphs, multi-pipeline chunking) before core workflow is stable.
+- Definition-package distribution, public template exchange, upstream sync, and diff re-import are v2 scope rather than part of this iterative delivery plan.
 
 ---
 
@@ -272,7 +273,7 @@ export class DraftGenerationService {
 
   async generateDraft(decisionContextId: string, guidance?: GuidanceSegment[]): Promise<DecisionContext>;
   // 1. Fetch transcript chunks for meeting (weighted: field-tagged > decision-tagged > meeting-tagged)
-  // 2. Fetch template fields (default template if none set)
+  // 2. Resolve the context's pinned template definition version and field-definition set
   // 3. Build prompt via PromptBuilder
   // 4. Skip locked fields (pass to LLM only unlocked fields)
   // 5. Call llm.generateDraft()
@@ -934,7 +935,10 @@ decision log --type <consensus|vote|authority|defer|reject|manual|ai_assisted> \
 **Definition model updates**:
 - Field identity is stable via UUID at definition time (seed-time for canonical/core registry).
 - `name` is the stable programmatic key within a `namespace` (not the user-facing label).
-- Templates reuse fields by `fieldId` (UUID) and customize presentation via `template_field_assignments.customLabel` / `customDescription`.
+- Fields remain the primary semantic definition units.
+- Templates reuse fields by `fieldId` (UUID) and act as versioned compositions over field definitions.
+- Template assignments control composition concerns such as inclusion, order, requiredness, and non-semantic grouping/layout metadata.
+- Templates should not override field-definition meaning, prompt semantics, or validation behavior.
 
 **Seed/registry updates**:
 - Canonical fields/templates stored in a registry (constants) with pre-assigned UUIDs.
@@ -951,6 +955,7 @@ decision log --type <consensus|vote|authority|defer|reject|manual|ai_assisted> \
 - Core and DB now expose authoritative field/template identity lookup by stable attributes
 - Field-specific CLI/API callers now use shared identity-aware resolution rather than ad hoc name scans
 - Field-specific API routes now accept stable field references while continuing to validate active-template assignment
+- The next implementation pass should make `DecisionContext` creation explicitly pin a template definition version and its resolved field-definition set
 
 **Impact of versioning review**:
 - This recent field work remains valid and should be treated as foundational contract hardening for the long-term field-version model
@@ -972,17 +977,25 @@ decision log --type <consensus|vote|authority|defer|reject|manual|ai_assisted> \
   - `FieldVersion`
   - `FieldVisibilityState`
   - field-version source enums and inferred types
+- Add context configuration support for:
+  - pinned template definition version on `DecisionContext`
+  - resolved field-definition versions used by that context
 - Add DB migrations, repositories, and core service interfaces for:
   - create next field version
   - read active field version
   - list field history
   - restore field version
   - recompute field visibility for template changes
+- Add explicit migration support for:
+  - moving an open context to a newer version of the same template definition
+  - recomputing the resolved field-definition set during template migration
 - Add focused tests for:
   - append-only restore behavior
   - one-active-version invariant
   - hidden-field preservation across template changes
   - locked-field rejection for automated writes
+  - context creation binding exact template and field-definition versions
+  - explicit version-to-version template migration without synthetic unchanged field writes
   - agenda selection of open contexts without transferring ownership to meetings
   - transcript linkage from many meetings into one decision context
 - Add planning/design follow-up for cross-meeting context scope:
@@ -1194,12 +1207,24 @@ Complete all remaining API endpoints. All use Zod + `@hono/zod-openapi`.
 - `POST /api/templates`, `PATCH /api/templates/:id`, `DELETE /api/templates/:id`
 - `POST /api/templates/:id/set-default`
 
+These endpoints cover local definition management for v1/v1.5 workflows.
+
+Public definition-package distribution, upstream update flows, and diff re-import remain out of scope for this iterative plan and belong to v2.
+
 **Versioning-first additions before broader CRUD expansion**:
 - `GET /api/decision-contexts/:id/fields` — active field state backed by active field versions
 - `GET /api/decision-contexts/:id/fields/:fieldRef/versions`
 - `GET /api/decision-contexts/:id/fields/:fieldRef/versions/:version`
 - `POST /api/decision-contexts/:id/fields/:fieldRef/restore`
 - `POST /api/decision-contexts/:id/template-change` with explicit transform mode semantics
+
+**Preserved future-facing API notes**:
+- Expert and MCP surfaces are expected to include CRUD-style expert management plus MCP server inspection/registration flows, but exact contracts remain subordinate to the M6/M7 milestone implementation.
+- Field/template management is expected to expose list/get/update/default-selection flows; exact route contracts should be finalized through `packages/schema` and milestone-specific API work rather than a static overview doc.
+- Decision-context creation should bind a specific template definition version and resolved field-definition set rather than allowing template-definition editing inside the context.
+- Migration to a newer version of the same template definition should use the same explicit transform semantics as template-to-template migration, not an implicit in-place rebind.
+- Iterative-plan scope stops at local definition management and runtime context migration; public/community definition-package management is deferred to v2.
+- Export should preserve a simple single-log export flow first, with richer export-option surfaces and batch export treated as later contract expansion.
 
 **Validation**:
 ```bash
@@ -1227,6 +1252,11 @@ For human segment selection, overlapped chunk text is hard to read. Add a dedica
 - Overlap metadata is optional and compact (e.g., icon/count), hidden by default in reading view.
 - Reading rows are append-only for ongoing transcript ingestion; existing rows are not renumbered when new transcript content is added.
 - Confirmed selections persist both selected reading-row IDs and final ordered, deduplicated chunk IDs.
+
+**Preserved transcript-selection contract notes**:
+- Confirmed selection persistence may need to retain meeting reference, selection reference type/id, reading-row IDs, chunk IDs, selection source, and explicit user-confirmation state.
+- Reading projection rows may need stable row identity, ordered sequence position, optional speaker/timing metadata, source chunk references, and overlap metadata.
+- Candidate queue / agenda states remain important planning concepts for meeting workflow ordering even if final schema names change during implementation.
 
 **CLI/API parity**:
 - CLI: `transcript list --reading --meeting-id <id> [--from <seq>] [--to <seq>] [--query <text>] [--page <n>] [--page-size <n>]`
@@ -1260,6 +1290,11 @@ Manual decision creation should support title/summary-driven AI suggestions for 
 - Persist only user-confirmed selection.
 - Suggestions return reading-row spans plus mapped chunk IDs; single-row suggestions are represented as one-row spans.
 - This workflow assists explicit user-driven decision creation and does not create candidate records automatically.
+
+**Preserved suggestion contract notes**:
+- Suggestion requests may later support optional sequence bounds, query filtering, result limits, and confidence thresholds.
+- Suggestion responses may need to preserve suggested reading-row spans, source chunk references, confidence, and inclusion reason.
+- CLI and API parity remains required even if one surface temporarily ships ahead of the other.
 
 **CLI/API parity**:
 - CLI: `decisions suggest-segments --meeting-id <id> --title <text> --summary <text> [--from <seq>] [--to <seq>] [--limit <n>]`
@@ -1380,6 +1415,11 @@ Key screens:
 
 Real-time: SSE or WebSocket for streaming LLM draft generation (show progress per field as it generates).
 
+**Preserved export planning notes**:
+- Export targets may grow beyond markdown/json to include HTML, PDF, CSV, DOCX, and plain text.
+- Batch export, export templates, and format-specific rendering options are valid future design directions, but should remain planning concerns until canonical API/schema support exists.
+- Export rendering must continue to reflect finalized decision-log authority participants rather than broader contributor history.
+
 ---
 
 ### M5 Validation (End-to-End)
@@ -1495,6 +1535,22 @@ expert create <name> --prompt-file <file>
 - `GET/POST /api/experts`, `GET/PATCH/DELETE /api/experts/:id`
 - `POST /api/decision-contexts/:id/experts/:name/consult`
 
+**Preserved expert contract notes**:
+- Custom experts may eventually carry MCP access configuration, allowed-tool/resource constraints, and optional structured output schemas.
+- MCP server registry records may eventually expose server type, connection configuration, capabilities, and activation state.
+- These structures should be treated as planning-level contract direction until they exist canonically in `packages/schema`.
+
+**Preserved expert persistence notes**:
+- Planning currently expects persistence for expert templates, MCP server registry records, and expert advice history.
+- Expert template records may include stable identity, prompt template text, expert type (`core` vs `custom`), activation state, and MCP access configuration.
+- MCP access configuration may include allowed server list plus optional tool/resource restrictions.
+- Expert advice history may need to retain the decision-context reference, expert reference, request/response payloads, and any MCP tools used for auditability.
+
+**Preserved expert API notes**:
+- Full expert CRUD plus expert test/consultation flows are valid planned surfaces.
+- The eventual surface may distinguish between normal consultation and test-only prompt execution.
+- These routes remain planning-owned until the implemented API and canonical schemas exist.
+
 ---
 
 ### M6.2 — Structured Output for Expert Service
@@ -1524,6 +1580,11 @@ The Decision Detector is an expert stored in the experts table. It uses `consult
   - `evidenceSegmentIds`
 - Confidence threshold is configurable per run; default include threshold: `>= 0.5`
 - Persisted candidate metadata includes lifecycle timestamps and queue status (`suggested` by default before agenda ordering/promotion)
+
+**Preserved detection contract notes**:
+- Candidate records may need to retain meeting reference, source (`ai` or `manual`), lifecycle status, contiguous primary span, evidence segment IDs, and non-contiguous revisit segment IDs.
+- Detector structured output may remain smaller than final persisted candidate shape; revisit links can be appended by orchestration after initial inference.
+- Detection CLI/API parity remains a planning requirement even if milestone sequencing temporarily staggers delivery.
 
 **Seed**: Decision Detector expert inserted into `experts` table (name: `'decision-detector'`, domain: `'detection'`)
 
@@ -1687,6 +1748,14 @@ rollback_draft(decision_context_id, version)
 ```
 
 Each tool accepts structured JSON input validated against Zod schemas. Returns structured JSON output.
+
+**Preserved MCP planning notes**:
+- MCP resource and tool discovery endpoints/resources are part of the expected future surface area.
+- Exact MCP request/response structures should remain planning-owned until the MCP server implementation and canonical schemas are in place.
+
+**Preserved MCP registry notes**:
+- MCP server registry design may include server identity, server type, connection configuration, declared capabilities, and lifecycle status.
+- Tool discovery and resource discovery should remain first-class registry concerns even if the final transport/API shape changes during implementation.
 
 ---
 

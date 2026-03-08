@@ -60,17 +60,14 @@ Reading projection is a derived, human-readable view over transcript artifacts. 
 
 Selections must persist both the user-visible reading-row references and the storage-facing chunk references.
 
-```typescript
-type PersistedSelection = {
-  meetingId: string;
-  selectionRefType: 'candidate' | 'flagged_decision' | 'decision_context';
-  selectionRefId: string;
-  readingRowIds: string[];
-  chunkIds: string[];
-  selectionSource: 'manual' | 'ai_suggested' | 'hybrid';
-  confirmedByUser: boolean;
-};
-```
+Confirmed selection persistence should preserve at least:
+
+- meeting identity
+- the workflow entity the selection belongs to
+- selected reading-row identifiers
+- resolved chunk identifiers
+- selection source
+- explicit confirmation state
 
 In v1, confirmed persistence stores the final ordered, deduplicated chunk ID set together with the selected reading row IDs.
 
@@ -80,19 +77,7 @@ In v1, confirmed persistence stores the final ordered, deduplicated chunk ID set
 
 Returns ordered reading rows:
 
-```typescript
-type TranscriptReadingRow = {
-  readingRowId: string;
-  meetingId: string;
-  sequenceNumber: number;
-  speaker?: string; // optional, may be unknown
-  text: string;
-  startTime?: string;
-  endTime?: string;
-  sourceChunkIds: string[]; // mapping back to overlapped chunks
-  overlapCount: number; // number of additional chunks sharing text window
-};
-```
+Reading rows should preserve stable row identity, deterministic ordering, human-readable content, optional speaker/timing metadata, mapping back to source chunks, and overlap metadata.
 
 ### Resolution Rules
 
@@ -129,21 +114,7 @@ CLI output must match API ordering/content for equivalent parameters.
 
 Candidates and decisions must support ordered meeting workflow.
 
-```typescript
-type CandidateQueueStatus = 'suggested' | 'agenda' | 'promoted' | 'dismissed';
-
-type CandidateQueueItem = {
-  candidateId: string;
-  meetingId: string;
-  status: CandidateQueueStatus;
-  agendaOrder?: number; // required when status='agenda'
-  createdAt: string;
-  detectedAt?: string;
-  agendaUpdatedAt?: string;
-  promotedAt?: string;
-  dismissedAt?: string;
-};
-```
+Candidate queue records should preserve enough state to distinguish suggested items from agenda items, promoted items, and dismissed items, with ordering metadata for agenda placement and lifecycle timestamps for auditability.
 
 Rules:
 - Agenda view renders only `agenda` items in `agendaOrder`.
@@ -162,38 +133,13 @@ Rules:
 
 `POST /api/meetings/:id/segment-suggestions`
 
-Request:
+Suggestion request/response behavior should preserve enough information to:
 
-```typescript
-type SegmentSuggestionRequest = {
-  title: string;
-  summary: string;
-  fromSequenceNumber?: number;
-  toSequenceNumber?: number;
-  query?: string;
-  limit?: number; // default 25
-  minConfidence?: number; // default 0.5
-};
-```
-
-Response:
-
-```typescript
-type SegmentSuggestion = {
-  readingRowIds: string[];
-  startSequenceNumber: number;
-  endSequenceNumber: number;
-  sourceChunkIds: string[];
-  confidence: number;
-  reason: string;
-};
-
-type SegmentSuggestionResponse = {
-  suggestions: SegmentSuggestion[];
-  model: string;
-  threshold: number;
-};
-```
+- scope a suggestion run by title/summary and optional filters
+- return suggested reading-row spans
+- resolve those spans back to source chunks
+- express confidence and inclusion rationale
+- preserve model/threshold metadata where needed for auditability
 
 ### CLI
 
