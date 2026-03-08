@@ -1,189 +1,80 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { createFlaggedDecisionService } from '@repo/core';
+import { api, requireActiveMeeting, type FlaggedDecision } from '../client.js';
 
-// Create service instance
-const decisionService = createFlaggedDecisionService();
-
-async function resolveChunkIdsForMeeting(meetingId: string, segmentSpec?: string, includeAll?: boolean): Promise<string[]> {
-  if (includeAll) {
-    return decisionService.resolveChunkIdsFromSequenceSpec(meetingId, 'all');
+function printDecision(d: FlaggedDecision, index?: number) {
+  const prefix = index !== undefined ? `${index + 1}. ` : '';
+  console.log(chalk.gray(`${prefix}${d.id}`));
+  console.log(chalk.white(`   Title:      ${d.suggestedTitle}`));
+  console.log(chalk.white(`   Status:     ${d.status}`));
+  console.log(chalk.white(`   Priority:   ${d.priority}`));
+  console.log(chalk.white(`   Confidence: ${(d.confidence * 100).toFixed(0)}%`));
+  if (d.contextSummary) {
+    console.log(chalk.gray(`   Context:    ${d.contextSummary}`));
   }
-
-  if (!segmentSpec) {
-    return [];
-  }
-
-  return decisionService.resolveChunkIdsFromSequenceSpec(meetingId, segmentSpec);
 }
 
 export const decisionsCommand = new Command('decisions')
-  .description('Flagged decision management commands');
+  .description('Flagged decision management');
 
-// Show decision command
 decisionsCommand
-  .command('show')
-  .description('Show flagged decision details')
-  .argument('<id>', 'Flagged decision ID')
-  .action(async (id) => {
-    try {
-      const decision = await decisionService.getDecisionById(id);
-      
-      if (!decision) {
-        console.error(chalk.red('Decision not found'));
-        process.exit(1);
-      }
-
-      console.log(chalk.white('Flagged Decision Details:'));
-      console.log('');
-      console.log(chalk.gray(`ID: ${decision.id}`));
-      console.log(chalk.white(`Title: ${decision.suggestedTitle}`));
-      console.log(chalk.white(`Meeting: ${decision.meetingId}`));
-      
-      if (decision.contextSummary) {
-        console.log(chalk.white(`Context: ${decision.contextSummary}`));
-      }
-      
-      console.log(chalk.blue(`Confidence: ${(decision.confidence * 100).toFixed(1)}%`));
-      console.log(chalk.gray(`Status: ${decision.status}`));
-      
-      if (decision.chunkIds && decision.chunkIds.length > 0) {
-        console.log(chalk.gray(`Source Chunks: ${decision.chunkIds.join(', ')}`));
-      }
-      
-      if (decision.suggestedTemplateId) {
-        console.log(chalk.gray(`Suggested Template: ${decision.suggestedTemplateId}`));
-        console.log(chalk.gray(`Template Confidence: ${(decision.templateConfidence! * 100).toFixed(1)}%`));
-      }
-      
-      console.log(chalk.gray(`Created: ${decision.createdAt}`));
-    } catch (error) {
-      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
-      process.exit(1);
+  .command('list')
+  .description('List flagged decisions for a meeting')
+  .option('-m, --meeting-id <id>', 'Meeting ID (defaults to active meeting)')
+  .option('-s, --status <status>', 'Filter by status: pending|accepted|rejected|dismissed')
+  .action(async (opts: { meetingId?: string; status?: string }) => {
+    const meetingId = opts.meetingId ?? await requireActiveMeeting();
+    const qs = opts.status ? `?status=${opts.status}` : '';
+    const { decisions } = await api.get<{ decisions: FlaggedDecision[] }>(
+      `/api/meetings/${meetingId}/flagged-decisions${qs}`,
+    );
+    if (decisions.length === 0) {
+      console.log(chalk.yellow('No flagged decisions found'));
+      return;
     }
+    console.log(chalk.white(`Flagged decisions for meeting ${meetingId}:\n`));
+    decisions.forEach((d, i) => {
+      printDecision(d, i);
+      console.log('');
+    });
   });
 
-// Flag decision command
 decisionsCommand
   .command('flag')
-  .description('Manually flag a decision from transcript segments')
-  .argument('<meeting-id>', 'Meeting ID')
+  .description('Manually flag a decision')
   .requiredOption('-t, --title <title>', 'Decision title')
-  .option('-s, --segments <segments>', 'Sequence ranges like 12-18,22 or the literal value all')
-  .option('--all', 'Include all chunks from the meeting')
-  .option('-c, --context <context>', 'Context summary')
-  .option('--template <templateId>', 'Suggested template ID')
-  .action(async (meetingId, options) => {
-    try {
-      const chunkIds = await resolveChunkIdsForMeeting(meetingId, options.segments, options.all);
-      const decision = await decisionService.createFlaggedDecision({
-        meetingId,
-        suggestedTitle: options.title,
-        contextSummary: options.context ?? '',
-        chunkIds,
-        suggestedTemplateId: options.template,
-        templateConfidence: options.template ? 0.8 : undefined,
-        confidence: 1.0, // Manual flags have high confidence
-        priority: 0, // Default priority
-      });
-
-      console.log(chalk.green('✓ Decision flagged successfully'));
-      console.log(chalk.gray(`ID: ${decision.id}`));
-      console.log(chalk.white(`Title: ${decision.suggestedTitle}`));
-      console.log(chalk.gray(`Status: ${decision.status}`));
-    } catch (error) {
-      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
-      process.exit(1);
-    }
+  .option('-m, --meeting-id <id>', 'Meeting ID (defaults to active meeting)')
+  .option('-c, --context <summary>', 'Context summary')
+  .action(async (opts: { title: string; meetingId?: string; context?: string }) => {
+    const meetingId = opts.meetingId ?? await requireActiveMeeting();
+    const decision = await api.post<FlaggedDecision>(
+      `/api/meetings/${meetingId}/flagged-decisions`,
+      {
+        suggestedTitle: opts.title,
+        contextSummary: opts.context ?? '',
+        confidence: 1.0,
+        priority: 0,
+        chunkIds: [],
+      },
+    );
+    console.log(chalk.green('✓ Decision flagged'));
+    printDecision(decision);
   });
 
-// Update decision command
 decisionsCommand
   .command('update')
   .description('Update a flagged decision')
-  .argument('<id>', 'Decision ID')
+  .argument('<id>', 'Flagged decision ID')
   .option('-t, --title <title>', 'New title')
-  .option('-s, --status <status>', 'New status')
-  .option('--segments <segments>', 'Sequence ranges like 12-18,22 or the literal value all')
-  .option('--all', 'Replace current source chunks with all chunks from the decision meeting')
-  .action(async (id, options) => {
-    try {
-      const updateData: any = {};
-      if (options.title) updateData.suggestedTitle = options.title;
-      if (options.status) updateData.status = options.status;
+  .option('-s, --status <status>', 'New status: pending|accepted|rejected|dismissed')
+  .option('-p, --priority <n>', 'New priority (integer)')
+  .action(async (id: string, opts: { title?: string; status?: string; priority?: string }) => {
+    const body: Record<string, unknown> = {};
+    if (opts.title) body.suggestedTitle = opts.title;
+    if (opts.status) body.status = opts.status;
+    if (opts.priority !== undefined) body.priority = parseInt(opts.priority, 10);
 
-      if (options.segments || options.all) {
-        const existing = await decisionService.getDecisionById(id);
-        if (!existing) {
-          console.error(chalk.red('Decision not found'));
-          process.exit(1);
-        }
-
-        updateData.chunkIds = await resolveChunkIdsForMeeting(
-          existing.meetingId,
-          options.segments,
-          options.all
-        );
-      }
-      
-      const decision = await decisionService.updateDecision(id, updateData);
-      
-      if (decision) {
-        console.log(chalk.green('✓ Decision updated successfully'));
-        console.log(chalk.gray(`ID: ${decision.id}`));
-        console.log(chalk.white(`Title: ${decision.suggestedTitle}`));
-        console.log(chalk.gray(`Status: ${decision.status}`));
-      } else {
-        console.error(chalk.red('Failed to update decision'));
-        process.exit(1);
-      }
-    } catch (error) {
-      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
-      process.exit(1);
-    }
-  });
-
-// Priority command
-decisionsCommand
-  .command('priority')
-  .description('Set decision priority')
-  .argument('<id>', 'Decision ID')
-  .requiredOption('-p, --priority <number>', 'Priority level (1-5)', '3')
-  .action(async (id, options) => {
-    try {
-      const priority = parseInt(options.priority);
-      if (isNaN(priority) || priority < 1 || priority > 5) {
-        console.error(chalk.red('Priority must be a number between 1 and 5'));
-        process.exit(1);
-      }
-      
-      await decisionService.updateDecisionPriority(id, priority);
-      
-      console.log(chalk.green(`✓ Priority set to ${priority}`));
-      console.log(chalk.gray(`Decision ID: ${id}`));
-    } catch (error) {
-      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
-      process.exit(1);
-    }
-  });
-
-// Dismiss command
-decisionsCommand
-  .command('dismiss')
-  .description('Dismiss a flagged decision')
-  .argument('<id>', 'Decision ID')
-  .option('-r, --reason <reason>', 'Dismissal reason')
-  .action(async (id, options) => {
-    try {
-      await decisionService.updateDecisionStatus(id, 'dismissed');
-      
-      console.log(chalk.green('✓ Decision dismissed'));
-      console.log(chalk.gray(`Decision ID: ${id}`));
-      if (options.reason) {
-        console.log(chalk.gray(`Reason: ${options.reason}`));
-      }
-    } catch (error) {
-      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
-      process.exit(1);
-    }
+    const decision = await api.patch<FlaggedDecision>(`/api/flagged-decisions/${id}`, body);
+    console.log(chalk.green('✓ Decision updated'));
+    printDecision(decision);
   });

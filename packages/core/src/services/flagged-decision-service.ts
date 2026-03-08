@@ -20,11 +20,6 @@ export class FlaggedDecisionService implements IFlaggedDecisionService {
       throw new Error('Confidence must be between 0 and 1');
     }
 
-    // Validate at least one chunk ID is provided
-    if (data.chunkIds.length === 0) {
-      throw new Error('At least one chunk ID is required');
-    }
-
     // Create the flagged decision
     return await this.repository.create(data);
   }
@@ -51,10 +46,6 @@ export class FlaggedDecisionService implements IFlaggedDecisionService {
     const existing = await this.repository.findById(id);
     if (!existing) {
       throw new Error('Decision not found');
-    }
-
-    if (data.chunkIds !== undefined && data.chunkIds.length === 0) {
-      throw new Error('At least one chunk ID is required');
     }
 
     const updateData: Partial<FlaggedDecision> = {};

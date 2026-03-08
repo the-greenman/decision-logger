@@ -114,20 +114,28 @@ describe('FlaggedDecisionService', () => {
       expect(mockRepository.create).not.toHaveBeenCalled();
     });
 
-    it('should throw error for empty chunk IDs', async () => {
+    it('should allow empty chunk IDs (manual flag with no transcript yet)', async () => {
       const data: CreateFlaggedDecision = {
         meetingId: testMeetingId,
         suggestedTitle: 'Decision',
         contextSummary: 'Context',
         confidence: 0.8,
-        chunkIds: [], // Invalid: empty array
+        chunkIds: [],
         priority: 3,
       };
 
-      await expect(service.createFlaggedDecision(data)).rejects.toThrow(
-        'At least one chunk ID is required'
-      );
-      expect(mockRepository.create).not.toHaveBeenCalled();
+      const created: FlaggedDecision = {
+        ...data,
+        id: randomUUID(),
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      mockRepository.create.mockResolvedValue(created);
+
+      const result = await service.createFlaggedDecision(data);
+      expect(mockRepository.create).toHaveBeenCalledWith(data);
+      expect(result).toEqual(created);
     });
   });
 
@@ -393,7 +401,7 @@ describe('FlaggedDecisionService', () => {
       expect(result).toEqual(updated);
     });
 
-    it('should reject chunk ID updates when the list is empty', async () => {
+    it('should allow chunk ID updates with empty list (clearing chunks)', async () => {
       const decisionId = randomUUID();
       const existing: FlaggedDecision = {
         id: decisionId,
@@ -410,10 +418,10 @@ describe('FlaggedDecisionService', () => {
 
       mockRepository.findById.mockResolvedValue(existing);
 
-      await expect(
-        service.updateDecision(decisionId, { chunkIds: [] })
-      ).rejects.toThrow('At least one chunk ID is required');
-      expect(mockRepository.update).not.toHaveBeenCalled();
+      mockRepository.update.mockResolvedValue({ ...existing, chunkIds: [] });
+      const result = await service.updateDecision(decisionId, { chunkIds: [] });
+      expect(mockRepository.update).toHaveBeenCalledWith(decisionId, { chunkIds: [] });
+      expect(result).toBeDefined();
     });
   });
 

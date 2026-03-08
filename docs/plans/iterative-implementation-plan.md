@@ -17,7 +17,7 @@ Phases 0–2 are complete: Zod schemas, full service layer, Drizzle repositories
 
 ---
 
-## Current State (as of March 3, 2026)
+## Current State (as of March 8, 2026)
 
 - ✅ Phase 0: Vertical slice
 - ✅ Phase 1: Schema foundation (all Zod schemas)
@@ -33,6 +33,7 @@ Phases 0–2 are complete: Zod schemas, full service layer, Drizzle repositories
 - ✅ M1.9: Markdown export service implemented with full formatting options
 - ✅ M1.10: Draft generation prompt template implemented with runtime injection
 - ✅ M1.11: API endpoints implemented with OpenAPI/Swagger docs, real-DB e2e coverage, and compose-based API/db startup workflow
+- ✅ M5-CLI: CLI rewritten as pure HTTP API client (tsx boot blocker resolved by eliminating all @repo/* imports)
 
 ---
 
@@ -43,9 +44,13 @@ Use `ai` + `@ai-sdk/anthropic` + `@ai-sdk/openai`. Existing API keys work unchan
 - `LLM_PROVIDER=anthropic|openai`
 - `LLM_MODEL=claude-opus-4-5|gpt-4o` (etc.)
 
-### CLI Architecture: @repo/core until M5
-- M1–M4: CLI imports `@repo/core` services directly (no API server required to use CLI)
-- M5: CLI rewrites to pure HTTP API client (`DECISION_LOGGER_API_URL`)
+### CLI Architecture: HTTP client (M5 CLI pivot executed early)
+
+The original plan called for CLI to import `@repo/core` directly through M1–M4, then rewrite to HTTP in M5. A tsx/ESM runtime boot blocker in the M1–M4 CLI made it unusable, and with the API fully validated (43/43 E2E tests), the M5 pivot was executed at M4/M5 boundary.
+
+- M1–M4 CLI: direct `@repo/core` service imports — **replaced, do not restore**
+- M5 CLI (current): pure HTTP API client, `API_BASE_URL` env var (default `http://localhost:3000`), no `@repo/*` imports
+- Commands: `meeting`, `transcript`, `decisions`, `context`, `draft`
 - API is built in parallel throughout M1–M4, ready for M5 web UI
 
 ### CLI/API Sync Contract (all milestones)
@@ -1531,6 +1536,35 @@ pnpm test --filter=@repo/core
 
 ---
 
+### M5-CLI — Minimal HTTP Client CLI (complete)
+
+The old `apps/cli` direct-service-import CLI was replaced with a minimal HTTP client CLI. Covers the core E2E workflow with no `@repo/*` dependencies.
+
+**Commands shipped:**
+- `meeting create/list/show`
+- `transcript upload`
+- `decisions flag/list/update`
+- `context show/set-meeting/clear-meeting/set-decision/clear-decision/set-field/clear-field`
+- `draft generate/show/lock-field/unlock-field/log`
+
+**Configuration:** `API_BASE_URL` env var, defaults to `http://localhost:3000`.
+
+**E2E validation path:**
+```bash
+pnpm cli meeting create "Q1 Planning" -p "Alice,Bob"
+pnpm cli context set-meeting <meeting-id>
+pnpm cli transcript upload -f ./transcript.txt
+pnpm cli decisions flag -t "Approve cloud migration"
+pnpm cli decisions list
+pnpm cli context set-decision <flagged-id>
+pnpm cli draft generate
+pnpm cli draft show
+pnpm cli draft lock-field -f <field-id>
+pnpm cli draft log --type consensus --by Alice
+```
+
+---
+
 ### M5.0 — Multi-Decision Workflow Foundation
 
 Before the web UI, the API and CLI must support working on multiple decisions simultaneously within a single meeting — flagging several, then jumping between them to work on each independently.
@@ -1704,6 +1738,50 @@ curl "http://localhost:3000/api/meetings/<id>/transcript-reading"
 
 ---
 
+### M5.1a.1 — Transcript Preprocessing Seam (Whisper-Canonical)
+
+Introduce a lightweight preprocessing layer to normalize transcript input into one canonical segment shape before chunking and reading projection.
+
+**Architecture reference**: `docs/transcript-preprocessing-architecture.md`
+
+**Goal**:
+- Keep Whisper-style segments as the canonical internal format.
+- Support non-Whisper text input through pluggable normalization processors.
+- Improve reading-mode usability without creating source-specific importer pipelines.
+
+**Implementation tasks**:
+- Add `TranscriptPreprocessor` interface and registry in transcript ingest path.
+- Implement default Whisper pass-through preprocessor.
+- Implement plain-text normalization fallback preprocessor for pasted/uploaded text.
+- Ensure preprocessing runs before chunking and reading projection derivation.
+- Preserve raw transcript input and preprocessing metadata for auditability.
+- Emit preprocessing observability (processor ID, counts, warnings, duration).
+
+**Contract rules**:
+- Canonical segment output remains source-agnostic (`sequenceNumber`, `text`, optional `speaker`/timing/metadata).
+- Missing speaker metadata remains valid; presentation fallback is `Speaker unknown`.
+- Preprocessing must be deterministic for equivalent input.
+
+**CLI/API parity notes**:
+- No new source-specific endpoint families.
+- Existing transcript ingest commands/routes continue to accept raw transcript input.
+- Reading/chunk endpoints expose normalized content regardless of source.
+
+**Validation**:
+```bash
+# Upload/paste plain text transcript and verify normalization
+pnpm cli transcript upload <file-or-payload>
+
+# Verify deterministic sequence ordering and readable row sizing
+pnpm cli transcript list --reading --meeting-id <id>
+curl "http://localhost:3000/api/meetings/<id>/transcript-reading"
+
+# Verify preprocessing metadata/logging captured
+pnpm cli draft debug
+```
+
+---
+
 ### M5.1b — AI-Assisted Segment Suggestions (Review First)
 
 Manual decision creation should support title/summary-driven AI suggestions for relevant transcript evidence.
@@ -1847,6 +1925,8 @@ Additional Screen 3 stories from gap analysis (`docs/ux-workflow-examples.md`):
 - **G2** (Flow 1): As a facilitator, I can create a new decision context directly by entering a title, summary, and choosing a template — without requiring a prior detected candidate.
 - **G5 (UI-only, Flow 1)**: The **Regenerate all** action exposes an optional "Focus for this pass" text input, sent as `additionalContext`. Ephemeral — not saved after the pass. No new API needed.
 - **G6** (Flow 2): As a facilitator, I can add an existing open decision context (from a prior meeting or sub-committee) to the current meeting's agenda — without cloning it — so its full field history and transcript evidence are immediately available. (Requires M4.9 `decision_context_meetings` join table.)
+- **G6.1** (Flow 2 extension): As a facilitator, I can find related meetings by date, title, and tag when attaching cross-meeting context.
+- **G6.2** (Flow 2 extension): As a facilitator, I can use autocomplete plus a calendar popup to pick related meetings quickly during agenda/context attachment.
 - **G8** (Flow 2): As a facilitator, I can start a live transcript stream for the current meeting, see its status (active / paused / stopped) and row count, and stop it when the meeting ends. (Requires `POST /api/meetings/:id/transcripts/stream` and `GET /api/meetings/:id/streaming/status`.)
 - **G9** (Flow 2): As a facilitator, I can see how many new transcript rows have arrived since the last regeneration pass, so I can judge whether regenerating again will produce materially different output. (Lightweight indicator adjacent to the Regenerate action; no new API — row count derivable from existing transcript state.)
 - **G10** (Flow 2): As a facilitator, I can quickly flag a future decision (title only, no template required) from within the active deliberation, adding it to the candidate queue without switching away from the current context. Distinct from G2, which requires full context creation.
@@ -1878,6 +1958,8 @@ Additional Screen 4 story added from Flow 1 gap analysis:
 | `GET /api/decision-contexts?status=open` | Add-to-agenda picker (G6) | M4.9 |
 | `POST /api/meetings/:id/decision-contexts/:contextId/activate` | Add existing context to meeting agenda (G6) | M4.9 |
 | `POST /api/meetings/:id/decision-contexts/:contextId/defer` | Defer context from meeting agenda (G11) | M4.9 |
+| `GET /api/meetings?query=<text>&dateFrom=<iso>&dateTo=<iso>&tag=<name>` | Related-meeting autocomplete/filter picker (G6 extension) | M5.1 |
+| `GET /api/meetings/calendar?month=<YYYY-MM>` | Related-meeting calendar popup (G6 extension) | M5.1 |
 | `POST /api/meetings/:id/transcripts/stream` | Start live transcript stream (G8) | M5.1 |
 | `GET /api/meetings/:id/streaming/status` | Live stream status indicator (G8) | M5.1 |
 
@@ -1895,6 +1977,7 @@ Additional Screen 4 story added from Flow 1 gap analysis:
 - Candidate promotion requires template selection before initial draft generation; detector-suggested template may be preselected
 - Segment selection persists reading-row IDs together with resolved chunk IDs for auditability
 - Manual and AI-assisted selections both require explicit user confirmation before persistence
+- Related-meeting picker in facilitator workflow supports date/title/tag autocomplete and calendar-based selection
 - Field zoom supports edit, regenerate, and field-version navigation
 - Field content preserved when switching templates; non-template fields hidden (not deleted), excluded from export
 - Completion captures decision method, actors, logged-by, and timestamp; incomplete decisions remain resumable

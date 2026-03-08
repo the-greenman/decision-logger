@@ -1,130 +1,96 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { createGlobalContextService } from '@repo/core';
+import { api, getContext, requireActiveMeeting, type GlobalContext } from '../client.js';
 
-const globalContextService = createGlobalContextService();
-
-function printContextValue(label: string, value?: string) {
-  console.log(chalk.white(`${label}: ${value ?? 'none'}`));
+function printContext(ctx: GlobalContext) {
+  console.log(chalk.white('Active context:'));
+  console.log(chalk.gray(`  Meeting:          ${ctx.activeMeetingId ?? '(none)'}`));
+  if (ctx.activeMeeting) {
+    console.log(chalk.white(`                    ${ctx.activeMeeting.title}`));
+  }
+  console.log(chalk.gray(`  Decision:         ${ctx.activeDecisionId ?? '(none)'}`));
+  if (ctx.activeDecision) {
+    console.log(chalk.white(`                    ${ctx.activeDecision.suggestedTitle}`));
+  }
+  console.log(chalk.gray(`  Decision context: ${ctx.activeDecisionContextId ?? '(none)'}`));
+  console.log(chalk.gray(`  Active field:     ${ctx.activeField ?? '(none)'}`));
 }
 
 export const contextCommand = new Command('context')
-  .description('Global context management commands');
+  .description('Active session context');
 
 contextCommand
   .command('show')
-  .description('Show the active global context')
+  .description('Show current active context')
   .action(async () => {
-    try {
-      const context = await globalContextService.getContext();
-
-      console.log(chalk.white('Active Context:'));
-      console.log('');
-      printContextValue('Meeting ID', context.activeMeetingId);
-      if (context.activeMeeting) {
-        console.log(chalk.gray(`Meeting Title: ${context.activeMeeting.title}`));
-      }
-
-      printContextValue('Flagged Decision ID', context.activeDecisionId);
-      if (context.activeDecision) {
-        console.log(chalk.gray(`Decision Title: ${context.activeDecision.suggestedTitle}`));
-      }
-
-      printContextValue('Decision Context ID', context.activeDecisionContextId);
-      if (context.activeTemplate) {
-        console.log(chalk.gray(`Template: ${context.activeTemplate.name} (${context.activeTemplate.id})`));
-      }
-
-      printContextValue('Field', context.activeField);
-    } catch (error) {
-      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
-      process.exit(1);
-    }
+    const ctx = await getContext();
+    printContext(ctx);
   });
 
 contextCommand
   .command('set-meeting')
-  .description('Set the active meeting')
+  .description('Set active meeting')
   .argument('<id>', 'Meeting ID')
-  .action(async (id) => {
-    try {
-      await globalContextService.setActiveMeeting(id);
-      console.log(chalk.green('✓ Active meeting updated'));
-      console.log(chalk.gray(`Meeting ID: ${id}`));
-    } catch (error) {
-      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
-      process.exit(1);
-    }
-  });
-
-contextCommand
-  .command('set-decision')
-  .description('Set the active flagged decision')
-  .argument('<flagged-id>', 'Flagged decision ID')
-  .option('-t, --template <id>', 'Template ID to use when creating a decision context')
-  .action(async (flaggedId, options) => {
-    try {
-      const decisionContext = await globalContextService.setActiveDecision(flaggedId, options.template);
-      console.log(chalk.green('✓ Active decision updated'));
-      console.log(chalk.gray(`Flagged Decision ID: ${flaggedId}`));
-      console.log(chalk.gray(`Decision Context ID: ${decisionContext.id}`));
-      console.log(chalk.white(`Template ID: ${decisionContext.templateId}`));
-    } catch (error) {
-      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
-      process.exit(1);
-    }
-  });
-
-contextCommand
-  .command('set-field')
-  .description('Set the active field on the current decision context')
-  .argument('<field-name>', 'Decision field name')
-  .action(async (fieldName) => {
-    try {
-      await globalContextService.setActiveField(fieldName);
-      console.log(chalk.green('✓ Active field updated'));
-      console.log(chalk.gray(`Field: ${fieldName}`));
-    } catch (error) {
-      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
-      process.exit(1);
-    }
-  });
-
-contextCommand
-  .command('clear-field')
-  .description('Clear the active field')
-  .action(async () => {
-    try {
-      await globalContextService.clearField();
-      console.log(chalk.green('✓ Active field cleared'));
-    } catch (error) {
-      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
-      process.exit(1);
-    }
-  });
-
-contextCommand
-  .command('clear-decision')
-  .description('Clear the active decision and field state')
-  .action(async () => {
-    try {
-      await globalContextService.clearDecision();
-      console.log(chalk.green('✓ Active decision cleared'));
-    } catch (error) {
-      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
-      process.exit(1);
-    }
+  .action(async (id: string) => {
+    const ctx = await api.post<GlobalContext>('/api/context/meeting', { meetingId: id });
+    console.log(chalk.green('✓ Active meeting set'));
+    printContext(ctx);
   });
 
 contextCommand
   .command('clear-meeting')
-  .description('Clear the active meeting and any nested decision state')
+  .description('Clear active meeting (and decision context)')
   .action(async () => {
-    try {
-      await globalContextService.clearMeeting();
-      console.log(chalk.green('✓ Active meeting cleared'));
-    } catch (error) {
-      console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
-      process.exit(1);
-    }
+    const ctx = await api.delete<GlobalContext>('/api/context/meeting');
+    console.log(chalk.green('✓ Active meeting cleared'));
+    printContext(ctx);
+  });
+
+contextCommand
+  .command('set-decision')
+  .description('Set active decision (creates a decision context if needed)')
+  .argument('<flagged-decision-id>', 'Flagged decision ID')
+  .option('-m, --meeting-id <id>', 'Meeting ID (defaults to active meeting)')
+  .option('-t, --template-id <id>', 'Template ID to use when creating context')
+  .action(async (flaggedDecisionId: string, opts: { meetingId?: string; templateId?: string }) => {
+    const meetingId = opts.meetingId ?? await requireActiveMeeting();
+    const body: Record<string, unknown> = { flaggedDecisionId };
+    if (opts.templateId) body.templateId = opts.templateId;
+    const ctx = await api.post<GlobalContext>(`/api/meetings/${meetingId}/context/decision`, body);
+    console.log(chalk.green('✓ Active decision set'));
+    printContext(ctx);
+  });
+
+contextCommand
+  .command('clear-decision')
+  .description('Clear active decision context')
+  .option('-m, --meeting-id <id>', 'Meeting ID (defaults to active meeting)')
+  .action(async (opts: { meetingId?: string }) => {
+    const meetingId = opts.meetingId ?? await requireActiveMeeting();
+    const ctx = await api.delete<GlobalContext>(`/api/meetings/${meetingId}/context/decision`);
+    console.log(chalk.green('✓ Active decision cleared'));
+    printContext(ctx);
+  });
+
+contextCommand
+  .command('set-field')
+  .description('Set active field focus')
+  .argument('<field-id>', 'Field ID')
+  .option('-m, --meeting-id <id>', 'Meeting ID (defaults to active meeting)')
+  .action(async (fieldId: string, opts: { meetingId?: string }) => {
+    const meetingId = opts.meetingId ?? await requireActiveMeeting();
+    const ctx = await api.post<GlobalContext>(`/api/meetings/${meetingId}/context/field`, { fieldId });
+    console.log(chalk.green('✓ Active field set'));
+    printContext(ctx);
+  });
+
+contextCommand
+  .command('clear-field')
+  .description('Clear active field focus')
+  .option('-m, --meeting-id <id>', 'Meeting ID (defaults to active meeting)')
+  .action(async (opts: { meetingId?: string }) => {
+    const meetingId = opts.meetingId ?? await requireActiveMeeting();
+    const ctx = await api.delete<GlobalContext>(`/api/meetings/${meetingId}/context/field`);
+    console.log(chalk.green('✓ Active field cleared'));
+    printContext(ctx);
   });

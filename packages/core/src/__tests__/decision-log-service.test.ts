@@ -190,9 +190,8 @@ describe('DecisionLogService', () => {
       expect(mockDecisionLogRepository.create).not.toHaveBeenCalled();
     });
 
-    it('should throw error if decision context is not locked', async () => {
+    it('should throw error if decision context is already logged', async () => {
       const decisionContextId = 'ctx_123';
-      const loggedBy = 'user_123';
 
       const mockContext: DecisionContext = {
         id: decisionContextId,
@@ -202,9 +201,9 @@ describe('DecisionLogService', () => {
         templateId: 'tpl_123',
         activeField: undefined,
         lockedFields: [],
-        draftData: { decision: 'In progress' },
+        draftData: {},
         draftVersions: [],
-        status: 'drafting',
+        status: 'logged',
         createdAt: '2026-02-28T10:00:00Z',
         updatedAt: '2026-02-28T10:30:00Z',
       };
@@ -213,15 +212,11 @@ describe('DecisionLogService', () => {
 
       await expect(
         service.logDecision(decisionContextId, {
-          loggedBy,
+          loggedBy: 'user_123',
           decisionMethod: { type: 'manual' },
         })
-      ).rejects.toThrow('Decision context must be locked before logging');
+      ).rejects.toThrow('Decision has already been logged');
 
-      expect(logger.warn).toHaveBeenCalledWith('Attempted to log decision from unlocked context', {
-        decisionContextId,
-        status: 'drafting',
-      });
       expect(mockDecisionLogRepository.create).not.toHaveBeenCalled();
     });
 
