@@ -8,6 +8,7 @@ import { templateCommand } from './commands/template';
 import { decisionsCommand } from './commands/decisions';
 import { draftCommand } from './commands/draft';
 import { contextCommand } from './commands/context';
+import { supplementaryCommand } from './commands/supplementary';
 
 const program = new Command();
 
@@ -25,6 +26,7 @@ program.addCommand(templateCommand);
 program.addCommand(decisionsCommand);
 program.addCommand(draftCommand);
 program.addCommand(contextCommand);
+program.addCommand(supplementaryCommand);
 
 // Global error handler
 program.configureOutput({

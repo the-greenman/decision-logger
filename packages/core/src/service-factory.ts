@@ -16,6 +16,7 @@ import { DecisionTemplateService } from './services/decision-template-service';
 import { GlobalContextService, FileGlobalContextStore } from './services/global-context-service';
 import { LLMInteractionService } from './services/llm-interaction-service';
 import { MarkdownExportService } from './services/markdown-export-service';
+import { SupplementaryContentService } from './services/supplementary-content-service';
 import { VercelAILLMService } from './llm/vercel-ai-llm-service';
 import type { ITranscriptManager } from './transcript-manager';
 import type { IDecisionLogGenerator } from './decision-log-generator/i-decision-log-generator';
@@ -38,6 +39,7 @@ import {
   DrizzleTemplateFieldAssignmentRepository,
   DrizzleFlaggedDecisionRepository,
   DrizzleDecisionTemplateRepository,
+  DrizzleSupplementaryContentRepository,
 } from '@repo/db';
 
 /**
@@ -134,7 +136,14 @@ export function createDraftGenerationService(): DraftGenerationService {
     new DrizzleDecisionFieldRepository(),
     new DrizzleDecisionContextRepository(),
     new DrizzleLLMInteractionRepository(),
-    new DrizzleFlaggedDecisionRepository()
+    new DrizzleFlaggedDecisionRepository(),
+    new DrizzleSupplementaryContentRepository()
+  );
+}
+
+export function createSupplementaryContentService(): SupplementaryContentService {
+  return new SupplementaryContentService(
+    new DrizzleSupplementaryContentRepository()
   );
 }
 
@@ -256,6 +265,7 @@ export interface ServiceContainer {
   transcriptManager: ITranscriptManager;
   decisionFieldService: DecisionFieldService;
   draftGenerationService: DraftGenerationService;
+  supplementaryContentService: SupplementaryContentService;
   contentCreator: IContentCreator;
   flaggedDecisionService: FlaggedDecisionService;
   decisionTemplateService: DecisionTemplateService;
@@ -276,6 +286,7 @@ export function createServices(): ServiceContainer {
     transcriptManager: createTranscriptManager(),
     decisionFieldService: createDecisionFieldService(),
     draftGenerationService: createDraftGenerationService(),
+    supplementaryContentService: createSupplementaryContentService(),
     contentCreator: createContentCreator(),
     flaggedDecisionService: createFlaggedDecisionService(),
     decisionTemplateService: createDecisionTemplateService(),

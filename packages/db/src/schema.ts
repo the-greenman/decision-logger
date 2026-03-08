@@ -9,6 +9,7 @@
  * - Version controlled
  */
 
+import { sql } from 'drizzle-orm';
 import { pgTable, uuid, text, date, timestamp, pgEnum, index, integer, jsonb, boolean, real, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // ============================================================================
@@ -101,6 +102,27 @@ export const transcriptChunks = pgTable('transcript_chunks', {
 
 export type TranscriptChunkSelect = typeof transcriptChunks.$inferSelect;
 export type TranscriptChunkInsert = typeof transcriptChunks.$inferInsert;
+
+// ============================================================================
+// SUPPLEMENTARY CONTENT
+// ============================================================================
+
+export const supplementaryContent = pgTable('supplementary_content', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  meetingId: uuid('meeting_id').notNull().references(() => meetings.id),
+  label: text('label'),
+  body: text('body').notNull(),
+  sourceType: text('source_type').notNull().default('manual'),
+  contexts: text('contexts').array().notNull().default(sql`'{}'::text[]`),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  meetingIdx: index('idx_supcontent_meeting').on(table.meetingId),
+  contextsIdx: index('idx_supcontent_contexts').on(table.contexts),
+}));
+
+export type SupplementaryContentSelect = typeof supplementaryContent.$inferSelect;
+export type SupplementaryContentInsert = typeof supplementaryContent.$inferInsert;
 
 // ============================================================================
 // CHUNK RELEVANCE

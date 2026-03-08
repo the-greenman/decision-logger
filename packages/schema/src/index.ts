@@ -138,6 +138,52 @@ export const CreateTranscriptChunkSchema = TranscriptChunkSchema.pick({
 export type CreateTranscriptChunk = z.infer<typeof CreateTranscriptChunkSchema>;
 
 // ============================================================================
+// SUPPLEMENTARY CONTENT SCHEMAS
+// ============================================================================
+
+export const SupplementaryContentSchema = z.object({
+  id: z.string().uuid(),
+  meetingId: z.string().uuid(),
+  label: z.string().optional(),
+  body: z.string().min(1, 'Body is required'),
+  sourceType: z.string().default('manual'),
+  contexts: z.array(z.string()).default([]),
+  createdBy: z.string().optional(),
+  createdAt: z.string().datetime({ offset: true }),
+}).openapi('SupplementaryContent', {
+  description: 'Supplementary evidence attached to a meeting, decision context, or field scope',
+  example: {
+    id: '550e8400-e29b-41d4-a716-446655440003',
+    meetingId: '550e8400-e29b-41d4-a716-446655440000',
+    label: 'Options comparison table',
+    body: 'Option 1: cloud-native stack (£45k). Option 2: patch existing service (£8k).',
+    sourceType: 'manual',
+    contexts: ['decision:550e8400-e29b-41d4-a716-446655440004:options'],
+    createdBy: 'Alice',
+    createdAt: '2026-02-27T10:00:00Z',
+  },
+});
+
+export type SupplementaryContent = z.infer<typeof SupplementaryContentSchema>;
+
+export const CreateSupplementaryContentSchema = SupplementaryContentSchema.omit({
+  id: true,
+  createdAt: true,
+}).openapi('CreateSupplementaryContent', {
+  description: 'Schema for creating supplementary evidence',
+  example: {
+    meetingId: '550e8400-e29b-41d4-a716-446655440000',
+    label: 'Options comparison table',
+    body: 'Option 1: cloud-native stack (£45k). Option 2: patch existing service (£8k).',
+    sourceType: 'manual',
+    contexts: ['decision:550e8400-e29b-41d4-a716-446655440004:options'],
+    createdBy: 'Alice',
+  },
+});
+
+export type CreateSupplementaryContent = z.infer<typeof CreateSupplementaryContentSchema>;
+
+// ============================================================================
 // CHUNK RELEVANCE SCHEMAS
 // ============================================================================
 
@@ -712,6 +758,7 @@ export type CreateExpertAdvice = z.infer<typeof CreateExpertAdviceSchema>;
 export const PromptSegmentSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('system'), content: z.string() }),
   z.object({ type: z.literal('transcript'), speaker: z.string().optional(), text: z.string(), tags: z.array(z.string()) }),
+  z.object({ type: z.literal('supplementary'), label: z.string().optional(), content: z.string(), tags: z.array(z.string()) }),
   z.object({ type: z.literal('guidance'), fieldId: z.string().optional(), content: z.string(), source: z.enum(['user_text', 'tagged_transcript']) }),
   z.object({ type: z.literal('template_fields'), fields: z.array(z.object({ id: z.string(), displayName: z.string(), description: z.string() })) }),
 ]);

@@ -16,6 +16,7 @@ export { ExpertTemplateService } from './services/expert-template-service';
 export { MCPServerService } from './services/mcp-server-service';
 export { ExpertAdviceService } from './services/expert-advice-service';
 export { DraftGenerationService } from './services/draft-generation-service';
+export { SupplementaryContentService } from './services/supplementary-content-service';
 export { InProcessEventBus } from './events/in-process-event-bus';
 
 // Service Factory
@@ -28,6 +29,7 @@ export {
   createTranscriptManager,
   createDecisionFieldService,
   createDraftGenerationService,
+  createSupplementaryContentService,
   createContentCreator,
   createFlaggedDecisionService,
   createDecisionTemplateService,
@@ -70,6 +72,7 @@ export type {
   DecisionTemplateIdentityLookup,
 } from './interfaces/i-decision-template-repository';
 export type { IDecisionTemplateService } from './interfaces/i-decision-template-service';
+export type { ISupplementaryContentRepository } from './interfaces/i-supplementary-content-repository';
 export type {
   IExpertTemplateRepository
 } from './interfaces/i-expert-template-repository';
@@ -102,3 +105,4 @@ export type { ExpertTemplate, CreateExpertTemplate, UpdateExpertTemplate } from 
 export type { MCPServer, CreateMCPServer, UpdateMCPServer } from '@repo/schema';
 export type { ExpertAdvice, CreateExpertAdvice } from '@repo/schema';
 export type { LLMInteraction, CreateLLMInteraction, PromptSegmentData } from '@repo/schema';
+export type { SupplementaryContent, CreateSupplementaryContent } from '@repo/schema';

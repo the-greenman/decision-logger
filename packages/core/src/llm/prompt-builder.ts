@@ -1,9 +1,10 @@
-import type { TranscriptChunk, DecisionField } from '@repo/schema';
+import type { TranscriptChunk, DecisionField, SupplementaryContent } from '@repo/schema';
 import type { GuidanceSegment } from './i-llm-service';
 
 export type PromptSegment =
   | { type: 'system'; content: string }
   | { type: 'transcript'; speaker?: string; text: string; tags: string[] }
+  | { type: 'supplementary'; label?: string; content: string; tags: string[] }
   | { type: 'guidance'; fieldId?: string; content: string; source: 'user_text' | 'tagged_transcript' }
   | { type: 'template_fields'; fields: Array<{ id: string; displayName: string; description: string }> };
 
@@ -47,6 +48,21 @@ export class PromptBuilder {
     return this;
   }
 
+  addSupplementaryContent(item: SupplementaryContent): this {
+    const segment: PromptSegment = {
+      type: 'supplementary',
+      content: item.body,
+      tags: item.contexts,
+    };
+
+    if (item.label !== undefined) {
+      segment.label = item.label;
+    }
+
+    this.segments.push(segment);
+    return this;
+  }
+
   addGuidance(segment: GuidanceSegment): this {
     const promptSegment: PromptSegment = {
       type: 'guidance',
@@ -82,6 +98,7 @@ export class PromptBuilder {
     const parts: string[] = [];
 
     const transcriptLines: string[] = [];
+    const supplementaryLines: string[] = [];
     const guidanceByField = new Map<string | undefined, string[]>();
     const fieldLines: string[] = [];
 
@@ -91,6 +108,9 @@ export class PromptBuilder {
       } else if (seg.type === 'transcript') {
         const prefix = seg.speaker ? `[${seg.speaker}]: ` : '';
         transcriptLines.push(`${prefix}${seg.text}`);
+      } else if (seg.type === 'supplementary') {
+        const label = seg.label ? `[${seg.label}]\n` : '';
+        supplementaryLines.push(`${label}${seg.content}`);
       } else if (seg.type === 'guidance') {
         const key = seg.fieldId;
         const existing = guidanceByField.get(key) ?? [];
@@ -106,6 +126,11 @@ export class PromptBuilder {
     if (transcriptLines.length > 0) {
       parts.push('=== TRANSCRIPT ===');
       parts.push(transcriptLines.join('\n'));
+    }
+
+    if (supplementaryLines.length > 0) {
+      parts.push('=== SUPPLEMENTARY EVIDENCE ===');
+      parts.push(supplementaryLines.join('\n\n'));
     }
 
     // Whole-draft guidance first (fieldId = undefined)
@@ -134,6 +159,7 @@ export class PromptBuilder {
 
 export function buildDraftPrompt(
   transcriptChunks: TranscriptChunk[],
+  supplementaryItems: SupplementaryContent[],
   templateFields: DecisionField[],
   guidance: GuidanceSegment[] = [],
 ): BuiltPrompt {
@@ -142,6 +168,10 @@ export function buildDraftPrompt(
 
   for (const chunk of transcriptChunks) {
     builder.addTranscriptChunk(chunk);
+  }
+
+  for (const item of supplementaryItems) {
+    builder.addSupplementaryContent(item);
   }
 
   for (const segment of guidance) {
@@ -160,6 +190,7 @@ export function buildDraftPrompt(
 
 export function buildFieldRegenerationPrompt(
   transcriptChunks: TranscriptChunk[],
+  supplementaryItems: SupplementaryContent[],
   field: DecisionField,
   fieldId: string,
   guidance: GuidanceSegment[] = [],
@@ -169,6 +200,10 @@ export function buildFieldRegenerationPrompt(
 
   for (const chunk of transcriptChunks) {
     builder.addTranscriptChunk(chunk);
+  }
+
+  for (const item of supplementaryItems) {
+    builder.addSupplementaryContent(item);
   }
 
   for (const segment of guidance) {

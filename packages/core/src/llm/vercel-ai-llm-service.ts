@@ -2,7 +2,6 @@ import { generateObject } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { openai } from '@ai-sdk/openai';
 import { z } from '@repo/schema';
-import { buildDraftPrompt, buildFieldRegenerationPrompt } from './prompt-builder';
 import type { ILLMService, GenerateDraftParams, RegenerateFieldParams, DraftResult } from './i-llm-service';
 
 function getModel() {
@@ -22,11 +21,7 @@ function getModel() {
 export class VercelAILLMService implements ILLMService {
   async generateDraft(params: GenerateDraftParams): Promise<DraftResult> {
     const fieldSchema = this.buildFieldSchema(params.templateFields.map(f => f.id));
-    const prompt = buildDraftPrompt(
-      params.transcriptChunks,
-      params.templateFields,
-      params.guidance ?? [],
-    ).text;
+    const prompt = params.promptText ?? '';
 
     const { object } = await generateObject({
       model: getModel(),
@@ -43,12 +38,7 @@ export class VercelAILLMService implements ILLMService {
       throw new Error(`Field ${params.fieldId} not found in template fields`);
     }
 
-    const prompt = buildFieldRegenerationPrompt(
-      params.transcriptChunks,
-      field,
-      params.fieldId,
-      params.guidance ?? [],
-    ).text;
+    const prompt = params.promptText ?? '';
 
     const { object } = await generateObject({
       model: getModel(),

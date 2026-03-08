@@ -5,6 +5,8 @@ import {
   FlaggedDecisionSchema,
   LLMInteractionSchema,
   RawTranscriptSchema,
+  SupplementaryContentSchema,
+  CreateSupplementaryContentSchema,
   TranscriptChunkSchema,
 } from '@repo/schema';
 
@@ -139,6 +141,14 @@ const LLMInteractionsResponseSchema = z.object({
   interactions: z.array(LLMInteractionSchema),
 }).openapi('LLMInteractionsResponse');
 
+const SupplementaryContentQuerySchema = z.object({
+  context: z.string().min(1),
+});
+
+const SupplementaryContentListResponseSchema = z.object({
+  items: z.array(SupplementaryContentSchema),
+}).openapi('SupplementaryContentListResponse');
+
 export const uploadTranscriptRoute = createRoute({
   method: 'post',
   path: '/api/meetings/:id/transcripts/upload',
@@ -169,6 +179,112 @@ export const uploadTranscriptRoute = createRoute({
         },
       },
       description: 'Invalid request data',
+    },
+    503: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Database-backed endpoint unavailable',
+    },
+  },
+});
+
+export const createSupplementaryContentRoute = createRoute({
+  method: 'post',
+  path: '/api/supplementary-content',
+  tags: ['supplementary-content'],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: CreateSupplementaryContentSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      content: {
+        'application/json': {
+          schema: SupplementaryContentSchema,
+        },
+      },
+      description: 'Supplementary content created successfully',
+    },
+    400: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Invalid request data',
+    },
+    503: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Database-backed endpoint unavailable',
+    },
+  },
+});
+
+export const listSupplementaryContentRoute = createRoute({
+  method: 'get',
+  path: '/api/supplementary-content',
+  tags: ['supplementary-content'],
+  request: {
+    query: SupplementaryContentQuerySchema,
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: SupplementaryContentListResponseSchema,
+        },
+      },
+      description: 'Supplementary content returned successfully',
+    },
+    400: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Invalid request data',
+    },
+    503: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Database-backed endpoint unavailable',
+    },
+  },
+});
+
+export const deleteSupplementaryContentRoute = createRoute({
+  method: 'delete',
+  path: '/api/supplementary-content/:id',
+  tags: ['supplementary-content'],
+  request: {
+    params: UuidParamSchema,
+  },
+  responses: {
+    204: {
+      description: 'Supplementary content deleted successfully',
+    },
+    404: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Supplementary content not found',
     },
     503: {
       content: {

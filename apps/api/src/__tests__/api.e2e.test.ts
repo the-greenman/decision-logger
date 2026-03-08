@@ -22,6 +22,7 @@ describe('API E2E Tests', () => {
   let createdDecisionId: string;
   let createdContextId: string;
   let loggedDecisionId: string;
+  let createdSupplementaryContentId: string;
 
   beforeAll(async () => {
     if (!process.env.DATABASE_URL) {
@@ -159,6 +160,39 @@ describe('API E2E Tests', () => {
     expect(data.lockedFields).toEqual([]);
 
     createdContextId = data.id;
+  });
+
+  it('POST /api/supplementary-content - should create supplementary content', async () => {
+    const response = await app.request('/api/supplementary-content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        meetingId: createdMeetingId,
+        label: 'Comparison table',
+        body: 'Option 1: approve migration now. Option 2: delay until next quarter.',
+        sourceType: 'manual',
+        contexts: [`decision:${createdContextId}:${createdFieldId}`],
+        createdBy: 'api-e2e-user',
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const data = await response.json();
+    expect(data.id).toBeDefined();
+    expect(data.meetingId).toBe(createdMeetingId);
+    expect(data.contexts).toContain(`decision:${createdContextId}:${createdFieldId}`);
+    createdSupplementaryContentId = data.id;
+  });
+
+  it('GET /api/supplementary-content?context=... - should list supplementary content for a context tag', async () => {
+    const response = await app.request(
+      `/api/supplementary-content?context=${encodeURIComponent(`decision:${createdContextId}:${createdFieldId}`)}`,
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.items).toBeInstanceOf(Array);
+    expect(data.items.some((item: { id: string }) => item.id === createdSupplementaryContentId)).toBe(true);
   });
 
   it('PUT /api/decision-contexts/:id/lock-field - should lock a field', async () => {
@@ -404,6 +438,21 @@ describe('API E2E Tests', () => {
     expect(data.interactions).toBeInstanceOf(Array);
   });
 
+  it('DELETE /api/supplementary-content/:id - should remove supplementary content', async () => {
+    const response = await app.request(`/api/supplementary-content/${createdSupplementaryContentId}`, {
+      method: 'DELETE',
+    });
+
+    expect(response.status).toBe(204);
+
+    const listResponse = await app.request(
+      `/api/supplementary-content?context=${encodeURIComponent(`decision:${createdContextId}:${createdFieldId}`)}`,
+    );
+    expect(listResponse.status).toBe(200);
+    const listData = await listResponse.json();
+    expect(listData.items.some((item: { id: string }) => item.id === createdSupplementaryContentId)).toBe(false);
+  });
+
   it('GET /api/meetings/:id - should get a specific meeting', async () => {
     const response = await app.request(`/api/meetings/${createdMeetingId}`);
     
@@ -447,5 +496,7 @@ describe('API E2E Tests', () => {
     expect(pathKeys.some((path) => path.includes('/api/decisions/') && !path.endsWith('/export'))).toBe(true);
     expect(pathKeys.some((path) => path.includes('/api/decisions/') && path.endsWith('/export'))).toBe(true);
     expect(pathKeys.some((path) => path.includes('/decision-contexts/') && path.endsWith('/llm-interactions'))).toBe(true);
+    expect(pathKeys).toContain('/api/supplementary-content');
+    expect(pathKeys.some((path) => path.includes('/api/supplementary-content/') && path !== '/api/supplementary-content')).toBe(true);
   });
 });

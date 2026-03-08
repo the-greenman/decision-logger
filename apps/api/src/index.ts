@@ -14,6 +14,7 @@ import {
   createDecisionFieldService,
   createDraftGenerationService,
   createFlaggedDecisionService,
+  createSupplementaryContentService,
   type GuidanceSegment,
   createLLMInteractionService,
   createMarkdownExportService,
@@ -26,7 +27,9 @@ import { DrizzleMeetingRepository } from '@repo/db';
 import { MockMeetingRepository } from './mock-repository';
 import {
   createDecisionContextRoute,
+  createSupplementaryContentRoute,
   createFlaggedDecisionRoute,
+  deleteSupplementaryContentRoute,
   exportDecisionLogRoute,
   exportMarkdownRoute,
   getDecisionLogRoute,
@@ -34,6 +37,7 @@ import {
   generateDraftRoute,
   listDraftVersionsRoute,
   listLLMInteractionsRoute,
+  listSupplementaryContentRoute,
   logDecisionRoute,
   lockFieldRoute,
   regenerateFieldRoute,
@@ -60,6 +64,7 @@ const decisionContextService = useDatabase ? createDecisionContextService() : nu
 const decisionLogService = useDatabase ? createDecisionLogService() : null;
 const decisionLogGenerator = useDatabase ? createDecisionLogGenerator() : null;
 const draftGenerationService = useDatabase ? createDraftGenerationService() : null;
+const supplementaryContentService = useDatabase ? createSupplementaryContentService() : null;
 const markdownExportService = useDatabase ? createMarkdownExportService() : null;
 const llmInteractionService = useDatabase ? createLLMInteractionService() : null;
 const decisionContextRepository = useDatabase ? createDecisionContextRepository() : null;
@@ -76,6 +81,7 @@ function getWorkflowServices() {
     !decisionLogService ||
     !decisionLogGenerator ||
     !draftGenerationService ||
+    !supplementaryContentService ||
     !markdownExportService ||
     !llmInteractionService ||
     !templateFieldAssignmentRepository
@@ -92,6 +98,7 @@ function getWorkflowServices() {
     decisionLogService,
     decisionLogGenerator,
     draftGenerationService,
+    supplementaryContentService,
     markdownExportService,
     llmInteractionService,
     templateFieldAssignmentRepository,
@@ -224,6 +231,72 @@ app.openapi(uploadTranscriptRoute, async (c) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return c.json({ error: message }, 400);
+  }
+});
+
+app.openapi(createSupplementaryContentRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  try {
+    const payload = c.req.valid('json');
+    const options: {
+      label?: string;
+      contexts?: string[];
+      createdBy?: string;
+      sourceType?: string;
+    } = {
+      contexts: payload.contexts,
+      sourceType: payload.sourceType,
+    };
+
+    if (payload.label !== undefined) {
+      options.label = payload.label;
+    }
+    if (payload.createdBy !== undefined) {
+      options.createdBy = payload.createdBy;
+    }
+
+    const item = await services.supplementaryContentService.add(payload.meetingId, payload.body, options);
+    return c.json(item, 201);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: message }, 400);
+  }
+});
+
+app.openapi(listSupplementaryContentRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  try {
+    const { context } = c.req.valid('query');
+    const items = await services.supplementaryContentService.listByContext(context);
+    return c.json({ items });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: message }, 400);
+  }
+});
+
+app.openapi(deleteSupplementaryContentRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  try {
+    const { id } = c.req.valid('param');
+    await services.supplementaryContentService.remove(id);
+    return c.body(null, 204);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.includes('not found') ? 404 : 400;
+    return c.json({ error: message }, status as 400 | 404);
   }
 });
 

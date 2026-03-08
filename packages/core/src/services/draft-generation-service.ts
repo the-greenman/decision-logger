@@ -1,4 +1,4 @@
-import type { DecisionContext, DecisionField } from '@repo/schema';
+import type { DecisionContext, DecisionField, SupplementaryContent } from '@repo/schema';
 import type { ILLMService, GuidanceSegment } from '../llm/i-llm-service';
 import type { PromptSegmentData } from '@repo/schema';
 import { buildDraftPrompt, buildFieldRegenerationPrompt, buildDraftPromptFromTemplate } from '../llm/prompt-builder';
@@ -8,6 +8,7 @@ import type { IDecisionContextRepository } from '../interfaces/i-decision-contex
 import type { IDecisionFieldRepository } from '../interfaces/i-decision-field-repository';
 import type { ILLMInteractionRepository } from '../interfaces/i-llm-interaction-repository';
 import type { IFlaggedDecisionRepository } from '../interfaces/i-flagged-decision-repository';
+import type { ISupplementaryContentRepository } from '../interfaces/i-supplementary-content-repository';
 import type { FlaggedDecision } from '@repo/schema';
 
 const FIELD_META_KEY = '__fieldMeta';
@@ -32,6 +33,7 @@ export class DraftGenerationService {
     private contextRepo: IDecisionContextRepository,
     private llmInteractionRepo: ILLMInteractionRepository,
     private flaggedDecisionRepo: IFlaggedDecisionRepository,
+    private supplementaryContentRepo: ISupplementaryContentRepository,
   ) {}
 
   async generateDraft(decisionContextId: string, guidance?: GuidanceSegment[]): Promise<DecisionContext> {
@@ -49,6 +51,7 @@ export class DraftGenerationService {
     }
 
     const chunks = await this.fetchDraftChunks(context.meetingId, decisionContextId);
+    const supplementaryItems = await this.fetchDraftSupplementaryContent(context.meetingId, decisionContextId);
 
     // Check if we should use the template-based prompt
     const useTemplatePrompt = process.env['USE_TEMPLATE_PROMPT'] === 'true';
@@ -69,7 +72,7 @@ export class DraftGenerationService {
         contextSummary
       );
     } else {
-      prompt = buildDraftPrompt(chunks, unlockedFields, guidance ?? []);
+      prompt = buildDraftPrompt(chunks, supplementaryItems, unlockedFields, guidance ?? []);
     }
 
     const provider = process.env['LLM_PROVIDER'] ?? 'anthropic';
@@ -80,6 +83,7 @@ export class DraftGenerationService {
       transcriptChunks: chunks,
       templateFields: unlockedFields,
       guidance: guidance ?? [],
+      promptText: prompt.text,
     });
     const latencyMs = Date.now() - start;
 
@@ -149,8 +153,9 @@ export class DraftGenerationService {
 
     // Field-tagged chunks get priority (fetched with context tag for this field)
     const chunks = await this.fetchFieldChunks(context.meetingId, decisionContextId, fieldId);
+    const supplementaryItems = await this.fetchFieldSupplementaryContent(context.meetingId, decisionContextId, fieldId);
 
-    const prompt = buildFieldRegenerationPrompt(chunks, field, fieldId, guidance ?? []);
+    const prompt = buildFieldRegenerationPrompt(chunks, supplementaryItems, field, fieldId, guidance ?? []);
 
     const provider = process.env['LLM_PROVIDER'] ?? 'anthropic';
     const model = process.env['LLM_MODEL'] ?? 'claude-opus-4-5';
@@ -161,6 +166,7 @@ export class DraftGenerationService {
       templateFields: [field],
       guidance: guidance ?? [],
       fieldId,
+      promptText: prompt.text,
     });
     const latencyMs = Date.now() - start;
 
@@ -250,6 +256,46 @@ export class DraftGenerationService {
 
       return a.sequenceNumber - b.sequenceNumber;
     });
+  }
+
+  private async fetchDraftSupplementaryContent(meetingId: string, decisionContextId: string): Promise<SupplementaryContent[]> {
+    const meetingTag = `meeting:${meetingId}`;
+    const decisionTag = `decision:${decisionContextId}`;
+
+    return this.mergeSupplementaryItems(
+      await this.supplementaryContentRepo.findByContext(meetingTag),
+      await this.supplementaryContentRepo.findByContext(decisionTag),
+    );
+  }
+
+  private async fetchFieldSupplementaryContent(
+    meetingId: string,
+    decisionContextId: string,
+    fieldId: string,
+  ): Promise<SupplementaryContent[]> {
+    const meetingTag = `meeting:${meetingId}`;
+    const decisionTag = `decision:${decisionContextId}`;
+    const fieldTag = `decision:${decisionContextId}:${fieldId}`;
+
+    return this.mergeSupplementaryItems(
+      await this.supplementaryContentRepo.findByContext(fieldTag),
+      await this.supplementaryContentRepo.findByContext(decisionTag),
+      await this.supplementaryContentRepo.findByContext(meetingTag),
+    );
+  }
+
+  private mergeSupplementaryItems(...groups: SupplementaryContent[][]): SupplementaryContent[] {
+    const itemsById = new Map<string, SupplementaryContent>();
+
+    for (const group of groups) {
+      for (const item of group) {
+        if (!itemsById.has(item.id)) {
+          itemsById.set(item.id, item);
+        }
+      }
+    }
+
+    return [...itemsById.values()];
   }
 
   private getChunkWeight(contexts: string[], fieldTag: string, decisionTag: string, meetingTag: string): number {

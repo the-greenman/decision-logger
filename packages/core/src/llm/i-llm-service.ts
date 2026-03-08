@@ -10,6 +10,7 @@ export type GenerateDraftParams = {
   transcriptChunks: TranscriptChunk[];
   templateFields: DecisionField[];
   guidance?: GuidanceSegment[];
+  promptText?: string;
 };
 
 export type RegenerateFieldParams = GenerateDraftParams & { fieldId: string };

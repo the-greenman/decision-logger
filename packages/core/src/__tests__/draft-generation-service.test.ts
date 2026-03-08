@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DraftGenerationService } from '../services/draft-generation-service';
 import { MockLLMService } from '../llm/mock-llm-service';
-import type { DecisionContext, DecisionField, TranscriptChunk, TemplateFieldAssignment } from '@repo/schema';
+import type { DecisionContext, DecisionField, TranscriptChunk, TemplateFieldAssignment, SupplementaryContent } from '@repo/schema';
 import type { ITranscriptChunkRepository } from '../interfaces/transcript-repositories';
 import type { ITemplateFieldAssignmentRepository } from '../interfaces/i-decision-template-repository';
 import type { IDecisionContextRepository } from '../interfaces/i-decision-context-repository';
 import type { IDecisionFieldRepository } from '../interfaces/i-decision-field-repository';
 import type { ILLMInteractionRepository } from '../interfaces/i-llm-interaction-repository';
 import type { IFlaggedDecisionRepository } from '../interfaces/i-flagged-decision-repository';
+import type { ISupplementaryContentRepository } from '../interfaces/i-supplementary-content-repository';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -22,6 +23,18 @@ function makeField(id: string, name: string): DecisionField {
     fieldType: 'textarea',
     version: 1,
     isCustom: false,
+    createdAt: '2026-01-01T00:00:00Z',
+  };
+}
+
+function makeSupplementaryItem(id: string, contexts: string[] = []): SupplementaryContent {
+  return {
+    id,
+    meetingId: 'meeting-1',
+    label: `Label ${id}`,
+    body: `Supplementary ${id}`,
+    sourceType: 'manual',
+    contexts,
     createdAt: '2026-01-01T00:00:00Z',
   };
 }
@@ -66,7 +79,12 @@ function makeContext(overrides: Partial<DecisionContext> = {}): DecisionContext 
 
 // ── Mock factories ────────────────────────────────────────────────────────────
 
-function makeRepos(context: DecisionContext, chunks: TranscriptChunk[], fields: DecisionField[]) {
+function makeRepos(
+  context: DecisionContext,
+  chunks: TranscriptChunk[],
+  fields: DecisionField[],
+  supplementaryItems: SupplementaryContent[] = [],
+) {
   const assignments = fields.map((f, i) => makeAssignment(f.id, i));
 
   const contextRepo: IDecisionContextRepository = {
@@ -109,6 +127,7 @@ function makeRepos(context: DecisionContext, chunks: TranscriptChunk[], fields: 
     findById: vi.fn().mockImplementation((id: string) =>
       Promise.resolve(fields.find(f => f.id === id) ?? null)
     ),
+    findByIdentity: vi.fn(),
     findAll: vi.fn(),
     findByCategory: vi.fn(),
     update: vi.fn(),
@@ -144,7 +163,23 @@ function makeRepos(context: DecisionContext, chunks: TranscriptChunk[], fields: 
     updateStatus: vi.fn(),
   };
 
-  return { contextRepo, transcriptRepo, fieldAssignmentRepo, fieldRepo, llmInteractionRepo, flaggedDecisionRepo };
+  const supplementaryContentRepo: ISupplementaryContentRepository = {
+    create: vi.fn(),
+    findByContext: vi.fn().mockImplementation((contextTag: string) =>
+      Promise.resolve(supplementaryItems.filter((item) => item.contexts.includes(contextTag)))
+    ),
+    delete: vi.fn(),
+  };
+
+  return {
+    contextRepo,
+    transcriptRepo,
+    fieldAssignmentRepo,
+    fieldRepo,
+    llmInteractionRepo,
+    flaggedDecisionRepo,
+    supplementaryContentRepo,
+  };
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -156,6 +191,11 @@ describe('DraftGenerationService', () => {
   ];
 
   const chunks = [makeChunk('chunk-1'), makeChunk('chunk-2')];
+  const supplementaryItems = [
+    makeSupplementaryItem('supp-meeting', ['meeting:meeting-1']),
+    makeSupplementaryItem('supp-decision', ['decision:ctx-1']),
+    makeSupplementaryItem('supp-field', ['decision:ctx-1:field-options']),
+  ];
 
   let llm: MockLLMService;
   let service: DraftGenerationService;
@@ -168,7 +208,7 @@ describe('DraftGenerationService', () => {
         'field-options': 'AWS, Azure, GCP',
       },
     });
-    repos = makeRepos(makeContext(), chunks, fields);
+    repos = makeRepos(makeContext(), chunks, fields, supplementaryItems);
     service = new DraftGenerationService(
       llm,
       repos.transcriptRepo,
@@ -177,6 +217,7 @@ describe('DraftGenerationService', () => {
       repos.contextRepo,
       repos.llmInteractionRepo,
       repos.flaggedDecisionRepo,
+      repos.supplementaryContentRepo,
     );
   });
 
@@ -213,6 +254,7 @@ describe('DraftGenerationService', () => {
       makeContext({ draftData: { 'field-statement': 'Previous decision' } }),
       chunks,
       fields,
+      supplementaryItems,
     );
     service = new DraftGenerationService(
       llm,
@@ -222,6 +264,7 @@ describe('DraftGenerationService', () => {
       repos.contextRepo,
       repos.llmInteractionRepo,
       repos.flaggedDecisionRepo,
+      repos.supplementaryContentRepo,
     );
 
     await service.generateDraft('ctx-1');
@@ -242,7 +285,7 @@ describe('DraftGenerationService', () => {
 
   it('does not regenerate locked fields', async () => {
     const contextWithLock = makeContext({ lockedFields: ['field-statement'] });
-    repos = makeRepos(contextWithLock, chunks, fields);
+    repos = makeRepos(contextWithLock, chunks, fields, supplementaryItems);
     service = new DraftGenerationService(
       llm,
       repos.transcriptRepo,
@@ -251,6 +294,7 @@ describe('DraftGenerationService', () => {
       repos.contextRepo,
       repos.llmInteractionRepo,
       repos.flaggedDecisionRepo,
+      repos.supplementaryContentRepo,
     );
 
     await service.generateDraft('ctx-1');
@@ -267,7 +311,7 @@ describe('DraftGenerationService', () => {
 
   it('returns context unchanged when all fields are locked', async () => {
     const allLocked = makeContext({ lockedFields: ['field-statement', 'field-options'] });
-    repos = makeRepos(allLocked, chunks, fields);
+    repos = makeRepos(allLocked, chunks, fields, supplementaryItems);
     service = new DraftGenerationService(
       llm,
       repos.transcriptRepo,
@@ -276,6 +320,7 @@ describe('DraftGenerationService', () => {
       repos.contextRepo,
       repos.llmInteractionRepo,
       repos.flaggedDecisionRepo,
+      repos.supplementaryContentRepo,
     );
 
     const result = await service.generateDraft('ctx-1');
@@ -311,7 +356,7 @@ describe('DraftGenerationService', () => {
       makeChunk('decision-tagged', ['decision:ctx-1']),
       makeChunk('field-tagged', ['decision:ctx-1:field-options']),
     ];
-    repos = makeRepos(makeContext(), weightedChunks, fields);
+    repos = makeRepos(makeContext(), weightedChunks, fields, supplementaryItems);
     service = new DraftGenerationService(
       llm,
       repos.transcriptRepo,
@@ -320,6 +365,7 @@ describe('DraftGenerationService', () => {
       repos.contextRepo,
       repos.llmInteractionRepo,
       repos.flaggedDecisionRepo,
+      repos.supplementaryContentRepo,
     );
 
     const llmSpy = vi.spyOn(llm, 'regenerateField');
@@ -345,7 +391,7 @@ describe('DraftGenerationService', () => {
 
   it('regenerateField throws when field is locked', async () => {
     const lockedCtx = makeContext({ lockedFields: ['field-options'] });
-    repos = makeRepos(lockedCtx, chunks, fields);
+    repos = makeRepos(lockedCtx, chunks, fields, supplementaryItems);
     service = new DraftGenerationService(
       llm,
       repos.transcriptRepo,
@@ -354,6 +400,7 @@ describe('DraftGenerationService', () => {
       repos.contextRepo,
       repos.llmInteractionRepo,
       repos.flaggedDecisionRepo,
+      repos.supplementaryContentRepo,
     );
 
     await expect(service.regenerateField('ctx-1', 'field-options'))
@@ -388,6 +435,9 @@ describe('DraftGenerationService', () => {
 
     const record = createCall![0];
     expect(record.promptText).toContain('You are an expert at analyzing meeting transcripts');
+    expect(record.promptText).toContain('=== SUPPLEMENTARY EVIDENCE ===');
+    expect(record.promptText).toContain('Supplementary supp-meeting');
+    expect(record.promptText).toContain('Supplementary supp-decision');
     expect(record.promptText).toContain('=== GUIDANCE ===');
     expect(record.promptText).toContain('Focus on cost');
     expect(record.promptText).not.toContain('Only for options');
@@ -407,6 +457,10 @@ describe('DraftGenerationService', () => {
 
     const record = createCall![0];
     expect(record.promptText).toContain('You are an expert at analyzing meeting transcripts');
+    expect(record.promptText).toContain('=== SUPPLEMENTARY EVIDENCE ===');
+    expect(record.promptText).toContain('Supplementary supp-field');
+    expect(record.promptText).toContain('Supplementary supp-decision');
+    expect(record.promptText).toContain('Supplementary supp-meeting');
     expect(record.promptText).toContain('General context');
     expect(record.promptText).toContain('Only for options');
     expect(record.promptText).not.toContain('Wrong field');

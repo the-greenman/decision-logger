@@ -26,3 +26,4 @@ export {
   DrizzleExpertAdviceHistoryRepository
 } from './repositories/expert-mcp-repository';
 export { DrizzleLLMInteractionRepository } from './repositories/llm-interaction-repository';
+export { DrizzleSupplementaryContentRepository } from './repositories/supplementary-content-repository';
