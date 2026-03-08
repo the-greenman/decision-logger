@@ -38,6 +38,8 @@ Use this document as the hub for the architecture set.
   - chunk tagging and field-level retrieval model
 - `docs/transcript-reading-and-segment-selection-architecture.md`
   - readable transcript projection and segment selection behavior
+- `docs/ui-ux-overview.md`
+  - page-level UX goals, shared-display constraints, and facilitator-mode direction
 
 ### Decision detection and workflow architecture
 

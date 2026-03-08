@@ -73,6 +73,10 @@ Templates provide wider framing. Fields provide the reusable semantic unit.
 
 If a template needs a materially different field meaning, that should be a different field definition rather than a template override.
 
+Option A is the preferred rule: remove per-template field label and description override columns entirely rather than trying to distinguish semantic overrides from presentation-only overrides.
+
+If a different label or description is needed, define a distinct field definition with its own lineage and version history.
+
 This preserves:
 
 - field portability across templates

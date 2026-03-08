@@ -366,16 +366,12 @@ If an open context needs to adopt a newer version of the same template definitio
   category: "technical",
   fields: [
     { fieldId: "decision_statement", order: 1, required: true },
-    { fieldId: "decision_context", order: 2, required: true, 
-      customLabel: "Problem Statement" }, // Override label
-    { fieldId: "evaluation_criteria", order: 3, required: true,
-      customLabel: "Requirements" }, // Override label
-    { fieldId: "options", order: 4, required: true,
-      customLabel: "Options Evaluated" },
+    { fieldId: "decision_context", order: 2, required: true },
+    { fieldId: "evaluation_criteria", order: 3, required: true },
+    { fieldId: "options", order: 4, required: true },
     { fieldId: "evaluation_matrix", order: 5, required: true },
     { fieldId: "selected_option", order: 6, required: true },
-    { fieldId: "decision_rationale", order: 7, required: true,
-      customLabel: "Selection Rationale" },
+    { fieldId: "decision_rationale", order: 7, required: true },
     { fieldId: "rejected_options_rationale", order: 8, required: false },
     { fieldId: "risks_and_mitigations", order: 9, required: false },
     { fieldId: "success_metrics", order: 10, required: false },
@@ -393,8 +389,7 @@ If an open context needs to adopt a newer version of the same template definitio
   fields: [
     { fieldId: "decision_statement", order: 1, required: true },
     { fieldId: "budget_amount", order: 2, required: true },
-    { fieldId: "decision_context", order: 3, required: true,
-      customLabel: "Business Justification" },
+    { fieldId: "decision_context", order: 3, required: true },
     { fieldId: "roi_analysis", order: 4, required: true },
     { fieldId: "cost_breakdown", order: 5, required: false },
     { fieldId: "budget_source", order: 6, required: true },
@@ -421,7 +416,7 @@ Instead, the field-library persistence model must support:
 - durable template definitions with stable identity and versioning
 - many-to-many template field assignments
 - template-local ordering and requiredness
-- template-local label/description overrides
+- template-local composition metadata that does not redefine field semantics
 - prompt/configuration data attached to fields rather than duplicated across templates
 
 ### 6. Prompt Organization

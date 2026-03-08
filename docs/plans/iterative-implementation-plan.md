@@ -926,23 +926,27 @@ decision log --type <consensus|vote|authority|defer|reject|manual|ai_assisted> \
 
 ---
 
-### M4.7 — Field/Template Identity Hardening
+### M4.7a — Field/Template Definition Identity Hardening
 
 **DB schema updates**:
 - `decision_fields.namespace` (default `core`)
 - Uniqueness constraint: `(namespace, name, version)`
+- `decision_templates.namespace` (default `core`)
+- Uniqueness constraint: `(namespace, name, version)`
 
 **Definition model updates**:
 - Field identity is stable via UUID at definition time (seed-time for canonical/core registry).
+- Template identity is stable via UUID at definition time (seed-time for canonical/core registry).
 - `name` is the stable programmatic key within a `namespace` (not the user-facing label).
 - Fields remain the primary semantic definition units.
 - Templates reuse fields by `fieldId` (UUID) and act as versioned compositions over field definitions.
 - Template assignments control composition concerns such as inclusion, order, requiredness, and non-semantic grouping/layout metadata.
 - Templates should not override field-definition meaning, prompt semantics, or validation behavior.
+- Remove `templateFieldAssignments.customLabel` and `customDescription` entirely. If different wording is required, define a different field definition.
 
 **Seed/registry updates**:
 - Canonical fields/templates stored in a registry (constants) with pre-assigned UUIDs.
-- Seeding is idempotent by `id`, with fallback lookup by `(namespace, name, version)`.
+- Seeding is idempotent by `id`, with fallback lookup by `(namespace, name, version)` for both fields and templates.
 
 **Why here**:
 - M4.5 decision logging needs reliable template identity for accurate `templateVersion` attribution.
@@ -955,32 +959,41 @@ decision log --type <consensus|vote|authority|defer|reject|manual|ai_assisted> \
 - Core and DB now expose authoritative field/template identity lookup by stable attributes
 - Field-specific CLI/API callers now use shared identity-aware resolution rather than ad hoc name scans
 - Field-specific API routes now accept stable field references while continuing to validate active-template assignment
-- The next implementation pass should make `DecisionContext` creation explicitly pin a template definition version and its resolved field-definition set
+- Template namespace hardening and template identity lookup parity still need to be completed.
 
 **Impact of versioning review**:
 - This recent field work remains valid and should be treated as foundational contract hardening for the long-term field-version model
 - Current `draft_data` / `draft_versions` field reads and writes remain compatibility behavior during migration, not the final persistence architecture
 - Template transform behavior is still snapshot-shaped and must later align with field visibility semantics from `docs/versioning-architecture.md`
 
-**Next priority shift**:
-- Before broadening template identity/API work, implement Versioning Phase A/B on field-specific flows
-- Start with schema + dual-write for:
-  - manual field edit
-  - field regenerate
-  - full draft regenerate
-- Add parity tests proving active field values match across:
-  - new field-version path
-- Treat temporary snapshot behavior as implementation scaffolding rather than as a lasting architecture commitment
+**Concrete tasks for M4.7a**:
+- Add `namespace` and `(namespace, name, version)` uniqueness to `decision_templates`.
+- Extend template repository and identity lookup helpers to resolve templates by stable identity attributes as well as UUID.
+- Remove `templateFieldAssignments.customLabel` and `customDescription` from schema, services, repositories, seeds, and tests.
+- Update canonical template registry data so template assignments only express composition metadata.
+- Add parity tests for field/template identity lookup using UUID and stable identity attributes.
 
-**Concrete next tasks**:
+---
+
+### M4.7b — Definition Immutability And Context Pinning
+
+**Goal**:
+- Make field-definition and template-definition versions immutable.
+- Replace in-place semantic/composition mutation with version creation.
+- Make `DecisionContext` creation pin a template definition version and resolved field-definition set.
+
+**Concrete tasks for M4.7b**:
 - Add schema/types for:
   - `FieldVersion`
   - `FieldVisibilityState`
   - field-version source enums and inferred types
+- Add lineage/versioning support for definition entities so new field/template versions can be created without mutating prior definition rows in place.
 - Add context configuration support for:
   - pinned template definition version on `DecisionContext`
   - resolved field-definition versions used by that context
 - Add DB migrations, repositories, and core service interfaces for:
+  - create next field-definition version instead of mutating an existing field row
+  - create next template-definition version instead of mutating an existing template row
   - create next field version
   - read active field version
   - list field history
@@ -1002,6 +1015,46 @@ decision log --type <consensus|vote|authority|defer|reject|manual|ai_assisted> \
   - decide whether `decision_contexts.meetingId` becomes origin-meeting metadata
   - evaluate a `decision_context_meetings` join table for multi-meeting preparation
   - define how finalization stores meeting/event identity and authority participant snapshot on `DecisionLog`
+
+**Code incompatibilities introduced by field/template distribution proposal** (`docs/plans/field-and-template-definition-distribution-proposal.md`):
+
+The following existing code conflicts with or is incomplete relative to the new planning model. None have a defined update task yet. These must be resolved before or alongside the concrete next tasks above.
+
+1. **`templateFieldAssignments.customLabel` / `customDescription` — forbidden semantic override**
+   - Location: `packages/db/src/schema.ts` (`templateFieldAssignments` table), `packages/schema/src/index.ts`, `packages/core/src/services/decision-template-service.ts`, and 8 other files that read or write these columns
+   - Conflict: the proposal prohibits templates from overriding field semantic description. These columns are per-template label and description overrides, which violates that rule.
+   - Resolution required: remove `customLabel` and `customDescription` from `templateFieldAssignments`. If a different label or description is needed, a distinct field definition must be created. A DB migration and cleanup of all service/repo/test callsites is needed.
+
+2. **`DecisionFieldService.updateField` mutates the field row in place — no version lineage**
+   - Location: `packages/core/src/services/decision-field-service.ts:52–66`
+   - Conflict: the proposal requires that a materially changed field definition creates a new version row (incrementing `version`), not an in-place update. In-place mutation silently changes the meaning of any open `DecisionContext` that references the old definition and makes prior states unrecoverable.
+   - Resolution required: replace `updateField` with a `createNextFieldVersion` operation that inserts a new row under the same `(namespace, name)` with `version + 1`. The old row must remain immutable. Any open context that pinned the prior version must not be silently rebased.
+
+3. **`DecisionTemplateService.updateTemplate` — no version bump on composition change**
+   - Location: `packages/core/src/services/decision-template-service.ts:86–127`
+   - Conflict: the proposal requires a new template-definition version whenever the included field set, field order, requiredness, or referenced field-definition versions change. The current implementation deletes and recreates field assignments in place without incrementing `decisionTemplates.version`, so open contexts silently see a changed composition.
+   - Resolution required: composition-changing updates must produce a new `decisionTemplates` row (new UUID, incremented version). The old row must remain immutable so pinned contexts are stable.
+
+4. **`templateFieldAssignments.fieldId` references field identity without pinning a specific field-definition version**
+   - Location: `packages/db/src/schema.ts:202` (FK to `decisionFields.id`)
+   - Conflict: the proposal requires template versions to reference exact field-definition versions. Currently `fieldId` points to a `decisionFields` row, but there is no structural lineage linking rows that are different versions of the same conceptual field. A template cannot express "uses field X at version 2" without a `fieldLineageId` or equivalent stable cross-version identifier.
+   - Resolution required: introduce a stable lineage identity for field definitions (e.g., a `lineageId` UUID shared across all version rows of the same conceptual field, or a `(namespace, name)` composite reference on the assignment). `templateFieldAssignments` should store the resolved field-definition version ID (pointing to the specific row), not a floating reference that silently tracks the latest version.
+
+5. **`decisionTemplates` has no `namespace` column**
+   - Location: `packages/db/src/schema.ts:179–193`
+   - Conflict: the proposal treats both fields and templates as distributable units with namespace-scoped identity. Fields already have `namespace` with a `(namespace, name, version)` uniqueness constraint, but templates have no equivalent. Templates cannot participate in import/export or identity-aware lookup without this.
+   - Resolution required: add `namespace text NOT NULL DEFAULT 'core'` to `decisionTemplates` and a `(namespace, name, version)` uniqueness constraint, mirroring the field schema. Update `DecisionTemplateIdentityLookup`, the template repository, and seeding logic accordingly.
+
+6. **`decisionLogs` records `templateVersion` but not resolved field-definition versions**
+   - Location: `packages/db/src/schema.ts:276` (`templateVersion integer`)
+   - Conflict: the proposal requires that a `DecisionLog` captures the exact resolved field-definition versions active at finalization, not just the template version. Without this, the log cannot be reproduced or audited against the field extraction prompts and validation rules that were in effect.
+   - Resolution required: add a `resolvedFieldVersions jsonb` column to `decisionLogs` that stores a map of `fieldId → fieldVersion` (or the resolved field-definition row IDs) at the moment of logging. Update `DecisionLogService.logDecision` to populate this from the context's pinned field-definition set.
+
+7. **`decisionContexts` stores `templateId` but does not pin a template version or resolved field-definition set**
+   - Location: `packages/db/src/schema.ts:250` (`templateId uuid`)
+   - Conflict: the proposal requires context creation to bind to one specific template-definition version and its resolved set of field-definition versions. Currently only `templateId` is stored — a live FK to the mutable template row — so any in-place template mutation (issue 3) silently changes the context's composition.
+   - Status: partially acknowledged in the "Current progress" note above, but no schema, migration, or service task is defined.
+   - Resolution required: add `pinnedTemplateVersion integer` and `resolvedFieldVersions jsonb` to `decisionContexts`. Populate both at context creation from the template row at that moment. `resolvedFieldVersions` should map each assigned field's `(namespace, name)` to its version so the context remains reproducible even after the template or field rows are superseded.
 
 ---
 
@@ -1386,6 +1439,7 @@ pnpm cli meeting list  # "Cannot connect to API at http://localhost:3000"
 ### M5.5 — Web Frontend
 
 **New**: `apps/web/` in monorepo (React + Vite, or Hono + htmx for minimal JS)
+**UX reference**: `docs/ui-ux-overview.md` is the maintainable source for page goals, user stories, and shared-display vs facilitator-mode boundaries.
 
 Key screens:
 1. **Meeting list** — create/open meetings
@@ -1404,6 +1458,8 @@ Key screens:
 - Candidate promotion flow chooses template before initial draft generation; detector-suggested template may be preselected.
 - Segment selection screen supports drag selection (mouse/touch), long-meeting paging/filtering, and optional overlap indicators.
 - Manual and AI-assisted selection persist user-visible reading-row references together with resolved chunk IDs for auditability.
+- Shared display mode remains uncluttered and projection-friendly by default.
+- Detailed operational controls that add visual noise should be planned for facilitator mode rather than the shared display path.
 
 **Decision workspace behavior requirements**:
 - Full decision is scrollable with per-field lock/unlock and regenerate controls.
@@ -1484,6 +1540,8 @@ open http://localhost:5173  # Decision draft editor, multi-decision switcher
 - ✅ CLI works against local and remote API URLs
 - ✅ Web UI: flag → draft → multi-decision switch → export full workflow
 - ✅ Real-time draft generation streaming in web UI
+- ✅ UI/UX behavior for each shipped screen is documented and maintained in `docs/ui-ux-overview.md`
+- ✅ Shared-display experience remains uncluttered; facilitator-only controls are separated or explicitly gated
 - ✅ E2E test suite passes
 
 ---

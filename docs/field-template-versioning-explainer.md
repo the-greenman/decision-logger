@@ -235,7 +235,6 @@ erDiagram
       uuid fieldId FK
       int order
       boolean required
-      string customLabel
     }
 
     DECISION_CONTEXT {
