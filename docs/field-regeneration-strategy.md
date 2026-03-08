@@ -2,7 +2,7 @@
 
 **Status**: authoritative
 **Owns**: field regeneration behavior, prompt-source rules, field-specific weighting and regeneration flow
-**Must sync with**: `packages/schema`, `docs/field-library-architecture.md`, `docs/PLAN.md`, `docs/iterative-implementation-plan.md`
+**Must sync with**: `packages/schema`, `docs/field-library-architecture.md`, `docs/plans/PLAN.md`, `docs/plans/iterative-implementation-plan.md`
 
 ## Architecture Decision: Field-Specific Prompts
 

@@ -2,9 +2,9 @@
 
 **Status**: authoritative
 **Owns**: expert-system scope, expert data model, MCP integration detail, expert/MCP API and CLI surface
-**Must sync with**: `packages/schema`, `docs/PLAN.md`, `docs/iterative-implementation-plan.md`
+**Must sync with**: `packages/schema`, `docs/plans/PLAN.md`, `docs/plans/iterative-implementation-plan.md`
 
-> **Implementation Note (see iterative-implementation-plan.md M5-M7)**:
+> **Implementation Note (see `docs/plans/iterative-implementation-plan.md` M5-M7)**:
 > The expert system is implemented in stages.
 > - **M5**: API endpoints for experts and MCP servers are created as stubs.
 > - **M6**: The first expert, the "Decision Detector," is implemented.

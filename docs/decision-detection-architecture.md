@@ -2,14 +2,16 @@
 
 **Status**: authoritative
 **Owns**: decision-detection prompt design, classification rules, prompt refinement workflow
-**Must sync with**: `packages/schema`, `docs/PLAN.md`, `docs/iterative-implementation-plan.md`
+**Must sync with**: `packages/schema`, `docs/plans/PLAN.md`, `docs/plans/iterative-implementation-plan.md`, `docs/decision-detection-implementation-reference.md`
 
-> **Implementation note (see iterative-implementation-plan.md M6)**:
+> **Implementation note (see `docs/plans/iterative-implementation-plan.md` M6)**:
 > Decision detection is **deferred to Milestone 6**. M1–M5 use manual decision flagging only.
 >
 > In M6, detection is implemented as an **expert persona** (the "Decision Detector" expert), not as a standalone `DecisionDetectionService`. It uses `ExpertService.consultStructured()` with a `FlaggedDecisionDetectionSchema` output type. This reuses the expert infrastructure (prompt management, LLM interaction logging, MCP tool access) rather than duplicating it.
 >
 > The standalone `DecisionDetectionService` class shown in the Implementation section below is superseded by this expert-persona approach. The prompt design, patterns, confidence scoring, and test corpus described here remain valid and apply directly to the Decision Detector expert prompt (`prompts/experts/decision-detector.md`).
+>
+> For detection execution flow (two-pass segment selection, candidate persistence, review/promotion lifecycle), see `docs/decision-detection-implementation-reference.md`.
 
 ## Core Challenge
 
@@ -361,4 +363,3 @@ test-cases/
 ├── multiple-decisions.json          # Multiple decisions in one discussion
 └── decision-reversal.json           # Decision made then changed
 ```
-

@@ -26,6 +26,14 @@ To ensure absolute consistency and eliminate duplicate code, we will implement a
 - **Rule**: Drizzle table definitions in `packages/db` MUST align with Zod definitions in `packages/schema`.
 - **Validation**: We will implement a "Schema Sanity Check" test that compares Zod field names/types with Drizzle column definitions to catch drift at build time.
 
+### 1.4 Documentation Schema Policy
+- **Rule**: `packages/schema` is the only canonical source for full domain structure definitions.
+- **Rule**: Evergreen docs in `docs/` MUST describe semantics, invariants, workflows, and relationships, not restate full schema shapes unless there is a compelling reason.
+- **Rule**: Time-bound plan/proposal docs in `docs/plans/` MAY describe proposed schema additions, but should prefer deltas, constraints, and field lists over full copied schema blocks.
+- **Rule**: When a doc mentions a schema, it SHOULD reference the canonical schema symbol and file location in `packages/schema`.
+- **Rule**: If exact schema excerpts are needed repeatedly across docs, they SHOULD be generated or centrally maintained rather than hand-copied into multiple documents.
+- **Rule**: If a schema changes, update `packages/schema` first, then adjust docs to match the semantics and references instead of treating docs as an alternative source of truth.
+
 ## 2. Shared Core Architecture
 
 To minimize duplicate code, the system follows a strict "Shared Core" pattern.
@@ -74,6 +82,11 @@ To prevent "Schema Drift", we will implement the following automated checks:
 
 ### 4.3 Type-Safe Tooling
 - **Rule**: Use `@repo/schema` everywhere. If an agent needs a new field, it MUST be added to `packages/schema` first.
+
+### 4.4 Documentation Drift Prevention
+- **Rule**: Before adding an inline schema definition to a doc, ask whether a reference to `packages/schema` plus a short semantic explanation would be sufficient.
+- **Rule**: Repeated inline schema copies across multiple docs are not allowed unless they are generated from a shared source.
+- **Rule**: Proposal docs should explain what is changing; reference docs should explain why it matters; `packages/schema` should define what the structure actually is.
 
 ## 5. Agentic Workflows
 

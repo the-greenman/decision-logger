@@ -2,7 +2,7 @@
 
 **Status**: authoritative
 **Owns**: field-library schema, template composition model, field-level extraction prompt structure
-**Must sync with**: `packages/schema`, `docs/PLAN.md`, `docs/iterative-implementation-plan.md`
+**Must sync with**: `packages/schema`, `docs/plans/PLAN.md`, `docs/plans/iterative-implementation-plan.md`
 
 ## Core Concept
 
@@ -493,7 +493,7 @@ prompts/
 
 ### 8. Implementation
 
-> **Implementation Note**: The `DraftGenerationService` and its methods, including `regenerateField`, are defined in Milestone 1 and Milestone 4 of `docs/iterative-implementation-plan.md`. That document is the authoritative source for the implementation, which uses a layered architecture with a dedicated `ILLMService` and `PromptBuilder`.
+> **Implementation Note**: The `DraftGenerationService` and its methods, including `regenerateField`, are defined in Milestone 1 and Milestone 4 of `docs/plans/iterative-implementation-plan.md`. That document is the authoritative source for the implementation, which uses a layered architecture with a dedicated `ILLMService` and `PromptBuilder`.
 
 ### 9. CLI Workflow
 

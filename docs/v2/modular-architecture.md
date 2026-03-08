@@ -95,6 +95,8 @@ interface TranscriptGraphView {
 
 `TranscriptManagerImpl` may start as a thin facade over existing repositories/services, then accumulate richer pipeline/graph capabilities later without changing consuming subsystem contracts.
 
+For v2, graph-backed transcript indexing (including Graphiti-style temporal/entity relations) is an optional extension for decision revisit linking. It must remain replaceable and preserve the same detection candidate contract.
+
 ---
 
 ### 2. Decision Log Generator
@@ -192,7 +194,7 @@ interface ICoachObserverHook {
 
 ### 3. Decision Detector
 
-**Responsibility**: Analyze a `Timestream` to identify decision candidates (explicit and implicit). Produce `FlaggedDecision` records. Does not own transcript data — consumes `ITranscriptManager` interfaces only.
+**Responsibility**: Analyze a `Timestream` to identify decision candidates (explicit and implicit). Persist candidate records for human review and promotion. Does not own transcript data — consumes `ITranscriptManager` interfaces only.
 
 Detection logic is implemented as an expert persona (per `docs/decision-detection-architecture.md`) by delegating to `IExpertSystem.consultStructured()` with the detection prompt and a typed output schema.
 
@@ -203,12 +205,27 @@ interface DetectionRequest {
   meetingId: string
   timestream: Timestream
   detectImplicit: boolean
-  confidenceThreshold: number       // 0–1, default 0.7
+  confidenceThreshold: number       // 0–1, default 0.5
   fromSequenceNumber?: number       // for incremental detection
 }
 
+interface DecisionCandidate {
+  id: string
+  meetingId: string
+  title: string
+  contextSummary: string
+  confidence: number
+  suggestedTemplateId: string
+  startSequenceNumber: number
+  endSequenceNumber: number
+  evidenceSegmentIds: string[]
+  revisitSegmentIds: string[]
+  source: 'ai' | 'manual'
+  status: 'pending_candidate' | 'promoted' | 'dismissed'
+}
+
 interface DetectionResult {
-  flaggedDecisions: FlaggedDecision[]
+  candidates: DecisionCandidate[]
   processedChunks: number
   detectionDurationMs: number
   modelUsed: string
@@ -217,13 +234,14 @@ interface DetectionResult {
 interface IDecisionDetector {
   detect(request: DetectionRequest): Promise<DetectionResult>
   detectIncremental(meetingId: string, fromSequenceNumber: number): Promise<DetectionResult>
-  getFlaggedDecisions(meetingId: string): Promise<FlaggedDecision[]>
-  updateDecisionStatus(id: string, status: FlaggedDecision['status']): Promise<FlaggedDecision | null>
-  dismissDecision(id: string, reason: string): Promise<void>
+  listCandidates(meetingId: string): Promise<DecisionCandidate[]>
+  updateCandidate(id: string, patch: Partial<DecisionCandidate>): Promise<DecisionCandidate | null>
+  dismissCandidate(id: string, reason: string): Promise<void>
+  promoteCandidate(id: string): Promise<FlaggedDecision>
 }
 ```
 
-Implementation: `DetectorExpertFacade` calls `ExpertSystem.consultStructured()` with a `FlaggedDecision[]` output schema.
+Implementation: `DetectorExpertFacade` calls `ExpertSystem.consultStructured()` for pass-1 contiguous detection, performs pass-2 revisit linking, then persists candidates.
 
 **Owns**: `IFlaggedDecisionRepository`
 
@@ -409,10 +427,11 @@ TranscriptManager.processTranscript()
   +--> [event] DecisionDetector.detectIncremental()
          |  calls: ITranscriptManager.getTimestream()
          |  calls: ExpertSystem.consultStructured(detectionExpert, timestream)
-         |  creates: FlaggedDecision[]
-         |  publishes: detection.decisions_flagged
+         |  creates: DecisionCandidate[] (status=pending_candidate)
+         |  publishes: detection.candidates_detected
          v
-       User reviews FlaggedDecision list
+       User reviews DecisionCandidate list
+         |  promotes selected candidate
          |
          v
        DecisionLogGenerator.createContext(flaggedDecisionId, templateId)

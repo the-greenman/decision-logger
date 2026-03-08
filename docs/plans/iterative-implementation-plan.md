@@ -64,7 +64,7 @@ CLI and API must remain behaviorally aligned while implementation wiring differs
 Every LLM call stores its structured prompt segments, serialized prompt text, raw response, model, provider, latency, and token counts in a `llm_interactions` table. No opt-in flag needed. Surfaced via `draft debug` CLI and `GET /api/decision-contexts/:id/llm-interactions`.
 
 **Layer 2 — Runtime structured logging (M2, phased rollout)**:
-Per `docs/logging-observability-plan.md`, all service boundaries emit structured JSON with correlation IDs. Rollout: M2 adds the shared logger + correlation helpers (Phase A/B of the observability plan). M4 instruments LLM requests and streaming (Phase C). Full debug UX (`--verbose`, `debug tail`) completes in M5 alongside the full API layer (Phase D). This does not block any LLM or domain milestone — logging is additive infrastructure.
+Per `docs/plans/logging-observability-plan.md`, all service boundaries emit structured JSON with correlation IDs. Rollout: M2 adds the shared logger + correlation helpers (Phase A/B of the observability plan). M4 instruments LLM requests and streaming (Phase C). Full debug UX (`--verbose`, `debug tail`) completes in M5 alongside the full API layer (Phase D). This does not block any LLM or domain milestone — logging is additive infrastructure.
 
 ### Prompt Construction: Structured Segments
 A `PromptBuilder` class assembles prompts as a typed segment list before serializing to string. Guidance text is visually and semantically distinct from transcript content via explicit section delimiters. The segment tree is stored per-interaction for full auditability.
@@ -586,6 +586,8 @@ draft_versions JSONB NOT NULL DEFAULT '[]'
 
 Drizzle migration required.
 
+> **Long-term direction**: `draft_versions` is a transitional snapshot model. The target architecture is field-centric versioning per `docs/versioning-architecture.md`.
+
 ---
 
 ### M2.4 — Version Service Methods
@@ -596,6 +598,88 @@ Drizzle migration required.
 - `listVersions(id)` — returns `Array<{version, savedAt, fieldCount}>`
 
 `DraftGenerationService.generateDraft()` calls `saveSnapshot()` automatically before each generation.
+
+> **Implementation note**: decision-level snapshot rollback may remain temporarily while field-based restore is completed, but the target behavior is field-based orchestration.
+
+---
+
+### Versioning Architecture Implementation (Dedicated Plan Section)
+
+**Architecture source-of-truth**: `docs/versioning-architecture.md`
+
+**Supporting references**:
+- `docs/field-template-versioning-explainer.md`
+- `docs/plans/field-versioning-schema-proposal.md`
+- `docs/plans/field-versioning-api-proposal.md`
+
+This section defines implementation sequencing for the long-term field-based versioning model.
+
+**Scope clarification**:
+- `DecisionContext` is long-running decision preparation state and may span multiple meetings plus off-meeting work.
+- Meetings manage ordered agendas by selecting from open decision contexts.
+- Automatically detected decision candidates remain candidates until explicitly promoted into decision contexts.
+- One decision context may accumulate transcript evidence from many meetings.
+- `DecisionLog` is the immutable record of the actual decision moment.
+- Finalization must capture the meeting/event context and authority participant snapshot relevant at that specific moment.
+
+**Phase A — Schema introduction**
+- Add field-version and field-visibility persistence model.
+- Add `field_versions` table with append-only per-field history, active-version semantics, and provenance columns.
+- Add `field_visibility_state` table for current template-driven visibility without deleting field content.
+- Add DB constraints/indexes for:
+  - unique `(decision_context_id, field_id, version)`
+  - exactly one active field version per `(decision_context_id, field_id)`
+  - efficient active-field and history reads by context/field.
+- Add explicit context/meeting linkage planning so agendas and transcript relations do not hard-code single-meeting ownership.
+
+**Phase B — Field-Specific Writes**
+- Route manual edit/regenerate/full regenerate through the field-version path.
+- Keep provisional snapshot updates only where unfinished code still depends on them.
+- Add tests ensuring active values resolve from the field-version path correctly.
+- Field-specific write entry points:
+  - `DecisionContextService.setFieldValue()`
+  - single-field regenerate flow
+  - full draft generate/regenerate flow for unlocked visible fields
+- Persist field-version provenance where available:
+  - `source`
+  - `sourceInteractionId`
+  - `createdBy`
+  - optional `notes`
+- Keep `lockedFields` as the current lock-state source for now; enforce lock policy in service logic rather than introducing lock-history persistence in Phase A/B.
+
+**Phase C — Field-Centric Reads**
+- Switch UI/API/CLI field reads to field-version active values.
+- Add field-centric read services that return active visible field state from `field_versions` + `field_visibility_state`.
+- Migrate `draft show`, field-specific API responses, export preparation, and finalization reads onto active field versions.
+- Remove provisional read paths as soon as the field-version surfaces cover the required behavior.
+
+**Phase D — Rollback conversion**
+- Convert rollback UX/API semantics to field-based restore operations.
+- Retain decision-level rollback command temporarily if needed.
+- Add field-history list/show/restore capabilities as first-class API/CLI workflows.
+- Implement restore as append-only creation of a new active field version with `source='rollback'`.
+- Convert decision-level rollback into orchestration that restores the affected fields rather than reactivating snapshot state in place.
+
+**Phase E — Template transform and context/meeting alignment**
+- Template switching uses visibility state:
+  - preserve all field content
+  - hide non-template fields
+  - exclude hidden fields from export
+  - do not mutate locked fields
+- Treat template change alone as a visibility/state change, not a field-value version event.
+- Only create `template_transform` field versions for values that are actually regenerated or transformed.
+- Add API/CLI affordances for template change modes, e.g. visibility-only vs transform-unlocked-visible-fields.
+- Add meeting-agenda selection semantics for open contexts.
+- Add transcript-to-context linkage semantics for evidence from many meetings.
+- Keep decision candidates separate from decision contexts until promotion.
+
+**Acceptance checkpoints**
+- Field edit/regenerate always creates append-only field versions.
+- Hidden fields remain recoverable and excluded from export.
+- Completion persists notes text + timestamp with active field versions.
+- API/CLI parity holds for field-version list/show/restore flows.
+- Locked fields reject automated writes from regenerate/template-transform flows.
+- Decision-level rollback behaves as a compatibility wrapper over field restore semantics.
 
 ---
 
@@ -618,6 +702,16 @@ draft rollback <version>   — restore draft to version N
 **New API endpoints**:
 - `GET /api/decision-contexts/:id/versions` — list versions
 - `POST /api/decision-contexts/:id/rollback` — body: `{ version: number }`
+
+**Migration note**:
+- These snapshot-oriented commands/endpoints may remain temporarily while the field-version workflow is completed.
+- Long-term field-centric additions should be introduced alongside them:
+  - `draft field-history <field-ref>`
+  - `draft show-field-version <field-ref> --version <n>`
+  - `draft restore-field <field-ref> --version <n>`
+  - `GET /api/decision-contexts/:id/fields/:fieldRef/versions`
+  - `GET /api/decision-contexts/:id/fields/:fieldRef/versions/:version`
+  - `POST /api/decision-contexts/:id/fields/:fieldRef/restore`
 
 ---
 
@@ -695,11 +789,6 @@ pnpm cli draft generate                # decision_statement now regenerated
 ---
 
 ## Milestone 4: Per-Field Updates + Manual Edit
-
-**Deliverable**: Regenerate a specific field with field-level guidance. Manually edit a field value directly. Full decision logging (immutable record).
-
----
-
 ### M4.1 — Field-Specific Regeneration
 
 **Update**: `packages/core/src/services/draft-generation-service.ts`
@@ -707,6 +796,8 @@ pnpm cli draft generate                # decision_statement now regenerated
 - Chunk weighting: field-tagged (`decision:<id>:<field>`) > decision-tagged (`decision:<id>`) > meeting-tagged (`meeting:<id>`)
 - Calls `llm.regenerateField()` with weighted, filtered chunk set
 - Stores separate `LLMInteraction` record with `fieldId` populated
+- Rejects persistence failures after regeneration instead of silently returning generated content
+- Validates that the requested field belongs to the active template before regeneration proceeds
 
 **Validation**:
 ```typescript
@@ -715,6 +806,9 @@ expect(typeof value).toBe('string');
 const interactions = await llmInteractionRepo.findByField(contextId, 'options');
 expect(interactions[0].fieldId).toBe('options');
 ```
+**Completed**:
+- Added test coverage for weighting order so field-tagged chunks outrank decision-tagged chunks, which outrank meeting-tagged chunks
+- Added a regression test ensuring failed draft persistence after LLM completion throws an error
 
 ---
 
@@ -746,11 +840,14 @@ This distinction is preserved in `llm_interactions.promptSegments` for full audi
 - Updates `draft_data[fieldId]` directly
 - Does NOT lock the field automatically (user can still regenerate)
 - Marks field in metadata as `{ manuallyEdited: true }` within `draft_data` or a separate `fieldMeta` JSONB column
+- Validates that `fieldId` is assigned to the context template before writing into `draft_data`
 
 **CLI command**:
 ```
 draft edit-field <field-name>    — opens $EDITOR or prompts interactively for value
 ```
+**Completed**:
+- `draft show` now renders a clear `[MANUALLY EDITED]` indicator based on persisted field metadata
 
 ---
 
@@ -766,20 +863,31 @@ draft edit-field <field-name>                            — manual edit
 - `POST /api/decision-contexts/:id/fields/:fieldId/regenerate` — body: `{ guidance?: GuidanceSegment[] }`
 - `PATCH /api/decision-contexts/:id/fields/:fieldId` — body: `{ value: string }`
 - `GET /api/decision-contexts/:id/fields/:fieldId/transcript` — field-tagged chunks for this field
+**Contract hardening**:
+- Align CLI, API, and docs on field identity semantics: either accept stable field keys end-to-end or document UUID-only routes explicitly
+- If API remains UUID-based, add server-side resolution helpers for user-facing flows that reference field names such as `options`
+- `PATCH /api/decision-contexts/:id/fields/:fieldId` must reject fields not assigned to the active template
+
+**Completed**:
+- Server-side validation now rejects `PATCH /api/decision-contexts/:id/fields/:fieldId` requests for fields not assigned to the active template
+- CLI continues to resolve field names to assigned field IDs before calling field-specific services
+- Field-specific API routes now accept either an assigned field UUID or a stable field name and resolve that reference server-side before update/regenerate/transcript operations
 
 ---
 
 ### M4.5 — Decision Logging (Finalization)
-
-**Status**: ✅ COMPLETE
-
-Fix existing TODOs in `DecisionLogService` (currently hardcodes `templateVersion: 1` and `sourceChunkIds: []`).
 
 **Update**: `packages/core/src/services/decision-log-service.ts`
 - `logDecision(contextId, options)` — fetch actual template version from `DecisionTemplate`; fetch source chunk IDs from `ChunkRelevance` records
 - Creates immutable `DecisionLog` from `DecisionContext.draftData`
 - Updates `DecisionContext.status` to `'logged'`
 - Validation: cannot log if required fields are empty (check against template `required` flag)
+- Treat `DecisionContext` as the preparation workspace, which may contain work accumulated across multiple meetings or outside meeting time.
+- Treat `DecisionLog` as the point-in-time finalized record for the actual decision event.
+- Extend finalization planning so the log captures:
+  - the meeting/event identity in which the decision was actually taken
+  - the participant snapshot relevant at that moment
+  - the finalization timestamp, which may differ from earlier preparation timestamps
 
 **Completed**:
 - `DecisionLogService` now reads real template version from the template repository
@@ -787,6 +895,7 @@ Fix existing TODOs in `DecisionLogService` (currently hardcodes `templateVersion
 - Source chunk IDs are collected from `ChunkRelevanceRepository` and stored on the immutable decision log
 - Successful finalization updates the `DecisionContext` status to `logged`
 - Core service tests were updated to cover constructor wiring, required-field validation, source chunk collection, and logged status transition
+- Required-field validation coverage includes whitespace-only strings and empty arrays
 
 **CLI command**:
 ```
@@ -800,7 +909,7 @@ decision log --type <consensus|vote|authority|defer|reject|manual|ai_assisted> \
 
 ### M4.6 — Logging API Endpoints
 
-**Status**: ✅ COMPLETE
+**Status**: COMPLETE
 
 - `POST /api/decision-contexts/:id/log` — finalize; body: `{ decisionMethod, actors, loggedBy }`
 - `GET /api/decisions/:id` — show decision log
@@ -811,14 +920,12 @@ decision log --type <consensus|vote|authority|defer|reject|manual|ai_assisted> \
 - Added CLI `decision log` support using the correct `decisionMethod` object shape
 - Added API e2e coverage for finalize, show, and export flows against the real test database
 - Validated `api` and `cli` type-checks after wiring the new decision logging surfaces
+- Logged decision markdown export now reuses shared export formatting so draft and logged exports do not drift
+- Added API coverage for invalid field/template associations on field update routes
 
 ---
 
 ### M4.7 — Field/Template Identity Hardening
-
-**Status**: 🚧 IN PROGRESS
-
-Move identity-hardening work forward so decision logging and M5 field/template APIs run on stable contracts.
 
 **DB schema updates**:
 - `decision_fields.namespace` (default `core`)
@@ -841,7 +948,47 @@ Move identity-hardening work forward so decision logging and M5 field/template A
 - DB support is already present for `decision_fields.namespace`
 - DB uniqueness is already present on `(namespace, name, version)`
 - DB seed flow already supports idempotent seeding by `id` with fallback lookup by `(namespace, name, version)`
-- Remaining work is to promote canonical field/template registry constants into a shared stable contract and align service-layer identity semantics before M5 field/template CRUD
+- Core and DB now expose authoritative field/template identity lookup by stable attributes
+- Field-specific CLI/API callers now use shared identity-aware resolution rather than ad hoc name scans
+- Field-specific API routes now accept stable field references while continuing to validate active-template assignment
+
+**Impact of versioning review**:
+- This recent field work remains valid and should be treated as foundational contract hardening for the long-term field-version model
+- Current `draft_data` / `draft_versions` field reads and writes remain compatibility behavior during migration, not the final persistence architecture
+- Template transform behavior is still snapshot-shaped and must later align with field visibility semantics from `docs/versioning-architecture.md`
+
+**Next priority shift**:
+- Before broadening template identity/API work, implement Versioning Phase A/B on field-specific flows
+- Start with schema + dual-write for:
+  - manual field edit
+  - field regenerate
+  - full draft regenerate
+- Add parity tests proving active field values match across:
+  - new field-version path
+- Treat temporary snapshot behavior as implementation scaffolding rather than as a lasting architecture commitment
+
+**Concrete next tasks**:
+- Add schema/types for:
+  - `FieldVersion`
+  - `FieldVisibilityState`
+  - field-version source enums and inferred types
+- Add DB migrations, repositories, and core service interfaces for:
+  - create next field version
+  - read active field version
+  - list field history
+  - restore field version
+  - recompute field visibility for template changes
+- Add focused tests for:
+  - append-only restore behavior
+  - one-active-version invariant
+  - hidden-field preservation across template changes
+  - locked-field rejection for automated writes
+  - agenda selection of open contexts without transferring ownership to meetings
+  - transcript linkage from many meetings into one decision context
+- Add planning/design follow-up for cross-meeting context scope:
+  - decide whether `decision_contexts.meetingId` becomes origin-meeting metadata
+  - evaluate a `decision_context_meetings` join table for multi-meeting preparation
+  - define how finalization stores meeting/event identity and authority participant snapshot on `DecisionLog`
 
 ---
 
@@ -857,6 +1004,42 @@ Add pluggable draft-content and coaching seams while keeping the current draft p
 **Constraints**:
 - Existing `draft generate`/`draft regenerate-field` behavior remains unchanged.
 - Coaching remains opt-in; no synchronous advice generation required before M6.
+
+---
+
+### M4.9 — Cross-Meeting Decision Context Planning
+
+Add the architectural seam for decisions that are prepared over time, not only inside one meeting.
+
+**Goal**:
+- A `DecisionContext` may remain active across:
+  - multiple meetings
+  - asynchronous preparation work
+  - off-meeting drafting/review
+- A `DecisionLog` remains tied to one concrete decision moment.
+
+**Plan**:
+- Reclassify `DecisionContext.meetingId` as compatibility/origin-meeting metadata unless/until the model is expanded.
+- Design explicit linkage between one decision context and multiple meetings/events.
+- Keep transcript evidence, guidance, and field history attachable to the same long-running context.
+- Ensure finalization records:
+  - the meeting/event where the decision was actually made
+  - the participant snapshot at finalization time
+  - the active visible field state at that moment
+
+**Likely implementation options**:
+- Add `decision_context_meetings` as a join table.
+- Or add a broader decision-work-item concept above `DecisionContext` and keep contexts as draft projections.
+
+**Recommendation for now**:
+- Do not block field-version work on the full multi-meeting redesign.
+- Preserve current `meetingId` for compatibility.
+- Add the planning/design work now so Phase A/B versioning does not hard-code single-meeting assumptions into new APIs and schema.
+
+**Validation questions**:
+- Can one context be resumed in a later meeting without cloning field history?
+- Can off-meeting edits occur without fabricating meeting ownership?
+- Can finalization explicitly identify the meeting/event and participant set for the actual decision moment?
 
 ---
 
@@ -894,16 +1077,18 @@ pnpm test --filter=@repo/core
 ```
 
 ### M4 Exit Criteria
-- ✅ Single field regeneration stores separate `LLMInteraction` with `fieldId`
-- ✅ Field-tagged transcript clearly separated from transcript in prompt (verifiable via `draft debug`)
-- ✅ Manual field edits persist and are marked as manually edited
-- ✅ Decision logging creates immutable record with real template version + source chunk IDs
-- ✅ Cannot log decision with required fields empty
-- ✅ Export works for both draft and logged decisions
-- ✅ Field/template identity hardened (namespace + uniqueness + stable seed UUIDs)
-- ✅ `IContentCreator` seam exists with AI adapter bound to current implementation
-- ✅ Field provenance metadata supported without breaking existing draft_data consumers
-- ✅ No-op coaching hook wired and verified non-disruptive
+- Single field regeneration stores separate `LLMInteraction` with `fieldId`
+- Field-tagged transcript clearly separated from transcript in prompt (verifiable via `draft debug`)
+- Manual field edits persist, are marked as manually edited, and are surfaced in CLI/API reads
+- Decision logging creates immutable record with real template version + source chunk IDs
+- Cannot log decision with required fields empty
+- Export works for both draft and logged decisions
+- Logged export reuses shared formatting rules or equivalent centralized rendering to avoid drift from draft export
+- Field/template identity hardened (namespace + uniqueness + stable seed UUIDs)
+- Field-level API/CLI contracts are aligned on identifier semantics and reject fields not assigned to the active template
+- `IContentCreator` seam exists with AI adapter bound to current implementation
+- Field provenance metadata supported without breaking existing draft_data consumers
+- No-op coaching hook wired and verified non-disruptive
 
 ---
 
@@ -927,12 +1112,26 @@ Before the web UI, the API and CLI must support working on multiple decisions si
 - Switch active decision: `context set-decision <flagged-id>` (loads existing `DecisionContext` if one exists)
 - Each decision has its own isolated draft state, version history, and LLM interactions
 - `draft show` always refers to the currently active decision context
+- Candidate queue distinguishes `suggested` from `agenda` items
+- Agenda ordering is explicit/user-controlled; new suggestions are inserted by user choice, not auto-appended to agenda end
+- Meeting participant list can be updated during meeting lifecycle (join/leave reflected in updates)
+
+**Follow-on planning beyond one meeting**:
+- A decision should also be able to continue beyond the originating meeting without losing the same `DecisionContext`.
+- Meeting-specific workflows remain important for evidence capture and finalization, but should not be the sole lifecycle boundary for the decision draft.
 
 **API endpoints** (confirm exist):
 - `GET /api/meetings/:id/flagged-decisions` — list all flagged decisions for a meeting
 - `GET /api/meetings/:id/decision-contexts` — list all draft contexts with status
 - `GET /api/meetings/:id/summary` — aggregate stats (decision count, draft count, logged count)
 - `GET /api/flagged-decisions/:id/context` — get the `DecisionContext` for a flagged decision (enables web UI "resume" flow)
+- `PATCH /api/meetings/:id` — update meeting metadata/participants during session
+- `GET /api/meetings/:id/decision-candidates?status=suggested|agenda` — queue split for review vs agenda
+- `PATCH /api/decision-candidates/:id/agenda` — promote to agenda and set/reorder agenda position
+
+**Future API planning for cross-meeting work**:
+- `GET /api/decision-contexts/:id` should remain the canonical way to resume one long-running decision context.
+- Add related-meeting/event views later rather than forcing all context navigation through a single meeting.
 
 **Validation**:
 ```bash
@@ -967,6 +1166,7 @@ Complete all remaining API endpoints. All use Zod + `@hono/zod-openapi`.
 - `DELETE /api/meetings/:id/streaming/buffer`
 - `GET /api/meetings/:id/transcripts/raw`
 - `GET /api/meetings/:id/chunks` — with context/time/strategy filters
+- `GET /api/meetings/:id/transcript-reading` — non-overlap reading projection for human review/segment selection
 - `POST /api/chunks/search`
 
 **Context/state endpoints**:
@@ -994,6 +1194,13 @@ Complete all remaining API endpoints. All use Zod + `@hono/zod-openapi`.
 - `POST /api/templates`, `PATCH /api/templates/:id`, `DELETE /api/templates/:id`
 - `POST /api/templates/:id/set-default`
 
+**Versioning-first additions before broader CRUD expansion**:
+- `GET /api/decision-contexts/:id/fields` — active field state backed by active field versions
+- `GET /api/decision-contexts/:id/fields/:fieldRef/versions`
+- `GET /api/decision-contexts/:id/fields/:fieldRef/versions/:version`
+- `POST /api/decision-contexts/:id/fields/:fieldRef/restore`
+- `POST /api/decision-contexts/:id/template-change` with explicit transform mode semantics
+
 **Validation**:
 ```bash
 pnpm test:e2e   # Full API test suite passes
@@ -1001,6 +1208,85 @@ curl http://localhost:3000/docs  # OpenAPI spec UI renders all endpoints
 curl http://localhost:3000/api/context  # Returns global context state
 curl http://localhost:3000/api/meetings/<id>/summary  # Returns stats
 ```
+
+---
+
+### M5.1a — Transcript Reading Mode (UI-Critical)
+
+For human segment selection, overlapped chunk text is hard to read. Add a dedicated reading projection that is non-overlapping and sequence-ordered.
+
+**Architecture reference**: `docs/transcript-reading-and-segment-selection-architecture.md`
+
+**Goal**:
+- Keep overlap-based chunking for LLM quality.
+- Provide a separate **reading mode** for humans (CLI + API + web UI) that avoids duplicate overlap text.
+
+**Behavior**:
+- Reading mode returns a de-overlapped display stream (stable order by sequence/time).
+- User selection in reading mode maps back to underlying chunk IDs internally.
+- Overlap metadata is optional and compact (e.g., icon/count), hidden by default in reading view.
+- Reading rows are append-only for ongoing transcript ingestion; existing rows are not renumbered when new transcript content is added.
+- Confirmed selections persist both selected reading-row IDs and final ordered, deduplicated chunk IDs.
+
+**CLI/API parity**:
+- CLI: `transcript list --reading --meeting-id <id> [--from <seq>] [--to <seq>] [--query <text>] [--page <n>] [--page-size <n>]`
+- API: `GET /api/meetings/:id/transcript-reading?from=<seq>&to=<seq>&q=<text>&page=<n>&pageSize=<n>`
+- Any temporary asymmetry must be documented per the CLI/API sync contract.
+
+**Validation**:
+```bash
+# API reading projection
+curl "http://localhost:3000/api/meetings/<id>/transcript-reading?from=120&to=180"
+
+# CLI# Reading mode parity
+pnpm cli transcript list --reading --meeting-id <id>
+curl "http://localhost:3000/api/meetings/<id>/transcript-reading"
+
+# Verify no duplicate overlap text in reading mode
+
+# Verify same row selection resolves to same chunk IDs across CLI/API
+```
+
+---
+
+### M5.1b — AI-Assisted Segment Suggestions (Review First)
+
+Manual decision creation should support title/summary-driven AI suggestions for relevant transcript evidence.
+
+**Behavior**:
+- User provides decision title + summary.
+- System proposes matching transcript segments for review.
+- Suggestions are pre-selected in selection UI, but user must confirm/edit before persistence.
+- Persist only user-confirmed selection.
+- Suggestions return reading-row spans plus mapped chunk IDs; single-row suggestions are represented as one-row spans.
+- This workflow assists explicit user-driven decision creation and does not create candidate records automatically.
+
+**CLI/API parity**:
+- CLI: `decisions suggest-segments --meeting-id <id> --title <text> --summary <text> [--from <seq>] [--to <seq>] [--limit <n>]`
+- API: `POST /api/meetings/:id/segment-suggestions`
+- Response includes sequence, mapped chunk IDs, confidence, and reason.
+
+**Validation**:
+```bash
+# API suggestions
+curl -X POST http://localhost:3000/api/meetings/<id>/segment-suggestions \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Choose secure storage backend","summary":"Select primary storage path and defer access method details","limit":20}'
+
+# CLI suggestions
+pnpm cli decisions suggest-segments --meeting-id <id> \
+  --title "Choose secure storage backend" \
+  --summary "Select primary storage path and defer access method details" \
+  --limit 20
+
+# Parity check: same meeting/title/summary returns equivalent ranked suggestions
+
+# Confirm only reviewed/accepted selections are persisted
+```
+
+**Boundary note**:
+- `segment-suggestions` is selection assistance for one explicit decision workflow item.
+- Meeting-wide candidate discovery, candidate persistence, revisit linking, and promotion remain part of M6 decision detection.
 
 ---
 
@@ -1068,11 +1354,29 @@ pnpm cli meeting list  # "Cannot connect to API at http://localhost:3000"
 
 Key screens:
 1. **Meeting list** — create/open meetings
-2. **Transcript view** — upload, stream, view chunks with context tags
+2. **Transcript view** — upload, stream, and read transcript in **reading mode** by default (non-overlap); optional chunk/debug mode
 3. **Decision detection** — review auto-detected decisions, accept/dismiss/flag
 4. **Draft editor** — field-by-field view with lock toggles, regenerate buttons, manual edit
 5. **Expert consultation** — request advice from experts, view suggestions
 6. **Decision log** — view finalized decisions, export markdown/JSON
+
+**Decision creation UX requirements**:
+- Candidate overview hides transcript by default.
+- Create decision screen supports:
+  - title/summary input
+  - manual segment selection path
+  - AI suggestion path (`Find matching segments`) with mandatory human review
+- Candidate promotion flow chooses template before initial draft generation; detector-suggested template may be preselected.
+- Segment selection screen supports drag selection (mouse/touch), long-meeting paging/filtering, and optional overlap indicators.
+- Manual and AI-assisted selection persist user-visible reading-row references together with resolved chunk IDs for auditability.
+
+**Decision workspace behavior requirements**:
+- Full decision is scrollable with per-field lock/unlock and regenerate controls.
+- Field zoom view supports edit/regenerate and field-version navigation.
+- Versioning is field-centric; template changes move unlocked fields in/out of active template view.
+- Field content is preserved when switching templates; non-template fields become hidden (not deleted) and are excluded from export.
+- Transcript added in decision/field context is explicitly tagged and recency-weighted for later manual regeneration.
+- Completion captures free-text agreement notes plus timestamp; incomplete decisions remain resumable.
 
 Real-time: SSE or WebSocket for streaming LLM draft generation (show progress per field as it generates).
 
@@ -1123,6 +1427,18 @@ open http://localhost:5173  # Decision draft editor, multi-decision switcher
 - ✅ Multiple decisions flagged and worked on independently within one meeting
 - ✅ Switching between active decisions preserves independent draft state
 - ✅ All API endpoints implemented (expert/MCP as stubs), tested, and in OpenAPI spec
+- ✅ Transcript reading mode exists in API + CLI with documented parity
+- ✅ Web transcript workflow defaults to reading mode for segment selection (chunk overlap hidden by default)
+- ✅ AI segment suggestion endpoint + CLI command implemented with parity
+- ✅ Manual + AI-assisted segment selection both require explicit user confirmation before persistence
+- ✅ Confirmed selection persistence stores both reading-row IDs and resolved chunk IDs
+- ✅ Transcript append does not invalidate previously confirmed selection mappings
+- ✅ Candidate queue supports `suggested` vs `agenda` states with explicit agenda ordering controls
+- ✅ Template selected before initial draft generation in candidate promotion flow
+- ✅ Field content preserved across template changes; hidden fields excluded from export
+- ✅ Field-level version navigation available in zoomed field workflow
+- ✅ New transcript in decision/field context is recency-weighted for manual regeneration
+- ✅ Decision completion persists free-text agreement notes and timestamp; incomplete decisions can be resumed
 - ✅ Modular activation gate passed (seams present; advanced v2 features still optional)
 - ✅ `apps/cli` has zero `@repo/core` or `@repo/db` imports
 - ✅ CLI works against local and remote API URLs
@@ -1139,6 +1455,11 @@ open http://localhost:5173  # Decision draft editor, multi-decision switcher
 **Why experts first, then detection**: The expert system provides the infrastructure (prompt personas, structured output, LLM interaction logging) that the Decision Detector reuses. Building experts first means detection gets a mature, tested foundation.
 
 **Implementation reference**: `docs/decision-detection-implementation-reference.md` defines the candidate persistence model, two-pass segment strategy, and review/promotion lifecycle for this milestone.
+
+**Boundary with M5 transcript selection**:
+- M5 transcript reading and `segment-suggestions` support explicit user-driven decision creation and reviewed evidence selection.
+- M6 decision detection supports meeting-wide candidate discovery, candidate persistence, revisit linking, and candidate promotion/dismissal.
+- Shared expert infrastructure is expected; shared lifecycle ownership is not.
 
 ---
 
@@ -1202,6 +1523,7 @@ The Decision Detector is an expert stored in the experts table. It uses `consult
   - `startSequenceNumber`, `endSequenceNumber`
   - `evidenceSegmentIds`
 - Confidence threshold is configurable per run; default include threshold: `>= 0.5`
+- Persisted candidate metadata includes lifecycle timestamps and queue status (`suggested` by default before agenda ordering/promotion)
 
 **Seed**: Decision Detector expert inserted into `experts` table (name: `'decision-detector'`, domain: `'detection'`)
 

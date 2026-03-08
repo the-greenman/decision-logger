@@ -22,9 +22,9 @@ This project is designed to be **agentic-friendly** - structured so AI coding as
 ### 2. **Comprehensive Documentation**
 
 **Architecture docs** (read these first):
-- `docs/PLAN.md` - Product spec and finalized architecture (SOURCE OF TRUTH)
+- `docs/plans/PLAN.md` - Product spec and finalized architecture (SOURCE OF TRUTH)
 - `docs/agentic-development-standards.md` - Strict architectural guardrails (Service-Repository, DI, layering, TDD)
-- `docs/iterative-implementation-plan.md` - Milestone-based implementation plan (M1–M8)
+- `docs/plans/iterative-implementation-plan.md` - Milestone-based implementation plan (M1–M8)
 
 **Domain-specific docs**:
 - `docs/field-library-architecture.md` - Field library + template system
@@ -88,7 +88,7 @@ packages/schema (Zod schemas - SSOT)
 
 1. **Product context**:
    ```
-   Read docs/PLAN.md
+   Read docs/plans/PLAN.md
    Focus on: Domain entities, API endpoints, CLI commands
    ```
 
@@ -100,7 +100,7 @@ packages/schema (Zod schemas - SSOT)
 
 3. **Current milestone**:
    ```
-   Read docs/iterative-implementation-plan.md
+   Read docs/plans/iterative-implementation-plan.md
    Find: Current milestone (M1–M8) and active tasks
    ```
 
@@ -253,7 +253,7 @@ This will verify:
 ### Task: Add a New API Endpoint
 
 **Steps**:
-1. Check `docs/PLAN.md` for endpoint spec
+1. Check `docs/plans/PLAN.md` for endpoint spec
 2. Add Zod schema in `packages/schema` if needed
 3. Write test in `apps/api/src/__tests__/`
 4. Implement route in `apps/api/src/routes/`
@@ -264,7 +264,7 @@ This will verify:
 ### Task: Implement a Service
 
 **Steps**:
-1. Read milestone tasks in `docs/iterative-implementation-plan.md`
+1. Read milestone tasks in `docs/plans/iterative-implementation-plan.md`
 2. Define interface in `packages/core/src/interfaces/`
 3. Write unit tests with mock repository
 4. Implement service with DI
@@ -277,8 +277,8 @@ This will verify:
 ### Quick Reference
 
 **Start here**:
-- `docs/PLAN.md` - What we're building
-- `docs/iterative-implementation-plan.md` - How we're building it
+- `docs/plans/PLAN.md` - What we're building
+- `docs/plans/iterative-implementation-plan.md` - How we're building it
 
 **Architecture**:
 - `docs/agentic-development-standards.md` - Service-Repository pattern, strict layering, TDD rules
@@ -311,8 +311,8 @@ This will verify:
 ```bash
 # Bad: Start coding immediately
 # Good: Read context first
-Read docs/PLAN.md
-Read docs/iterative-implementation-plan.md (find current phase)
+Read docs/plans/PLAN.md
+Read docs/plans/iterative-implementation-plan.md (find current phase)
 Read relevant domain docs
 Then implement
 ```

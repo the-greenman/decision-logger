@@ -2,7 +2,7 @@
 
 **Status**: authoritative
 **Owns**: MCP architecture direction, shared-core integration pattern, MCP-specific implementation scope
-**Must sync with**: `packages/schema`, `docs/expert-system-architecture.md`, `docs/PLAN.md`, `docs/iterative-implementation-plan.md`
+**Must sync with**: `packages/schema`, `docs/expert-system-architecture.md`, `docs/plans/PLAN.md`, `docs/plans/iterative-implementation-plan.md`
 
 ## Question: How to Build Consistent API + MCP System?
 

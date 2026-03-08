@@ -2,7 +2,7 @@
 
 **Status**: authoritative
 **Owns**: chunk tagging model, chunk relevance model, field-level retrieval and regeneration API details
-**Must sync with**: `packages/schema`, `docs/transcript-context-management.md`, `docs/PLAN.md`, `docs/iterative-implementation-plan.md`
+**Must sync with**: `packages/schema`, `docs/transcript-context-management.md`, `docs/plans/PLAN.md`, `docs/plans/iterative-implementation-plan.md`
 
 ## Overview
 

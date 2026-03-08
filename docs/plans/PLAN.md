@@ -38,9 +38,9 @@ A context-driven decision logging system with LLM-assisted extraction, iterative
 - Local transcription can be added as a separate upstream component, but is not required for the product to function.
 - Local LLMs are supported as an optional inference path for detection/classification, not a hard dependency.
 
-> **See**: `docs/transcription-service-plan.md` for the separate containerized transcription service boundary and integration contract
+> **See**: `docs/plans/transcription-service-plan.md` for the separate containerized transcription service boundary and integration contract
 - Detailed workflow and endpoint expansions in specialist docs are authoritative unless they conflict with the Zod schema source-of-truth rule.
-- Runtime logging, correlation, and redaction rules are defined in `docs/logging-observability-plan.md`.
+- Runtime logging, correlation, and redaction rules are defined in `docs/plans/logging-observability-plan.md`.
 
 ## Simplified Data Model
 
@@ -54,7 +54,7 @@ For high-level understanding, the system revolves around these core entities:
 5. **DecisionLog** - The final, immutable record of a logged decision.
 6. **DecisionField & Template** - The building blocks for structured decision logging.
 
-> **See**: `docs/iterative-implementation-plan.md` for the implementation sequence of these schemas.
+> **See**: `docs/plans/iterative-implementation-plan.md` for the implementation sequence of these schemas.
 
 ### CRUD Expectations
 

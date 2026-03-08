@@ -2,7 +2,7 @@
 
 **Status**: authoritative
 **Owns**: runtime logging strategy, correlation model, debug surfaces, redaction rules, observability rollout
-**Must sync with**: `packages/schema`, `docs/PLAN.md`, `docs/iterative-implementation-plan.md`, `docs/transcription-service-plan.md`
+**Must sync with**: `packages/schema`, `docs/plans/PLAN.md`, `docs/plans/iterative-implementation-plan.md`, `docs/plans/transcription-service-plan.md`
 
 ## Purpose
 
