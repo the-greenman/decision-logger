@@ -58,7 +58,7 @@ This is a structural guarantee: shared display components contain zero mutation 
 
 ## Route and Screen Catalog
 
-The web app has five production routes, plus a dev-only `/prototype` gallery route that is not part of the shipped product. Routes 1, 3, and 4 are facilitator-operated. Route 2 is projected to the group. Route 5 is available to both — suitable for projection at the end of a meeting or as post-meeting reference.
+The web app has six production routes, plus a dev-only `/prototype` gallery route that is not part of the shipped product. Routes 1, 2, 4, and 5 are facilitator-operated. Route 3 is projected to the group. Route 6 is available to both — suitable for projection at the end of a meeting or as post-meeting reference.
 Full user stories and API dependencies: `docs/web-ui-plan.md`.
 
 ### Route 1 — Meeting List (`/`)
@@ -73,7 +73,20 @@ Key user stories:
 - As a facilitator, I can open an existing active meeting.
 - As a facilitator, I can see how many decisions are drafted and logged per meeting without opening it.
 
-### Route 2 — Shared Meeting Display (`/meetings/:id`) ← projected
+### Route 2 — Facilitator Meeting Homepage (`/meetings/:id/facilitator/home`)
+
+Mode: facilitator only.
+
+Primary goal: provide a stable setup/overview page for the meeting before and during active decision work.
+
+Key user stories:
+- As a facilitator, I can return to a meeting homepage at any time to orient myself.
+- As a facilitator, I can manage meeting basics (title/date/participants) without opening a decision context.
+- As a facilitator, I can build an initial agenda by adding new decision stubs or selecting open contexts.
+- As a facilitator, I can move into the active facilitator workspace only when setup is ready.
+- As a facilitator, I can use the same open-context picker behavior used elsewhere (search, autocomplete, calendar), so selection is consistent and predictable.
+
+### Route 3 — Shared Meeting Display (`/meetings/:id`) ← projected
 
 Mode: shared display (read-only). This route is open on the room projector throughout the meeting.
 
@@ -91,7 +104,7 @@ Key user stories:
 
 Mode implications: no UUIDs, no chunk counts, no confidence numbers, no action buttons. Locked fields shown with muted background — no `[LOCKED]` label. Tags as coloured pills. Per-field spinner during generation (not raw tokens). Minimum 20px font.
 
-### Route 3 — Facilitator Meeting View (`/meetings/:id/facilitator`)
+### Route 4 — Facilitator Meeting View (`/meetings/:id/facilitator`)
 
 Mode: facilitator only. This route runs on the facilitator’s laptop while the group watches Route 2.
 
@@ -118,7 +131,7 @@ Key user stories:
 
 Mode implications: candidate queue panel, per-field lock/unlock/regenerate/zoom/guidance controls, LLM log sidebar, action strip in header. Facilitator-only components are isolated in `src/components/facilitator/`.
 
-### Route 4 — Segment Selection (`/meetings/:id/facilitator/transcript`)
+### Route 5 — Segment Selection (`/meetings/:id/facilitator/transcript`)
 
 Mode: facilitator only. Launched from Route 3 when adding transcript evidence.
 
@@ -138,7 +151,7 @@ Mode implications: facilitator only — not linked from Route 2. Overlap indicat
 
 **Prototype vs plan**: the current `TranscriptPage.tsx` prototype implements click-to-toggle row selection, text search, row count display, and jump-to-row. Drag-select, overlap indicators, cross-meeting transcript toggle, and AI suggestions are planned capabilities (Phase 3 / M5.1a–b) not yet in the prototype.
 
-### Route 5 — Logged Decision View (`/decisions/:id`)
+### Route 6 — Logged Decision View (`/decisions/:id`)
 
 Mode: both. Suitable for projection at end of meeting or post-meeting reference.
 

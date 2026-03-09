@@ -45,6 +45,7 @@ The web app splits into two modes via separate routes — not a toggle — becau
 | Route | Audience | Description |
 |---|---|---|
 | `/` | Facilitator | Meeting list — create or open a meeting |
+| `/meetings/:id/facilitator/home` | Facilitator device | Meeting homepage — setup/overview with no active decision context |
 | `/meetings/:id` | **Projected to group** | Shared display — agenda + active workspace, read-only |
 | `/meetings/:id/facilitator` | Facilitator device | Full controls — candidates, generate, lock, edit, finalise |
 | `/meetings/:id/facilitator/transcript` | Facilitator | Segment selection in reading mode |
@@ -70,6 +71,29 @@ The web app splits into two modes via separate routes — not a toggle — becau
 **API**:
 - `GET /api/meetings` — meeting list
 - `POST /api/meetings` — create meeting
+
+---
+
+### Screen 1b — Facilitator Meeting Homepage (`/meetings/:id/facilitator/home`)
+
+**Primary goal**: provide a durable meeting setup and overview page before selecting an active decision context.
+
+**User stories**:
+- As a facilitator, I can return to a meeting homepage at any time to regain high-level orientation.
+- As a facilitator, I can update meeting title/date/participants without opening a specific decision context.
+- As a facilitator, I can draft an initial decision agenda by adding new stubs.
+- As a facilitator, I can browse and attach open decision contexts from other meetings while planning agenda.
+- As a facilitator, I can transition from meeting setup into facilitator decision workspace only when ready.
+
+**Reusable component rule**:
+- Open decision context selection must use the same reusable picker component across meeting homepage, add-to-agenda dialogs, and relation pickers (search + autocomplete + calendar behavior stays consistent).
+
+**API**:
+- `GET /api/meetings/:id` — meeting header data
+- `PATCH /api/meetings/:id` — update meeting basics/participants
+- `GET /api/decision-contexts?status=open` — open contexts for agenda planning
+- `GET /api/meetings?query=<text>&dateFrom=<iso>&dateTo=<iso>&tag=<name>` — related meeting search for picker
+- `GET /api/meetings/calendar?month=<YYYY-MM>` — calendar source for picker
 
 ---
 

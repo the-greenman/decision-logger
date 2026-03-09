@@ -1923,6 +1923,7 @@ Simplicity invariants enforced by structure:
 Additional Screen 3 stories from gap analysis (`docs/ux-workflow-examples.md`):
 - **G1** (Flow 1): As a facilitator, I can upload a transcript file (plain text, no attribution required) to the active meeting and trigger decision detection.
 - **G2** (Flow 1): As a facilitator, I can create a new decision context directly by entering a title, summary, and choosing a template — without requiring a prior detected candidate.
+- **G2.1** (Flow 1 extension): As a facilitator, I can edit an active context title/summary in place as understanding evolves, without recreating the context.
 - **G5 (UI-only, Flow 1)**: The **Regenerate all** action exposes an optional "Focus for this pass" text input, sent as `additionalContext`. Ephemeral — not saved after the pass. No new API needed.
 - **G6** (Flow 2): As a facilitator, I can add an existing open decision context (from a prior meeting or sub-committee) to the current meeting's agenda — without cloning it — so its full field history and transcript evidence are immediately available. (Requires M4.9 `decision_context_meetings` join table.)
 - **G6.1** (Flow 2 extension): As a facilitator, I can find related meetings by date, title, and tag when attaching cross-meeting context.
@@ -1948,6 +1949,7 @@ Additional Screen 4 story added from Flow 1 gap analysis:
 | `GET /api/meetings/:id/summary` | Meeting header stats | M5.1 |
 | `GET /api/meetings/:id/flagged-decisions` | Facilitator candidate queue | M5.1 |
 | `PATCH /api/meetings/:id` | Participant updates | M5.1 |
+| `PATCH /api/decision-contexts/:id` | Edit active context title/summary (G2.1) | M5.1 |
 | `POST /api/decision-contexts/:id/regenerate` | Full regen (all unlocked) | M5.1 |
 | `GET /api/meetings/:id/transcript-reading` | Segment selection | M5.1a |
 | `POST /api/meetings/:id/segment-suggestions` | AI segment assist | M5.1b |
@@ -1962,6 +1964,8 @@ Additional Screen 4 story added from Flow 1 gap analysis:
 | `GET /api/meetings/calendar?month=<YYYY-MM>` | Related-meeting calendar popup (G6 extension) | M5.1 |
 | `POST /api/meetings/:id/transcripts/stream` | Start live transcript stream (G8) | M5.1 |
 | `GET /api/meetings/:id/streaming/status` | Live stream status indicator (G8) | M5.1 |
+
+Implementation note (March 9, 2026): the related-meeting search/calendar endpoints and `PATCH /api/decision-contexts/:id` are required by the facilitator UI workflow but are not yet present in `apps/api/src/routes/*`.
 
 #### Phased build order
 
