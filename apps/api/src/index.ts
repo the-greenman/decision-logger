@@ -4,6 +4,7 @@ import { logger } from 'hono/logger';
 import {
   createMeetingRoute,
   getMeetingSummaryRoute,
+  getMeetingTranscriptReadingRoute,
   listMeetingsRoute,
   listMeetingDecisionContextsRoute,
   getMeetingRoute,
@@ -382,6 +383,17 @@ app.openapi(listMeetingDecisionContextsRoute, async (c) => {
   const { id } = c.req.valid('param');
   const contexts = await services.decisionContextService.getAllContextsForMeeting(id);
   return c.json({ contexts });
+});
+
+app.openapi(getMeetingTranscriptReadingRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  const { id } = c.req.valid('param');
+  const rows = await services.transcriptService.getReadableTranscriptRows(id);
+  return c.json({ rows });
 });
 
 app.openapi(uploadTranscriptRoute, async (c) => {

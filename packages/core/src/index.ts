@@ -106,3 +106,4 @@ export type { MCPServer, CreateMCPServer, UpdateMCPServer } from '@repo/schema';
 export type { ExpertAdvice, CreateExpertAdvice } from '@repo/schema';
 export type { LLMInteraction, CreateLLMInteraction, PromptSegmentData } from '@repo/schema';
 export type { SupplementaryContent, CreateSupplementaryContent } from '@repo/schema';
+export type { ReadableTranscriptRow } from '@repo/schema';

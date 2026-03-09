@@ -1,5 +1,5 @@
 import { createRoute, z } from '@hono/zod-openapi';
-import { CreateMeetingSchema, DecisionContextSchema, MeetingSchema } from '@repo/schema';
+import { CreateMeetingSchema, DecisionContextSchema, MeetingSchema, ReadableTranscriptRowSchema } from '@repo/schema';
 
 // Extend schemas with OpenAPI metadata
 const CreateMeetingRequestSchema = CreateMeetingSchema.openapi({
@@ -34,6 +34,10 @@ const MeetingDecisionContextsResponseSchema = z.object({
   contexts: z.array(DecisionContextSchema),
 }).openapi('MeetingDecisionContextsResponse');
 
+const TranscriptReadingResponseSchema = z.object({
+  rows: z.array(ReadableTranscriptRowSchema),
+}).openapi('TranscriptReadingResponse');
+
 const MeetingResponseSchema = MeetingSchema.openapi({
   example: {
     id: '550e8400-e29b-41d4-a716-446655440000',
@@ -42,6 +46,33 @@ const MeetingResponseSchema = MeetingSchema.openapi({
     participants: ['Alice', 'Bob'],
     status: 'active',
     createdAt: '2026-02-27T10:00:00Z',
+  },
+});
+
+export const getMeetingTranscriptReadingRoute = createRoute({
+  method: 'get',
+  path: '/api/meetings/:id/transcript-reading',
+  tags: ['meetings'],
+  request: {
+    params: MeetingIdParamSchema,
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: TranscriptReadingResponseSchema,
+        },
+      },
+      description: 'Readable transcript rows returned successfully',
+    },
+    503: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Database-backed endpoint unavailable',
+    },
   },
 });
 

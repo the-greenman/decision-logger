@@ -39,6 +39,20 @@ class MockRawTranscriptRepository {
       uploadedAt: new Date().toISOString(),
     };
   }
+
+  async updateMetadata(id: string, metadata: Record<string, unknown>) {
+    const transcript = await this.findById(id);
+    if (!transcript) {
+      return null;
+    }
+
+    const updated = {
+      ...transcript,
+      metadata,
+    };
+    this.transcripts.set(id, updated);
+    return updated;
+  }
 }
 
 class MockTranscriptChunkRepository {
@@ -72,6 +86,10 @@ class MockTranscriptChunkRepository {
 
   async findById(_id: string) {
     return null;
+  }
+
+  getAll() {
+    return this.chunks;
   }
 }
 
@@ -231,6 +249,103 @@ describe('TranscriptService', () => {
 
       expect(result).toBeDefined();
       expect(result.format).toBe('json');
+    });
+  });
+
+  describe('preprocessTranscript', () => {
+    it('should normalize plain text paragraphs into deterministic segments', async () => {
+      const transcript = await service.uploadTranscript({
+        meetingId: randomUUID(),
+        source: 'upload',
+        format: 'txt',
+        content: 'First paragraph line one.\n\nSecond paragraph line two.',
+      });
+
+      const segments = await service.preprocessTranscript(transcript.id);
+
+      expect(segments).toHaveLength(2);
+      expect(segments[0]?.sequenceNumber).toBe(1);
+      expect(segments[0]?.text).toBe('First paragraph line one.');
+      expect(segments[1]?.sequenceNumber).toBe(2);
+      expect(segments[1]?.text).toBe('Second paragraph line two.');
+    });
+
+    it('should normalize whisper-like json transcripts into canonical segments', async () => {
+      const transcript = await service.uploadTranscript({
+        meetingId: randomUUID(),
+        source: 'upload',
+        format: 'json',
+        content: JSON.stringify({
+          segments: [
+            { text: 'Hello there', speaker: 'Alice', start: 0, end: 1.2 },
+            { text: 'General Kenobi', start: 1.2, end: 2.5 },
+          ],
+        }),
+      });
+
+      const segments = await service.preprocessTranscript(transcript.id);
+
+      expect(segments).toHaveLength(2);
+      expect(segments[0]?.speaker).toBe('Alice');
+      expect(segments[0]?.startTimeMs).toBe(0);
+      expect(segments[0]?.endTimeMs).toBe(1200);
+      expect(segments[1]?.text).toBe('General Kenobi');
+    });
+  });
+
+  describe('getReadableTranscriptRows', () => {
+    it('should return readable transcript rows derived from preprocessing output', async () => {
+      const meetingId = randomUUID();
+      const transcript = await service.uploadTranscript({
+        meetingId,
+        source: 'upload',
+        format: 'json',
+        content: JSON.stringify({
+          segments: [
+            { text: 'Hello there', speaker: 'Alice', start: 0, end: 1.2 },
+            { text: 'General Kenobi', start: 1.2, end: 2.5 },
+          ],
+        }),
+      });
+
+      const rows = await service.getReadableTranscriptRows(meetingId);
+
+      expect(rows).toHaveLength(2);
+      expect(rows[0]?.id).toBe(`${transcript.id}:1`);
+      expect(rows[0]?.displayText).toBe('Hello there');
+      expect(rows[0]?.speaker).toBe('Alice');
+      expect(rows[0]?.startTime).toBe('00:00:00');
+      expect(rows[0]?.endTime).toBe('00:00:01');
+      expect(rows[1]?.displayText).toBe('General Kenobi');
+      expect(rows[1]?.rawTranscriptId).toBe(transcript.id);
+    });
+  });
+
+  describe('processTranscript', () => {
+    it('should persist preprocessing metadata and chunk normalized plain text content', async () => {
+      const meetingId = randomUUID();
+      const transcript = await service.uploadTranscript({
+        meetingId,
+        source: 'upload',
+        format: 'txt',
+        content: 'Alpha section.\n\nBeta section.',
+        metadata: { fileName: 'google-recorder.txt' },
+      });
+
+      const chunks = await service.processTranscript(transcript.id, {
+        strategy: 'fixed',
+        maxTokens: 50,
+        overlap: 0,
+      });
+
+      expect(chunks.length).toBeGreaterThan(0);
+
+      const updatedTranscript = await mockRawTranscriptRepo.findById(transcript.id);
+      expect(updatedTranscript?.metadata?.fileName).toBe('google-recorder.txt');
+      expect(updatedTranscript?.metadata?.preprocessing?.processorId).toBe('plain_text_blocks');
+      expect(updatedTranscript?.metadata?.preprocessing?.stats?.outputSegmentCount).toBe(2);
+      expect(chunks[0]?.text).toContain('Alpha section.');
+      expect(chunks[0]?.text).toContain('Beta section.');
     });
   });
 

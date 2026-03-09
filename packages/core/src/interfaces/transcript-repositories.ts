@@ -15,6 +15,7 @@ export interface IRawTranscriptRepository {
   create(data: CreateRawTranscript): Promise<RawTranscript>;
   findByMeetingId(meetingId: string): Promise<RawTranscript[]>;
   findById(id: string): Promise<RawTranscript | null>;
+  updateMetadata(id: string, metadata: Record<string, unknown>): Promise<RawTranscript | null>;
 }
 
 export interface ITranscriptChunkRepository {

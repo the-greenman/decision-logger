@@ -2,6 +2,7 @@
  * TranscriptService - Business logic for transcript management
  */
 
+import { logger } from '../logger';
 import {
   IRawTranscriptRepository,
   ITranscriptChunkRepository,
@@ -11,12 +12,18 @@ import {
 } from '../interfaces/transcript-repositories';
 import {
   RawTranscript,
+  ReadableTranscriptRow,
   TranscriptChunk,
   CreateRawTranscript,
   CreateTranscriptChunk,
   ChunkRelevance,
   DecisionContextWindow,
 } from '@repo/schema';
+import {
+  createDefaultTranscriptPreprocessorRegistry,
+  type CanonicalTranscriptSegment,
+  type TranscriptPreprocessorRegistry,
+} from '../transcript-preprocessing';
 
 export interface TranscriptUploadData {
   meetingId: string;
@@ -66,6 +73,7 @@ export class TranscriptService {
     private streamingBuffer: IStreamingBufferRepository,
     private relevanceRepo: IChunkRelevanceRepository,
     private contextWindowRepo: IDecisionContextWindowRepository,
+    private preprocessorRegistry: TranscriptPreprocessorRegistry = createDefaultTranscriptPreprocessorRegistry(),
   ) {}
 
   // Raw transcript management
@@ -168,12 +176,34 @@ export class TranscriptService {
 
     const chunks: TranscriptChunk[] = [];
     const { strategy, maxTokens = 500, overlap = 50 } = options;
+    const preprocessResult = await this.preprocessorRegistry.preprocess(rawTranscript);
+    const normalizedContent = preprocessResult.segments.map((segment) => segment.text).join('\n\n');
+
+    const existingMetadata = rawTranscript.metadata ?? {};
+    await this.rawTranscriptRepo.updateMetadata(rawTranscript.id, {
+      ...existingMetadata,
+      preprocessing: {
+        processorId: preprocessResult.processorId,
+        processorVersion: preprocessResult.processorVersion,
+        warnings: preprocessResult.warnings,
+        stats: preprocessResult.stats,
+      },
+    });
+
+    logger.info('Transcript preprocessing completed', {
+      rawTranscriptId,
+      processorId: preprocessResult.processorId,
+      warnings: preprocessResult.warnings,
+      inputUnits: preprocessResult.stats.inputUnitCount,
+      outputSegments: preprocessResult.stats.outputSegmentCount,
+      durationMs: preprocessResult.stats.durationMs,
+    });
 
     // Two strategies:
     // - fixed: token/word-count based chunks
     // - semantic: sentence-boundary aware chunks (still bounded by maxTokens)
     if (strategy === 'semantic') {
-      const sentences = rawTranscript.content
+      const sentences = normalizedContent
         .split(/(?<=[.!?])\s+/)
         .map((s) => s.trim())
         .filter(Boolean);
@@ -225,7 +255,7 @@ export class TranscriptService {
         chunks.push(chunk);
       }
     } else {
-      const words = rawTranscript.content.split(/\s+/).filter(Boolean);
+      const words = normalizedContent.split(/\s+/).filter(Boolean);
       let currentChunk: string[] = [];
       let currentTokens = 0;
       let sequenceNumber = 1;
@@ -270,6 +300,84 @@ export class TranscriptService {
     }
 
     return chunks;
+  }
+
+  async preprocessTranscript(rawTranscriptId: string): Promise<CanonicalTranscriptSegment[]> {
+    const rawTranscript = await this.rawTranscriptRepo.findById(rawTranscriptId);
+    if (!rawTranscript) {
+      throw new Error('Raw transcript not found');
+    }
+
+    const result = await this.preprocessorRegistry.preprocess(rawTranscript);
+    return result.segments;
+  }
+
+  async getReadableTranscriptRows(meetingId: string): Promise<ReadableTranscriptRow[]> {
+    const transcripts = await this.rawTranscriptRepo.findByMeetingId(meetingId);
+    const rowsByTranscript = await Promise.all(
+      transcripts.map(async (rawTranscript) => {
+        const result = await this.preprocessorRegistry.preprocess(rawTranscript);
+        return result.segments.map((segment) => this.toReadableTranscriptRow(rawTranscript, segment));
+      })
+    );
+
+    return rowsByTranscript
+      .flat()
+      .sort((left, right) => {
+        if (left.rawTranscriptUploadedAt !== right.rawTranscriptUploadedAt) {
+          return left.rawTranscriptUploadedAt.localeCompare(right.rawTranscriptUploadedAt);
+        }
+
+        return left.sequenceNumber - right.sequenceNumber;
+      });
+  }
+
+  private toReadableTranscriptRow(
+    rawTranscript: RawTranscript,
+    segment: CanonicalTranscriptSegment,
+  ): ReadableTranscriptRow {
+    const row: ReadableTranscriptRow = {
+      id: `${rawTranscript.id}:${segment.sequenceNumber}`,
+      meetingId: rawTranscript.meetingId,
+      rawTranscriptId: rawTranscript.id,
+      rawTranscriptUploadedAt: rawTranscript.uploadedAt,
+      rawTranscriptFormat: rawTranscript.format,
+      sequenceNumber: segment.sequenceNumber,
+      displayText: segment.text,
+    };
+
+    if (segment.speaker !== undefined) {
+      row.speaker = segment.speaker;
+    }
+
+    const startTime = this.formatTimestamp(segment.startTimeMs);
+    if (startTime !== undefined) {
+      row.startTime = startTime;
+    }
+
+    const endTime = this.formatTimestamp(segment.endTimeMs);
+    if (endTime !== undefined) {
+      row.endTime = endTime;
+    }
+
+    if (segment.sourceMetadata !== undefined) {
+      row.sourceMetadata = segment.sourceMetadata;
+    }
+
+    return row;
+  }
+
+  private formatTimestamp(timeMs: number | undefined): string | undefined {
+    if (timeMs === undefined) {
+      return undefined;
+    }
+
+    const totalSeconds = Math.max(0, Math.floor(timeMs / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    return [hours, minutes, seconds].map((value) => value.toString().padStart(2, '0')).join(':');
   }
 
   // Streaming buffer management

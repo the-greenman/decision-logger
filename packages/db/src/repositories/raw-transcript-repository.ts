@@ -41,6 +41,15 @@ export class DrizzleRawTranscriptRepository {
     return result ? this.mapToSchema(result) : null;
   }
 
+  async updateMetadata(id: string, metadata: Record<string, unknown>): Promise<RawTranscript | null> {
+    const [result] = await db.update(rawTranscripts)
+      .set({ metadata })
+      .where(eq(rawTranscripts.id, id))
+      .returning();
+
+    return result ? this.mapToSchema(result) : null;
+  }
+
   private mapToSchema(row: RawTranscriptSelect): RawTranscript {
     return {
       id: row.id,

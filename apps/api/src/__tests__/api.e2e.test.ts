@@ -155,6 +155,18 @@ describe('API E2E Tests', () => {
     createdChunkId = data.chunks[0].id;
   });
 
+  it('GET /api/meetings/:id/transcript-reading - should return normalized readable transcript rows', async () => {
+    const response = await app.request(`/api/meetings/${createdMeetingId}/transcript-reading`);
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.rows).toBeInstanceOf(Array);
+    expect(data.rows.length).toBeGreaterThan(0);
+    expect(data.rows[0].meetingId).toBe(createdMeetingId);
+    expect(data.rows[0].rawTranscriptId).toBeDefined();
+    expect(data.rows[0].displayText).toContain('Alice: We should approve the migration.');
+  });
+
   it('POST /api/meetings/:id/flagged-decisions - should create a flagged decision', async () => {
     const response = await app.request(`/api/meetings/${createdMeetingId}/flagged-decisions`, {
       method: 'POST',

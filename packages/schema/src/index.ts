@@ -83,6 +83,37 @@ export const CreateRawTranscriptSchema = RawTranscriptSchema.pick({
 
 export type CreateRawTranscript = z.infer<typeof CreateRawTranscriptSchema>;
 
+export const ReadableTranscriptRowSchema = z.object({
+  id: z.string(),
+  meetingId: z.string().uuid(),
+  rawTranscriptId: z.string().uuid(),
+  rawTranscriptUploadedAt: z.string().datetime({ offset: true }),
+  rawTranscriptFormat: z.enum(['json', 'txt', 'vtt', 'srt']),
+  sequenceNumber: z.number().int().positive(),
+  displayText: z.string(),
+  speaker: z.string().optional(),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+  sourceMetadata: z.record(z.unknown()).optional(),
+}).openapi('ReadableTranscriptRow', {
+  description: 'A readable transcript row derived from normalized preprocessing output for human review and selection',
+  example: {
+    id: '550e8400-e29b-41d4-a716-446655440100:1',
+    meetingId: '550e8400-e29b-41d4-a716-446655440000',
+    rawTranscriptId: '550e8400-e29b-41d4-a716-446655440001',
+    rawTranscriptUploadedAt: '2026-02-27T10:00:00Z',
+    rawTranscriptFormat: 'txt',
+    sequenceNumber: 1,
+    displayText: 'We should keep the system simple and evolve it over time.',
+    speaker: 'Alice',
+    startTime: '00:08:29',
+    endTime: '00:08:35',
+    sourceMetadata: { sourceBlockIndex: 0 },
+  },
+});
+
+export type ReadableTranscriptRow = z.infer<typeof ReadableTranscriptRowSchema>;
+
 export const TranscriptChunkSchema = z.object({
   id: z.string().uuid(),
   meetingId: z.string().uuid(),
