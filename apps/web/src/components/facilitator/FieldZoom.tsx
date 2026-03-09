@@ -9,6 +9,7 @@ interface FieldZoomProps {
   supplementaryItems: SupplementaryItem[];
   onClose: () => void;
   onSave: (fieldId: string, value: string) => void;
+  onRegenerate: (fieldId: string) => void;
   onLock: (fieldId: string) => void;
   onUnlock: (fieldId: string) => void;
   onGuidanceChange: (fieldId: string, guidance: string) => void;
@@ -23,6 +24,7 @@ export function FieldZoom({
   supplementaryItems,
   onClose,
   onSave,
+  onRegenerate,
   onLock,
   onUnlock,
   onGuidanceChange,
@@ -36,6 +38,7 @@ export function FieldZoom({
   const [newLabel, setNewLabel] = useState('');
   const [newBody, setNewBody] = useState('');
   const isLocked = field.status === 'locked';
+  const isGenerating = field.status === 'generating';
   const isDirty = editValue !== field.value;
 
   const fieldItems = supplementaryItems.filter(
@@ -96,6 +99,14 @@ export function FieldZoom({
             </button>
           ) : (
             <>
+              <button
+                onClick={() => onRegenerate(field.id)}
+                disabled={isGenerating}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-fac-meta border border-accent/30 text-accent rounded hover:bg-accent-dim transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <RotateCcw size={13} />
+                Regenerate this field
+              </button>
               {isDirty && (
                 <button
                   onClick={handleSave}
@@ -136,6 +147,7 @@ export function FieldZoom({
               <textarea
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
+                disabled={isGenerating}
                 className="w-full min-h-[200px] p-4 rounded-card border border-border bg-surface text-fac-field text-text-primary leading-relaxed resize-y focus:outline-none focus:border-accent placeholder:text-text-muted"
                 placeholder="Enter content…"
               />

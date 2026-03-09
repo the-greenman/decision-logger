@@ -9,6 +9,7 @@ const STATUS_CONFIG: Record<AgendaItemStatus, { label: string; className: string
   active: { label: 'In Progress', className: 'bg-accent-dim text-accent border-accent/30' },
   drafted: { label: 'Drafted', className: 'bg-caution-dim text-caution border-caution/30' },
   logged: { label: 'Logged', className: 'bg-settled-dim text-settled border-settled/30' },
+  deferred: { label: 'Deferred', className: 'bg-overlay text-text-muted border-border' },
 };
 
 export function StatusBadge({ status }: StatusBadgeProps) {

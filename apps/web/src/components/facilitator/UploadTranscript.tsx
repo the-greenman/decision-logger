@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { Upload, FileText, CheckCircle2, X } from 'lucide-react';
 
 type UploadState = 'idle' | 'ready' | 'processing' | 'done';
+type InputMode = 'file' | 'paste';
 
 interface UploadTranscriptProps {
   onComplete: (filename: string, rowCount: number) => void;
@@ -10,8 +11,10 @@ interface UploadTranscriptProps {
 
 export function UploadTranscript({ onComplete, onCancel }: UploadTranscriptProps) {
   const [state, setState] = useState<UploadState>('idle');
+  const [mode, setMode] = useState<InputMode>('file');
   const [filename, setFilename] = useState('');
   const [rowCount, setRowCount] = useState(0);
+  const [pastedText, setPastedText] = useState('');
   const [attribution, setAttribution] = useState<'none' | 'speaker'>('none');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -41,6 +44,16 @@ export function UploadTranscript({ onComplete, onCancel }: UploadTranscriptProps
     }, 1500);
   }
 
+  function handlePreparePastedTranscript() {
+    const normalized = pastedText.replace(/\r\n/g, '\n');
+    const lines = normalized.split('\n').map((line) => line.trim()).filter(Boolean);
+    if (lines.length === 0) return;
+
+    setFilename('Pasted transcript');
+    setRowCount(lines.length);
+    setState('ready');
+  }
+
   if (state === 'done') {
     return (
       <div className="flex flex-col gap-3 p-4 rounded-card border border-settled/30 bg-settled-dim/20">
@@ -67,14 +80,37 @@ export function UploadTranscript({ onComplete, onCancel }: UploadTranscriptProps
       <div className="flex items-center gap-2 justify-between">
         <span className="text-fac-field text-text-primary font-medium flex items-center gap-2">
           <Upload size={15} className="text-accent" />
-          Upload transcript
+          Add transcript
         </span>
         <button onClick={onCancel} className="text-text-muted hover:text-text-primary transition-colors">
           <X size={15} />
         </button>
       </div>
 
-      {state === 'idle' && (
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setMode('file')}
+          className={`px-2.5 py-1 rounded text-fac-meta border transition-colors ${
+            mode === 'file'
+              ? 'border-accent/40 text-accent bg-accent-dim/20'
+              : 'border-border text-text-muted hover:text-text-primary'
+          }`}
+        >
+          Upload file
+        </button>
+        <button
+          onClick={() => setMode('paste')}
+          className={`px-2.5 py-1 rounded text-fac-meta border transition-colors ${
+            mode === 'paste'
+              ? 'border-accent/40 text-accent bg-accent-dim/20'
+              : 'border-border text-text-muted hover:text-text-primary'
+          }`}
+        >
+          Paste text
+        </button>
+      </div>
+
+      {state === 'idle' && mode === 'file' && (
         <div
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
@@ -90,6 +126,28 @@ export function UploadTranscript({ onComplete, onCancel }: UploadTranscriptProps
         </div>
       )}
 
+      {state === 'idle' && mode === 'paste' && (
+        <div className="flex flex-col gap-2">
+          <textarea
+            value={pastedText}
+            onChange={(e) => setPastedText(e.target.value)}
+            rows={8}
+            placeholder="Paste transcript text here. One line per segment works best."
+            className="w-full p-3 rounded border border-border bg-overlay text-fac-meta text-text-primary resize-y focus:outline-none focus:border-accent placeholder:text-text-muted"
+          />
+          <div className="flex items-center justify-between">
+            <p className="text-fac-meta text-text-muted">Copy/paste from any live transcript tool.</p>
+            <button
+              onClick={handlePreparePastedTranscript}
+              disabled={!pastedText.trim()}
+              className="px-3 py-1.5 text-fac-meta bg-accent text-white rounded hover:bg-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Use pasted transcript
+            </button>
+          </div>
+        </div>
+      )}
+
       {state === 'ready' && (
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2 px-3 py-2 rounded border border-border bg-overlay/30">
@@ -97,7 +155,7 @@ export function UploadTranscript({ onComplete, onCancel }: UploadTranscriptProps
             <span className="text-fac-meta text-text-primary flex-1 truncate">{filename}</span>
             <span className="text-fac-meta text-text-muted">{rowCount} lines</span>
             <button
-              onClick={() => { setState('idle'); setFilename(''); }}
+              onClick={() => { setState('idle'); setFilename(''); setRowCount(0); }}
               className="text-text-muted hover:text-danger transition-colors"
             >
               <X size={13} />

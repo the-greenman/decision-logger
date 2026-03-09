@@ -13,6 +13,7 @@ const STATUS_ICON: Record<AgendaItemStatus, React.ReactNode> = {
   active: <PlayCircle size={18} className="text-accent shrink-0" />,
   drafted: <Clock size={18} className="text-caution shrink-0" />,
   logged: <CheckCircle2 size={18} className="text-settled shrink-0" />,
+  deferred: <Clock size={18} className="text-text-muted shrink-0" />,
 };
 
 export function AgendaItem({ title, status, position, isActive }: AgendaItemProps) {

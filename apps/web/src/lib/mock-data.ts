@@ -1,7 +1,7 @@
 // ── Mock data for prototype pages ────────────────────────────────
 
 export type FieldStatus = 'idle' | 'generating' | 'locked' | 'editing';
-export type AgendaItemStatus = 'pending' | 'active' | 'drafted' | 'logged';
+export type AgendaItemStatus = 'pending' | 'active' | 'drafted' | 'logged' | 'deferred';
 export type CandidateStatus = 'new' | 'dismissed';
 export type TagCategory = 'topic' | 'team' | 'project';
 export type RelationType = 'supersedes' | 'superseded_by' | 'related' | 'blocks' | 'blocked_by';
@@ -82,6 +82,16 @@ export interface Template {
   fieldCount: number;
 }
 
+export interface OpenContextSummary {
+  id: string;
+  title: string;
+  templateName: string;
+  status: 'open' | 'deferred';
+  sourceMeetingTitle: string;
+  sourceMeetingDate: string; // YYYY-MM-DD
+  sourceMeetingTags: string[];
+}
+
 // ── Templates ────────────────────────────────────────────────────
 
 export const TEMPLATES: Template[] = [
@@ -92,6 +102,15 @@ export const TEMPLATES: Template[] = [
   { id: 'tpl-5', name: 'Policy Change', category: 'policy', description: 'Governance and compliance decisions', fieldCount: 8 },
   { id: 'tpl-6', name: 'Proposal Acceptance', category: 'proposal', description: 'Yes/no decisions on submitted proposals', fieldCount: 7 },
 ];
+
+export const OUTSTANDING_ISSUES_FIELD: Field = {
+  id: 'f-outstanding-issues',
+  label: 'Outstanding Issues / Open Questions',
+  value: '',
+  status: 'idle',
+  required: false,
+  guidance: '',
+};
 
 export const DECISION_METHODS: { value: DecisionMethod; label: string }[] = [
   { value: 'unanimous_vote', label: 'Unanimous vote' },
@@ -221,6 +240,54 @@ export const AGENDA_ITEMS: Array<{ id: string; title: string; status: AgendaItem
   { id: 'ctx-3', title: 'On-call Rotation Policy Change', status: 'pending' },
 ];
 
+export const OPEN_CONTEXTS: OpenContextSummary[] = [
+  {
+    id: 'ctx-55',
+    title: 'Data Retention Policy Alignment',
+    templateName: 'Policy Change',
+    status: 'open',
+    sourceMeetingTitle: 'Compliance Review — Feb 2026',
+    sourceMeetingDate: '2026-02-18',
+    sourceMeetingTags: ['compliance', 'policy', 'retention'],
+  },
+  {
+    id: 'ctx-56',
+    title: 'Shared Authentication Flow Decision',
+    templateName: 'Technology Selection',
+    status: 'open',
+    sourceMeetingTitle: 'Platform Sync — Jan 2026',
+    sourceMeetingDate: '2026-01-29',
+    sourceMeetingTags: ['platform', 'identity', 'auth'],
+  },
+  {
+    id: 'ctx-57',
+    title: 'Vendor Procurement Criteria',
+    templateName: 'Standard Decision',
+    status: 'deferred',
+    sourceMeetingTitle: 'Finance Committee — Feb 2026',
+    sourceMeetingDate: '2026-02-24',
+    sourceMeetingTags: ['finance', 'procurement', 'vendor'],
+  },
+  {
+    id: 'ctx-58',
+    title: 'Community Partner Intake Process',
+    templateName: 'Standard Decision',
+    status: 'open',
+    sourceMeetingTitle: 'Founding Team Working Session',
+    sourceMeetingDate: '2026-03-03',
+    sourceMeetingTags: ['community', 'partners', 'intake'],
+  },
+  {
+    id: 'ctx-59',
+    title: 'Volunteer Safeguarding Escalation Path',
+    templateName: 'Policy Change',
+    status: 'open',
+    sourceMeetingTitle: 'Operations Circle Weekly',
+    sourceMeetingDate: '2026-03-05',
+    sourceMeetingTags: ['safeguarding', 'operations', 'volunteers'],
+  },
+];
+
 // ── Candidates ───────────────────────────────────────────────────
 
 export const CANDIDATES: Candidate[] = [
@@ -250,3 +317,24 @@ export const LOGGED_DECISIONS = [
   { id: 'dec-12', title: 'Observability Stack: Datadog vs Grafana', loggedAt: '2026-02-20' },
   { id: 'dec-13', title: 'Internal Developer Platform Roadmap', loggedAt: '2026-01-28' },
 ];
+
+export function getMockFieldsForTemplate(templateName: string): Field[] {
+  const baseFields = ACTIVE_CONTEXT.fields.map((field) => ({
+    ...field,
+    status: 'idle' as const,
+    value: '',
+    guidance: '',
+  }));
+
+  const templatesWithOutstandingIssues = new Set([
+    'Proposal Acceptance',
+    'Strategy Decision',
+    'Standard Decision',
+  ]);
+
+  if (!templatesWithOutstandingIssues.has(templateName)) {
+    return baseFields;
+  }
+
+  return [...baseFields, { ...OUTSTANDING_ISSUES_FIELD }];
+}
