@@ -206,7 +206,56 @@ pnpm dev
 ### Current state of remediation
 - `@repo/schema` package metadata was realigned to the actual emitted files.
 - `@repo/core` no longer shows the previous TS6305 declaration-path issue against `@repo/db`.
-- `@repo/db` remains unresolved for full `pnpm build` because DTS bundling still rejects the composite project file list.
+- `@repo/db` local build now succeeds after moving declaration emission out of `tsup`'s DTS worker.
+- `@repo/core` later showed the same `tsup` DTS-worker failure mode and was moved to the same declaration-first / JS-bundling-second build pattern.
+- Full `pnpm build` now passes.
+
+### Fix applied
+```json
+{
+  "build": "tsc --build --emitDeclarationOnly && tsup --no-dts"
+}
+```
+
+### Why this worked
+- `tsc --build --emitDeclarationOnly` handles the composite-project declaration graph directly.
+- `tsup --no-dts` remains responsible only for JavaScript bundling.
+- This avoids the failing `tsup` DTS worker path while preserving emitted declarations for downstream packages.
+
+### Follow-up discovered
+- Build success does not automatically mean downstream package consumers can resolve published declaration files.
+- `@repo/api type-check` still surfaces declaration-consumption issues for `@repo/core` / `@repo/db`.
+- The remaining blocker is now declaration publication / resolution for type-check, not JavaScript bundling.
+
+## 2026-03-09 - Build is green, dev no longer hits schema export mismatch, remaining blocker is declaration publication for type-check
+
+### Symptom
+- `pnpm build` now succeeds.
+- `pnpm dev` no longer fails with the earlier `@repo/schema` missing-export runtime error.
+- `pnpm dev` currently stops in `@repo/api` only because port `3000` is already in use (`EADDRINUSE`).
+- `pnpm --filter @repo/api type-check` and `pnpm type-check` still fail because downstream packages cannot reliably consume published declaration outputs from `@repo/core` / `@repo/db`.
+
+### Trigger observed
+- `@repo/db` and `@repo/core` were both moved off `tsup` DTS bundling to avoid `TS6307` failures.
+- Package metadata for `@repo/core` / `@repo/db` was then adjusted toward `.js` / `.d.ts` outputs.
+- Despite improved build stability, declaration files were not yet confirmed in the published locations expected by downstream package type-check.
+
+### Working interpretation
+1. There are now two separate success criteria:
+   - JavaScript/runtime build health
+   - Published declaration availability for downstream package type-check
+2. The repo has progressed from broad workspace instability to a narrower packaging problem around declaration publication.
+3. `pnpm dev` is no longer blocked by the original workspace-type problem; its current failure is operational (`EADDRINUSE`).
+
+### Current state
+- `pnpm build` passes.
+- `pnpm dev` gets past the previous schema export/runtime mismatch.
+- `pnpm dev` currently fails only because another process is already bound to port `3000`.
+- Remaining technical blocker: make `@repo/core` / `@repo/db` publish declarations in the exact paths consumed by downstream package type-check.
+
+### Notes
+- Treat `EADDRINUSE` as a local environment/runtime issue, not as evidence that the type-system remediation regressed.
+- The next strategy should focus on declaration publication paths and package-consumer expectations, not on more broad tsconfig/reference changes.
 
 ### Recommended validation sequence
 ```bash
@@ -218,4 +267,5 @@ pnpm build
 
 ### Notes
 - Keep distinguishing `tsc` project-reference success from `tsup` DTS bundling success; they are not currently equivalent in this repo.
-- Future fixes should focus on why `tsup`'s DTS worker sees an incomplete file list for `@repo/db` despite `src/**/*.ts` inclusion.
+- `@repo/db` no longer needs `tsup` DTS bundling in its `build` script as long as declaration emission is handled explicitly by `tsc` first.
+- Downstream/full-workspace validation can still fail for separate reasons; treat `@repo/db` DTS worker failure as resolved unless it reappears through another path.

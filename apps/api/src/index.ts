@@ -134,7 +134,7 @@ async function resolveContextFieldId(
   }
 
   const assignments = await services.templateFieldAssignmentRepository.findByTemplateId(context.templateId);
-  const assignedFieldIds = new Set(assignments.map((assignment) => assignment.fieldId));
+  const assignedFieldIds = new Set(assignments.map((assignment: { fieldId: string }) => assignment.fieldId));
 
   if (assignedFieldIds.has(fieldReference)) {
     return fieldReference;
@@ -149,9 +149,9 @@ async function resolveContextFieldId(
   }
 
   const assignedFields = await Promise.all(
-    assignments.map(async (assignment) => services.decisionFieldService.getField(assignment.fieldId))
+    assignments.map(async (assignment: { fieldId: string }) => services.decisionFieldService.getField(assignment.fieldId))
   );
-  const field = assignedFields.find((assignedField) => assignedField?.name === fieldReference) ?? null;
+  const field = assignedFields.find((assignedField: { name: string } | null) => assignedField?.name === fieldReference) ?? null;
   if (!field) {
     throw new Error(`Field ${fieldReference} not found`);
   }
@@ -369,7 +369,7 @@ app.openapi(getMeetingSummaryRoute, async (c) => {
 
   return c.json({
     decisionCount: decisions.length,
-    draftCount: contexts.filter((context) => context.status !== 'logged').length,
+    draftCount: contexts.filter((context: { status: string }) => context.status !== 'logged').length,
     loggedCount: stats.totalDecisions,
   });
 });
@@ -566,7 +566,7 @@ app.openapi(listFlaggedDecisionsRoute, async (c) => {
   const { id } = c.req.valid('param');
   const { status } = c.req.valid('query');
   const decisions = await services.flaggedDecisionService.getDecisionsForMeeting(id);
-  const filtered = status ? decisions.filter((decision) => decision.status === status) : decisions;
+  const filtered = status ? decisions.filter((decision: { status: string }) => decision.status === status) : decisions;
   return c.json({ decisions: filtered });
 });
 

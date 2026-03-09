@@ -3,25 +3,25 @@
   "version": "0.0.0",
   "description": "Drizzle ORM and database layer",
   "type": "module",
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "default": "./dist/index.mjs"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.js"
     },
     "./schema": {
-      "types": "./dist/schema.d.mts",
-      "import": "./dist/schema.mjs",
-      "require": "./dist/schema.js",
-      "default": "./dist/schema.mjs"
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js",
+      "require": "./dist/schema.cjs",
+      "default": "./dist/schema.js"
     }
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsc --project tsconfig.declarations.json && tsup --no-dts",
     "dev": "tsup --watch --no-dts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -30,7 +30,7 @@
     "db:validate": "drizzle-kit check:pg",
     "db:seed": "tsx scripts/seed.ts",
     "test": "vitest run --minWorkers=1 --maxWorkers=1",
-    "type-check": "tsc --build --emitDeclarationOnly"
+    "type-check": "tsc --project tsconfig.declarations.json"
   },
   "dependencies": {
     "@repo/schema": "workspace:*",
