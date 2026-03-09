@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Plus, UserPlus, Trash2, ClipboardList, Link2, ArrowRight, FileText, BookOpen } from 'lucide-react';
+import { ArrowRight, FileText, BookOpen } from 'lucide-react';
 import { MEETINGS, OPEN_CONTEXTS } from '@/lib/mock-data';
-import { AgendaList } from '@/components/shared/AgendaList';
-import { OpenContextPicker } from '@/components/shared/OpenContextPicker';
+import { MeetingAgendaPlanner } from '@/components/shared/MeetingAgendaPlanner';
+import {
+  MeetingAttendeesPanel,
+  type MeetingAttendeeEvent,
+  type MeetingAttendeePresence,
+} from '@/components/shared/MeetingAttendeesPanel';
 import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
-import { TabButton } from '@/components/ui/Tabs';
 import { Panel } from '@/components/ui/Panel';
 
 type SetupDraftState = {
@@ -15,6 +17,7 @@ type SetupDraftState = {
     meetingTitle?: string;
     meetingDate?: string;
     participants?: string[];
+    initialCandidates?: string[];
   };
 };
 
@@ -28,12 +31,9 @@ export function FacilitatorMeetingHomePage() {
   const [meetingDate, setMeetingDate] = useState(
     setupDraft?.meetingDate ?? new Date().toISOString().slice(0, 10),
   );
-  const [participants, setParticipants] = useState<string[]>(setupDraft?.participants ?? []);
-  const [newParticipant, setNewParticipant] = useState('');
 
-  const [agendaTab, setAgendaTab] = useState<'stubs' | 'open-contexts'>('stubs');
-  const [stubTitle, setStubTitle] = useState('');
-  const [agendaStubs, setAgendaStubs] = useState<string[]>([]);
+  const [draftAgendaItemTitle, setDraftAgendaItemTitle] = useState('');
+  const [manualAgendaItems, setManualAgendaItems] = useState<string[]>([]);
   const [selectedContextIds, setSelectedContextIds] = useState<string[]>([]);
   const [manualTranscriptTitle, setManualTranscriptTitle] = useState('');
   const [manualBackgroundTitle, setManualBackgroundTitle] = useState('');
@@ -42,31 +42,48 @@ export function FacilitatorMeetingHomePage() {
 
   const selectedOpenContexts = OPEN_CONTEXTS.filter((ctx) => selectedContextIds.includes(ctx.id));
   const activeMeeting = MEETINGS.find((meeting) => meeting.id === id) ?? null;
+  const initialAttendees = setupDraft?.participants ?? activeMeeting?.participants ?? [];
+  const [attendees, setAttendees] = useState<MeetingAttendeePresence[]>(
+    initialAttendees.map((name) => ({
+      name,
+      status: 'present',
+      updatedAt: 'meeting start',
+    })),
+  );
+  const [attendeeEvents, setAttendeeEvents] = useState<MeetingAttendeeEvent[]>(
+    initialAttendees.map((name, index) => ({
+      id: `home-attendee-start-${index}`,
+      attendeeName: name,
+      action: 'entered',
+      at: 'meeting start',
+    })),
+  );
 
-  function addParticipant() {
-    const name = newParticipant.trim();
-    if (!name || participants.includes(name)) return;
-    setParticipants((prev) => [...prev, name]);
-    setNewParticipant('');
-  }
-
-  function removeParticipant(name: string) {
-    setParticipants((prev) => prev.filter((p) => p !== name));
-  }
-
-  function addAgendaStub() {
-    const next = stubTitle.trim();
+  function addManualAgendaItem() {
+    const next = draftAgendaItemTitle.trim();
     if (!next) return;
-    if (agendaStubs.some((item) => item.toLowerCase() === next.toLowerCase())) {
-      setStubTitle('');
+    if (manualAgendaItems.some((item) => item.toLowerCase() === next.toLowerCase())) {
+      setDraftAgendaItemTitle('');
       return;
     }
-    setAgendaStubs((prev) => [...prev, next]);
-    setStubTitle('');
+    setManualAgendaItems((prev) => [...prev, next]);
+    setDraftAgendaItemTitle('');
   }
 
-  function removeAgendaStub(value: string) {
-    setAgendaStubs((prev) => prev.filter((item) => item !== value));
+  function removeManualAgendaItem(value: string) {
+    setManualAgendaItems((prev) => prev.filter((item) => item !== value));
+  }
+
+  function moveManualAgendaItem(value: string, direction: 'up' | 'down') {
+    setManualAgendaItems((prev) => {
+      const idx = prev.indexOf(value);
+      if (idx === -1) return prev;
+      const target = direction === 'up' ? idx - 1 : idx + 1;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[target]] = [next[target]!, next[idx]!];
+      return next;
+    });
   }
 
   function addManualTranscript() {
@@ -81,6 +98,56 @@ export function FacilitatorMeetingHomePage() {
     if (!next) return;
     setManualBackgroundDocs((prev) => [...prev, next]);
     setManualBackgroundTitle('');
+  }
+
+  function toggleAttendeeStatus(name: string) {
+    let nextEvent: MeetingAttendeeEvent | null = null;
+
+    setAttendees((prev) =>
+      prev.map((attendee) => {
+        if (attendee.name !== name) return attendee;
+        const nextStatus = attendee.status === 'present' ? 'left' : 'present';
+        const updatedAt = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        nextEvent = {
+          id: `home-attendee-event-${Date.now()}-${name.replace(/\s+/g, '-').toLowerCase()}`,
+          attendeeName: name,
+          action: nextStatus === 'present' ? 'entered' : 'left',
+          at: updatedAt,
+        };
+        return {
+          ...attendee,
+          status: nextStatus,
+          updatedAt,
+        };
+      }),
+    );
+
+    if (nextEvent) {
+      const event = nextEvent;
+      setAttendeeEvents((prev) => [event, ...prev].slice(0, 12));
+    }
+  }
+
+  function addAttendee(name: string) {
+    const normalized = name.trim();
+    if (!normalized) return false;
+
+    const exists = attendees.some((attendee) => attendee.name.toLowerCase() === normalized.toLowerCase());
+    if (exists) return false;
+
+    const updatedAt = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    setAttendees((prev) => [...prev, { name: normalized, status: 'present', updatedAt }]);
+    setAttendeeEvents((prev) => [
+      {
+        id: `home-attendee-event-${Date.now()}-${normalized.replace(/\s+/g, '-').toLowerCase()}`,
+        attendeeName: normalized,
+        action: 'entered' as const,
+        at: updatedAt,
+      },
+      ...prev,
+    ].slice(0, 12));
+
+    return true;
   }
 
   return (
@@ -108,9 +175,9 @@ export function FacilitatorMeetingHomePage() {
                   setupDraft: {
                     meetingTitle,
                     meetingDate,
-                    participants,
+                    participants: attendees.map((attendee) => attendee.name),
+                    initialCandidates: manualAgendaItems,
                     initialAgenda: {
-                      stubs: agendaStubs,
                       openContexts: selectedOpenContexts.map((ctx) => ({
                         id: ctx.id,
                         title: ctx.title,
@@ -144,122 +211,23 @@ export function FacilitatorMeetingHomePage() {
             onChange={(e) => setMeetingDate(e.target.value)}
             className="w-48"
           />
-          <div className="flex flex-col gap-1.5">
-            {participants.map((p) => (
-              <div key={p} className="flex items-center gap-2 px-3 py-1.5 rounded border border-border bg-overlay/60">
-                <span className="text-fac-meta text-text-primary flex-1">{p}</span>
-                <button onClick={() => removeParticipant(p)} className="text-text-muted hover:text-danger transition-colors">
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            ))}
-            <div className="flex gap-2">
-              <Input
-                type="text"
-                placeholder="Add participant..."
-                value={newParticipant}
-                onChange={(e) => setNewParticipant(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addParticipant()}
-                inputSize="sm"
-                className="flex-1"
-              />
-              <Button
-                onClick={addParticipant}
-                disabled={!newParticipant.trim()}
-                variant="outline-accent"
-                size="sm"
-              >
-                <UserPlus size={13} />
-                Add
-              </Button>
-            </div>
-          </div>
+          <p className="text-fac-meta text-text-muted">
+            Manage attendance in the shared attendee panel below.
+          </p>
         </Panel>
 
-        <Panel title="Decision agenda" className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <TabButton active={agendaTab === 'stubs'} onClick={() => setAgendaTab('stubs')} compact>
-              Agenda placeholders
-            </TabButton>
-            <TabButton active={agendaTab === 'open-contexts'} onClick={() => setAgendaTab('open-contexts')} compact>
-              Browse open contexts
-            </TabButton>
-          </div>
-
-          {agendaTab === 'stubs' ? (
-            <div className="flex flex-col gap-2">
-              <div className="flex gap-2">
-                <Input
-                  type="text"
-                  placeholder="Decision stub title..."
-                  value={stubTitle}
-                  onChange={(e) => setStubTitle(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addAgendaStub()}
-                  inputSize="sm"
-                  className="flex-1"
-                />
-                <Button
-                  onClick={addAgendaStub}
-                  disabled={!stubTitle.trim()}
-                  variant="outline-accent"
-                  size="sm"
-                >
-                  <Plus size={13} />
-                  Add
-                </Button>
-              </div>
-              <div className="flex flex-col gap-2">
-                {agendaStubs.map((item) => (
-                  <div key={item} className="flex items-center gap-2 px-3 py-1.5 rounded border border-border bg-overlay/60">
-                    <ClipboardList size={13} className="text-text-muted" />
-                    <span className="text-fac-meta text-text-primary flex-1">{item}</span>
-                    <IconButton onClick={() => removeAgendaStub(item)} tone="danger" className="w-7 h-7 border-0">
-                      <Trash2 size={13} />
-                    </IconButton>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <OpenContextPicker
-                idPrefix="meeting-home-open-contexts"
-                contexts={OPEN_CONTEXTS}
-                currentMeeting={{ title: meetingTitle, date: meetingDate }}
-                selectionMode="multiple"
-                selectedIds={selectedContextIds}
-                onChange={setSelectedContextIds}
-              />
-            </div>
-          )}
-        </Panel>
-
-        <Panel title="Agenda overview" className="lg:col-span-2">
-          {agendaStubs.length === 0 && selectedOpenContexts.length === 0 ? (
-            <p className="text-fac-meta text-text-muted mt-1">
-              Add placeholders or existing contexts to shape meeting agenda before opening a decision workspace.
-            </p>
-          ) : (
-            <AgendaList
-              items={[
-                ...agendaStubs.map((item) => ({
-                  id: `stub-${item}`,
-                  title: `${item} (stub)`,
-                  status: 'pending' as const,
-                })),
-                ...selectedOpenContexts.map((ctx) => ({
-                  id: `ctx-${ctx.id}`,
-                  title: `${ctx.title} (open context)`,
-                  status: ctx.status === 'deferred' ? 'deferred' as const : 'drafted' as const,
-                })),
-              ]}
-            />
-          )}
-          <div className="mt-3 flex items-center gap-2 text-fac-meta text-text-muted">
-            <Link2 size={13} />
-            Cross-meeting context linking is applied when open contexts are attached in facilitator workspace.
-          </div>
-        </Panel>
+        <MeetingAgendaPlanner
+          manualAgendaItems={manualAgendaItems}
+          draftManualAgendaItem={draftAgendaItemTitle}
+          onDraftManualAgendaItemChange={setDraftAgendaItemTitle}
+          onAddManualAgendaItem={addManualAgendaItem}
+          onRemoveManualAgendaItem={removeManualAgendaItem}
+          onMoveManualAgendaItem={moveManualAgendaItem}
+          selectedContextIds={selectedContextIds}
+          onSelectedContextIdsChange={setSelectedContextIds}
+          contexts={OPEN_CONTEXTS}
+          currentMeeting={{ title: meetingTitle, date: meetingDate }}
+        />
 
         <Panel title="Meeting materials" className="flex flex-col gap-3">
           <p className="text-fac-meta text-text-muted">
@@ -319,13 +287,12 @@ export function FacilitatorMeetingHomePage() {
           <p className="text-fac-meta text-text-muted">
             Track who is/was in the meeting and review decision outcomes when meeting is closed.
           </p>
-          <div className="rounded border border-border bg-overlay/40 p-3 flex flex-col gap-1">
-            {(participants.length > 0 ? participants : activeMeeting?.participants ?? []).map((participant, idx) => (
-              <p key={participant} className="text-fac-meta text-text-primary">
-                • {participant} <span className="text-text-muted">{idx % 3 === 0 ? '(left early)' : '(present)'}</span>
-              </p>
-            ))}
-          </div>
+          <MeetingAttendeesPanel
+            attendees={attendees}
+            attendeeEvents={attendeeEvents}
+            onToggleAttendee={toggleAttendeeStatus}
+            onAddAttendee={addAttendee}
+          />
           {activeMeeting?.status === 'closed' ? (
             <div className="rounded border border-border bg-overlay/40 p-3">
               <p className="text-fac-meta text-text-secondary">Meeting outcomes</p>

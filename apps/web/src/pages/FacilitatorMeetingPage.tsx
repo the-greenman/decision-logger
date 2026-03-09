@@ -27,6 +27,7 @@ import {
   ACTIVE_CONTEXT,
   AGENDA_ITEMS,
   CANDIDATES,
+  MEETINGS,
   OPEN_CONTEXTS,
   SUPPLEMENTARY_ITEMS,
   getMockFieldsForTemplate,
@@ -34,6 +35,7 @@ import {
 import { FacilitatorFieldCard } from '@/components/facilitator/FacilitatorFieldCard';
 import { CandidateCard } from '@/components/facilitator/CandidateCard';
 import { AgendaList } from '@/components/shared/AgendaList';
+import { MeetingAttendeesPanel } from '@/components/shared/MeetingAttendeesPanel';
 import { RelationsAccordion } from '@/components/shared/RelationsAccordion';
 import { TagPill } from '@/components/shared/TagPill';
 import { FieldZoom } from '@/components/facilitator/FieldZoom';
@@ -82,6 +84,21 @@ type CreateContextDraftPayload = {
   };
 };
 
+type SetupDraftPayload = {
+  meetingTitle?: string;
+  meetingDate?: string;
+  participants?: string[];
+  initialCandidates?: string[];
+  initialAgenda?: {
+    openContexts?: Array<{
+      id: string;
+      title: string;
+      sourceMeetingTitle: string;
+      sourceMeetingDate: string;
+    }>;
+  };
+};
+
 type StreamState = 'idle' | 'connecting' | 'live' | 'stopped';
 type RelatedMeeting = {
   id: string;
@@ -93,6 +110,19 @@ type SuggestedTag = {
   name: string;
   category: TagCategory;
   reason: string;
+};
+
+type AttendeePresence = {
+  name: string;
+  status: 'present' | 'left';
+  updatedAt: string;
+};
+
+type AttendeeEvent = {
+  id: string;
+  attendeeName: string;
+  action: 'entered' | 'left';
+  at: string;
 };
 
 type ModalState =
@@ -190,6 +220,23 @@ export function FacilitatorMeetingPage() {
   const promoteCandidate =
     modal?.type === 'promote' ? candidates.find((candidate) => candidate.id === modal.candidateId) ?? null : null;
   const currentMeeting = { id: 'mtg-1', title: 'Q4 Architecture Review', date: '2026-03-08' };
+  const meetingRecord = MEETINGS.find((meeting) => meeting.id === currentMeeting.id) ?? null;
+  const initialAttendeeNames = meetingRecord?.participants ?? ['Alice Chen', 'Bob Marsh', 'Priya Nair'];
+  const [attendees, setAttendees] = useState<AttendeePresence[]>(
+    initialAttendeeNames.map((name) => ({
+      name,
+      status: 'present',
+      updatedAt: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+    })),
+  );
+  const [attendeeEvents, setAttendeeEvents] = useState<AttendeeEvent[]>(
+    initialAttendeeNames.map((name, index) => ({
+      id: `attendee-start-${index}`,
+      attendeeName: name,
+      action: 'entered',
+      at: 'meeting start',
+    })),
+  );
   const meetingFocusKey = `dl:meeting-focus:${currentMeeting.id}`;
   const meetingFieldKey = `dl:meeting-fields:${currentMeeting.id}`;
   const leftPanelWidthKey = `dl:fac:left-width:${currentMeeting.id}`;
@@ -268,6 +315,43 @@ export function FacilitatorMeetingPage() {
   ]);
 
   // ── Process segment selection returned from transcript page ───────
+
+  useEffect(() => {
+    const state = location.state as { setupDraft?: SetupDraftPayload } | null;
+    if (!state?.setupDraft) return;
+
+    const { setupDraft } = state;
+
+    if (setupDraft.initialCandidates && setupDraft.initialCandidates.length > 0) {
+      const initialCandidates = setupDraft.initialCandidates;
+      setCandidates((prev) => {
+        const existingTitles = new Set(prev.map((candidate) => candidate.title.toLowerCase()));
+        const manualCandidates = initialCandidates
+          .filter((title) => !existingTitles.has(title.toLowerCase()))
+          .map((title, index) => ({
+            id: `cand-setup-${Date.now()}-${index}`,
+            title,
+            summary: 'Prepared from meeting agenda planning. Requires promotion before entering agenda.',
+            status: 'new' as const,
+            detectedAt: 'setup',
+          }));
+        return [...manualCandidates, ...prev];
+      });
+    }
+
+    if (setupDraft.initialAgenda?.openContexts && setupDraft.initialAgenda.openContexts.length > 0) {
+      setAgendaItems((prev) => {
+        const existing = new Set(prev.map((item) => item.id));
+        const additions = setupDraft.initialAgenda?.openContexts
+          ?.filter((ctx) => !existing.has(ctx.id))
+          .map((ctx) => ({ id: ctx.id, title: ctx.title, status: 'pending' as const })) ?? [];
+        return additions.length > 0 ? [...prev, ...additions] : prev;
+      });
+    }
+
+    setLeftTab('candidates');
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
 
   useEffect(() => {
     const state = location.state as { segmentSelection?: SegmentSelectionPayload } | null;
@@ -402,6 +486,57 @@ export function FacilitatorMeetingPage() {
     setFlagLaterTitle('');
     setLeftTab('candidates');
     setModal(null);
+  }
+
+  function toggleAttendeeStatus(name: string) {
+    let nextEvent: AttendeeEvent | null = null;
+
+    setAttendees((prev) =>
+      prev.map((attendee) => {
+        if (attendee.name !== name) return attendee;
+
+        const nextStatus = attendee.status === 'present' ? 'left' : 'present';
+        const updatedAt = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        nextEvent = {
+          id: `attendee-event-${Date.now()}-${name.replace(/\s+/g, '-').toLowerCase()}`,
+          attendeeName: name,
+          action: nextStatus === 'present' ? 'entered' : 'left',
+          at: updatedAt,
+        };
+        return {
+          ...attendee,
+          status: nextStatus,
+          updatedAt,
+        };
+      }),
+    );
+
+    if (nextEvent) {
+      const event = nextEvent;
+      setAttendeeEvents((prev) => [event, ...prev].slice(0, 12));
+    }
+  }
+
+  function handleAddAttendee(name: string) {
+    const normalized = name.trim();
+    if (!normalized) return false;
+
+    const exists = attendees.some((attendee) => attendee.name.toLowerCase() === normalized.toLowerCase());
+    if (exists) return false;
+
+    const updatedAt = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    setAttendees((prev) => [...prev, { name: normalized, status: 'present', updatedAt }]);
+    setAttendeeEvents((prev) => [
+      {
+        id: `attendee-event-${Date.now()}-${normalized.replace(/\s+/g, '-').toLowerCase()}`,
+        attendeeName: normalized,
+        action: 'entered' as const,
+        at: updatedAt,
+      },
+      ...prev,
+    ].slice(0, 12));
+
+    return true;
   }
 
   function handlePromoteConfirm(payload: {
@@ -1022,7 +1157,7 @@ export function FacilitatorMeetingPage() {
       )}
       {modal?.type === 'finalise' && (
         <FinaliseDialog
-          participants={['Alice Chen', 'Bob Marsh', 'Priya Nair']}
+          participants={attendees.map((attendee) => attendee.name)}
           onConfirm={handleFinalise}
           onCancel={() => setModal(null)}
         />
@@ -1227,6 +1362,31 @@ export function FacilitatorMeetingPage() {
             className="shrink-0 border-r border-border flex flex-col bg-surface"
             style={{ width: `${leftPanelWidth}px` }}
           >
+          <section className="border-b border-border px-3 py-3 flex flex-col gap-2">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-fac-label text-text-secondary uppercase tracking-wider">Meeting context</p>
+                <p className="text-fac-field text-text-primary mt-1">{currentMeeting.title}</p>
+                <p className="text-fac-meta text-text-muted">{currentMeeting.date}</p>
+              </div>
+              <button
+                onClick={() => setLeftPanelCollapsed(true)}
+                className="shrink-0 p-1.5 rounded text-text-muted hover:text-text-primary hover:bg-overlay border border-border"
+                aria-label="Collapse meeting context panel"
+                title="Collapse meeting context panel"
+              >
+                <ChevronLeft size={14} />
+              </button>
+            </div>
+
+            <MeetingAttendeesPanel
+              attendees={attendees}
+              attendeeEvents={attendeeEvents}
+              onToggleAttendee={toggleAttendeeStatus}
+              onAddAttendee={handleAddAttendee}
+            />
+          </section>
+
           <div className="flex border-b border-border">
             <TabButton active={leftTab === 'candidates'} onClick={() => setLeftTab('candidates')}>
               Suggested
@@ -1239,14 +1399,6 @@ export function FacilitatorMeetingPage() {
             <TabButton active={leftTab === 'agenda'} onClick={() => setLeftTab('agenda')}>
               Agenda
             </TabButton>
-            <button
-              onClick={() => setLeftPanelCollapsed(true)}
-              className="shrink-0 px-2 text-text-muted hover:text-text-primary border-l border-border"
-              aria-label="Collapse agenda sidebar"
-              title="Collapse agenda sidebar"
-            >
-              <ChevronLeft size={14} />
-            </button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-2">
