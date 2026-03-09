@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link2, X } from 'lucide-react';
 import type { OpenContextSummary } from '@/lib/mock-data';
 import { OpenContextPicker } from '@/components/shared/OpenContextPicker';
+import { Button } from '@/components/ui/Button';
 
 interface AddExistingContextDialogProps {
   contexts: OpenContextSummary[];
@@ -28,9 +29,9 @@ export function AddExistingContextDialog({
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
           <Link2 size={16} className="text-accent" />
           <h2 className="text-fac-field text-text-primary font-medium flex-1">Add existing context</h2>
-          <button onClick={onCancel} className="text-text-muted hover:text-text-primary transition-colors">
+          <Button onClick={onCancel} variant="ghost" size="sm" className="p-0">
             <X size={16} />
-          </button>
+          </Button>
         </div>
 
         <div className="p-5 flex flex-col gap-3 overflow-y-auto">
@@ -45,20 +46,20 @@ export function AddExistingContextDialog({
         </div>
 
         <div className="flex gap-2 justify-end px-5 py-4 border-t border-border">
-          <button
+          <Button
             onClick={onCancel}
-            className="px-4 py-2 text-fac-meta text-text-muted hover:text-text-primary transition-colors"
+            variant="ghost"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => selected && onConfirm(selected)}
             disabled={!selected}
-            className="flex items-center gap-1.5 px-4 py-2 text-fac-meta bg-accent text-white rounded hover:bg-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            variant="primary"
           >
             <Link2 size={13} />
             {selectedIsCrossMeeting ? 'Link meeting + add context' : 'Add to agenda'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

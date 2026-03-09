@@ -53,6 +53,7 @@ export function FacilitatorFieldCard({
           label="Zoom into field"
           onClick={() => onZoom?.(field.id)}
           className="text-text-muted hover:text-text-primary"
+          disabled={!onZoom}
         />
 
         {/* Supplementary content indicator */}

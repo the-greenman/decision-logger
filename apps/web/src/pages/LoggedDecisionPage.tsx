@@ -1,6 +1,8 @@
-import { Download, Link2 } from 'lucide-react';
+import { Download } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { RelationsAccordion } from '@/components/shared/RelationsAccordion';
 import { TagPill } from '@/components/shared/TagPill';
-import { ACTIVE_CONTEXT } from '@/lib/mock-data';
+import { ACTIVE_CONTEXT, MEETINGS } from '@/lib/mock-data';
 
 const LOGGED_DECISION = {
   ...ACTIVE_CONTEXT,
@@ -15,7 +17,9 @@ const LOGGED_DECISION = {
 };
 
 export function LoggedDecisionPage() {
+  const navigate = useNavigate();
   const d = LOGGED_DECISION;
+  const activeMeeting = MEETINGS.find((meeting) => meeting.status === 'active') ?? null;
 
   return (
     <div className="density-display min-h-screen bg-base">
@@ -40,10 +44,39 @@ export function LoggedDecisionPage() {
           </div>
 
           {/* Export */}
-          <button className="flex items-center gap-2 px-3 py-2 text-fac-meta text-text-muted border border-border rounded hover:border-border-strong hover:text-text-primary transition-colors shrink-0">
-            <Download size={14} />
-            Export
-          </button>
+          <div className="flex flex-col gap-2 shrink-0">
+            <button className="flex items-center gap-2 px-3 py-2 text-fac-meta text-text-muted border border-border rounded hover:border-border-strong hover:text-text-primary transition-colors">
+              <Download size={14} />
+              Export
+            </button>
+            <button
+              onClick={() => {
+                if (!activeMeeting) return;
+                navigate(`/meetings/${activeMeeting.id}/facilitator`, {
+                  state: {
+                    createContextDraft: {
+                      title: `Follow-up: ${d.title}`,
+                      summary: `Follow-up context linked to logged decision \"${d.title}\".`,
+                      relation: {
+                        targetId: d.id,
+                        targetTitle: d.title,
+                        relationType: 'related' as const,
+                      },
+                    },
+                  },
+                });
+              }}
+              disabled={!activeMeeting}
+              className="flex items-center gap-2 px-3 py-2 text-fac-meta border border-accent/30 text-accent rounded hover:bg-accent-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Create follow-up in active meeting
+            </button>
+            {!activeMeeting && (
+              <p className="text-fac-meta text-text-muted max-w-48">
+                No active meeting available. Start or resume a meeting to create follow-up contexts.
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Meta bar */}
@@ -68,22 +101,7 @@ export function LoggedDecisionPage() {
 
         {/* Relations */}
         {d.relations.length > 0 && (
-          <div className="flex flex-col gap-3">
-            <p className="text-display-label text-text-secondary uppercase tracking-widest flex items-center gap-2">
-              <Link2 size={14} />
-              Related decisions
-            </p>
-            {d.relations.map((rel) => (
-              <div
-                key={rel.id}
-                className="flex items-center gap-2 px-4 py-2 rounded border border-border text-fac-field text-text-secondary"
-              >
-                <span className="text-fac-meta text-text-muted capitalize">{rel.relationType.replace('_', ' ')}</span>
-                <span className="text-text-muted">·</span>
-                <span>{rel.targetTitle}</span>
-              </div>
-            ))}
-          </div>
+          <RelationsAccordion relations={d.relations} density="display" />
         )}
       </main>
     </div>

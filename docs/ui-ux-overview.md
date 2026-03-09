@@ -82,7 +82,11 @@ Primary goal: provide a stable setup/overview page for the meeting before and du
 Key user stories:
 - As a facilitator, I can return to a meeting homepage at any time to orient myself.
 - As a facilitator, I can manage meeting basics (title/date/participants) without opening a decision context.
-- As a facilitator, I can build an initial agenda by adding new decision stubs or selecting open contexts.
+- As a facilitator, I can manage the meeting agenda at any point by adding agenda placeholders or selecting open contexts.
+- As a facilitator, I can attach manual transcripts and background documents to the meeting.
+- As a facilitator, I can see who is/was in a meeting from the meeting homepage.
+- As a facilitator, I can review made/deferred outcomes once the meeting is completed.
+- As a facilitator, I can browse previous meetings from this page using calendar and tag filters.
 - As a facilitator, I can move into the active facilitator workspace only when setup is ready.
 - As a facilitator, I can use the same open-context picker behavior used elsewhere (search, autocomplete, calendar), so selection is consistent and predictable.
 
@@ -101,6 +105,8 @@ Key user stories:
 - As a participant, I can see other decisions referenced from this one.
 - As a participant, I can watch a field populate progressively during generation without visual noise.
 - As a participant, I can see when a decision has been finalised.
+- As a participant, when the facilitator focuses a field, I see a centered field-zoom overlay that is readable from anywhere in the room.
+- As a participant, I can see facilitator-saved field wording updates reflected on the shared display immediately during live drafting.
 
 Mode implications: no UUIDs, no chunk counts, no confidence numbers, no action buttons. Locked fields shown with muted background — no `[LOCKED]` label. Tags as coloured pills. Per-field spinner during generation (not raw tokens). Minimum 20px font.
 
@@ -120,10 +126,19 @@ Key user stories:
 - As a facilitator, I can lock a field when the group agrees on its content.
 - As a facilitator, I can unlock a field and regenerate it with new guidance.
 - As a facilitator, I can zoom into a single field to edit it or add specific guidance text.
+- As a facilitator, when I save a field edit, the updated field text appears on the shared display immediately so attendees can validate wording in real time.
 - As a facilitator, I can add transcript segments without leaving the workspace.
+- As a facilitator, I can change the active decision template during facilitation when the context is still open.
+- As a facilitator, before applying a template change, I can see which current fields will become unavailable.
+- As a facilitator, before applying a template change, I can manually copy/paste content from unavailable fields into destination fields in the new template.
 - As a facilitator, I can view the LLM interaction log (collapsible).
 - As a facilitator, I can view field version history and restore a prior version (in field zoom).
 - As a facilitator, I can finalise the decision with method, actors, and logged-by details.
+- As a facilitator, after finalising a decision, I remain in the meeting workspace and can continue directly to the next agenda item.
+- As a facilitator, I can browse the agenda during a meeting and jump to any item to review setup or revisit prior decisions.
+- As a facilitator, I can reorder non-finalised agenda items in-place to adapt the meeting sequence.
+- As a facilitator, when a decision context is closed, the context is clearly marked read-only and editing controls are disabled.
+- As a facilitator, from a closed context, I can open a fresh decision context to continue work.
 - As a facilitator, I can add or remove tags on the active context by name.
 - As a facilitator, I can add a relation to another decision or context.
 - As a facilitator, I can find related meetings quickly by date, title, or tag when attaching cross-meeting context.
@@ -162,6 +177,7 @@ Key user stories:
 - As a participant, I can see the decision method and who logged it.
 - As a participant, I can see tags and related decisions.
 - As a facilitator, I can export the decision as markdown or JSON.
+- As a facilitator, when an active meeting exists, I can create a follow-up context from a logged decision and attach it to the active meeting.
 
 Mode implications: projectable. Export buttons present but visually subordinate to content.
 

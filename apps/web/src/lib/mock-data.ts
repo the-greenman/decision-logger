@@ -82,6 +82,12 @@ export interface Template {
   fieldCount: number;
 }
 
+export interface TemplateFieldDefinition {
+  key: string;
+  label: string;
+  required: boolean;
+}
+
 export interface OpenContextSummary {
   id: string;
   title: string;
@@ -102,6 +108,62 @@ export const TEMPLATES: Template[] = [
   { id: 'tpl-5', name: 'Policy Change', category: 'policy', description: 'Governance and compliance decisions', fieldCount: 8 },
   { id: 'tpl-6', name: 'Proposal Acceptance', category: 'proposal', description: 'Yes/no decisions on submitted proposals', fieldCount: 7 },
 ];
+
+// Mirrors the expected API payload for template-field discovery.
+const TEMPLATE_FIELD_DEFINITIONS: Record<string, TemplateFieldDefinition[]> = {
+  'Technology Selection': [
+    { key: 'problem_statement', label: 'Problem Statement', required: true },
+    { key: 'requirements', label: 'Requirements', required: true },
+    { key: 'options_evaluated', label: 'Options Evaluated', required: true },
+    { key: 'selected_option', label: 'Selected Option', required: true },
+    { key: 'rationale', label: 'Rationale', required: true },
+    { key: 'implementation_notes', label: 'Implementation Notes', required: false },
+  ],
+  'Standard Decision': [
+    { key: 'problem_statement', label: 'Problem Statement', required: true },
+    { key: 'context', label: 'Context', required: false },
+    { key: 'options_evaluated', label: 'Options Evaluated', required: true },
+    { key: 'selected_option', label: 'Selected Option', required: true },
+    { key: 'rationale', label: 'Rationale', required: true },
+    { key: 'implementation_notes', label: 'Implementation Notes', required: false },
+    { key: 'outstanding_issues', label: 'Outstanding Issues / Open Questions', required: false },
+  ],
+  'Budget Approval': [
+    { key: 'problem_statement', label: 'Problem Statement', required: true },
+    { key: 'budget_scope', label: 'Budget Scope', required: true },
+    { key: 'cost_breakdown', label: 'Cost Breakdown', required: true },
+    { key: 'funding_source', label: 'Funding Source', required: true },
+    { key: 'selected_option', label: 'Selected Option', required: true },
+    { key: 'rationale', label: 'Rationale', required: true },
+    { key: 'implementation_notes', label: 'Implementation Notes', required: false },
+  ],
+  'Strategy Decision': [
+    { key: 'problem_statement', label: 'Problem Statement', required: true },
+    { key: 'strategic_goal', label: 'Strategic Goal', required: true },
+    { key: 'options_evaluated', label: 'Options Evaluated', required: true },
+    { key: 'selected_direction', label: 'Selected Direction', required: true },
+    { key: 'rationale', label: 'Rationale', required: true },
+    { key: 'implementation_notes', label: 'Implementation Notes', required: false },
+    { key: 'outstanding_issues', label: 'Outstanding Issues / Open Questions', required: false },
+  ],
+  'Policy Change': [
+    { key: 'current_policy', label: 'Current Policy', required: true },
+    { key: 'problem_statement', label: 'Problem Statement', required: true },
+    { key: 'proposed_change', label: 'Proposed Change', required: true },
+    { key: 'affected_groups', label: 'Affected Groups', required: true },
+    { key: 'rationale', label: 'Rationale', required: true },
+    { key: 'implementation_notes', label: 'Implementation Notes', required: false },
+  ],
+  'Proposal Acceptance': [
+    { key: 'proposal_summary', label: 'Proposal Summary', required: true },
+    { key: 'evaluation_criteria', label: 'Evaluation Criteria', required: true },
+    { key: 'options_evaluated', label: 'Options Evaluated', required: true },
+    { key: 'selected_option', label: 'Selected Option', required: true },
+    { key: 'rationale', label: 'Rationale', required: true },
+    { key: 'implementation_notes', label: 'Implementation Notes', required: false },
+    { key: 'outstanding_issues', label: 'Outstanding Issues / Open Questions', required: false },
+  ],
+};
 
 export const OUTSTANDING_ISSUES_FIELD: Field = {
   id: 'f-outstanding-issues',
@@ -318,23 +380,30 @@ export const LOGGED_DECISIONS = [
   { id: 'dec-13', title: 'Internal Developer Platform Roadmap', loggedAt: '2026-01-28' },
 ];
 
+export function getTemplateFieldDefinitions(templateName: string): TemplateFieldDefinition[] {
+  return TEMPLATE_FIELD_DEFINITIONS[templateName] ?? TEMPLATE_FIELD_DEFINITIONS['Standard Decision'] ?? [];
+}
+
 export function getMockFieldsForTemplate(templateName: string): Field[] {
-  const baseFields = ACTIVE_CONTEXT.fields.map((field) => ({
-    ...field,
-    status: 'idle' as const,
-    value: '',
-    guidance: '',
-  }));
+  const definitions = getTemplateFieldDefinitions(templateName);
+  return definitions.map((field, index) => {
+    if (field.label === OUTSTANDING_ISSUES_FIELD.label) {
+      return {
+        ...OUTSTANDING_ISSUES_FIELD,
+        required: field.required,
+        status: 'idle' as const,
+        value: '',
+        guidance: '',
+      };
+    }
 
-  const templatesWithOutstandingIssues = new Set([
-    'Proposal Acceptance',
-    'Strategy Decision',
-    'Standard Decision',
-  ]);
-
-  if (!templatesWithOutstandingIssues.has(templateName)) {
-    return baseFields;
-  }
-
-  return [...baseFields, { ...OUTSTANDING_ISSUES_FIELD }];
+    return {
+      id: `${templateName.toLowerCase().replace(/\s+/g, '-')}-${index + 1}`,
+      label: field.label,
+      value: '',
+      status: 'idle' as const,
+      required: field.required,
+      guidance: '',
+    };
+  });
 }

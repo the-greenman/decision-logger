@@ -2,7 +2,13 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Plus, UserPlus, Trash2, ClipboardList, Link2, ArrowRight, FileText, BookOpen } from 'lucide-react';
 import { MEETINGS, OPEN_CONTEXTS } from '@/lib/mock-data';
+import { AgendaList } from '@/components/shared/AgendaList';
 import { OpenContextPicker } from '@/components/shared/OpenContextPicker';
+import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { Input } from '@/components/ui/Input';
+import { TabButton } from '@/components/ui/Tabs';
+import { Panel } from '@/components/ui/Panel';
 
 type SetupDraftState = {
   setupDraft?: {
@@ -91,11 +97,11 @@ export function FacilitatorMeetingHomePage() {
             to="/meetings/mtg-1"
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3 py-2 rounded border border-border text-fac-meta text-text-muted hover:text-text-primary"
+            className="inline-flex items-center px-3 py-2 rounded border border-border text-fac-meta text-text-muted hover:text-text-primary transition-colors"
           >
             Shared screen
           </Link>
-          <button
+          <Button
             onClick={() =>
               navigate('/meetings/mtg-1/facilitator', {
                 state: {
@@ -116,113 +122,103 @@ export function FacilitatorMeetingHomePage() {
                 },
               })
             }
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded bg-accent text-white text-fac-meta hover:bg-accent/90"
+            variant="primary"
           >
             Open facilitator workspace
             <ArrowRight size={13} />
-          </button>
+          </Button>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <section className="rounded-card border border-border bg-surface p-4 flex flex-col gap-3">
-          <h2 className="text-fac-field text-text-primary font-medium">Meeting details</h2>
-          <input
+        <Panel title="Meeting details" className="flex flex-col gap-3">
+          <Input
             type="text"
             value={meetingTitle}
             onChange={(e) => setMeetingTitle(e.target.value)}
-            className="w-full px-3 py-2 rounded border border-border bg-overlay text-fac-meta text-text-primary focus:outline-none focus:border-accent"
+            className="w-full"
           />
-          <input
+          <Input
             type="date"
             value={meetingDate}
             onChange={(e) => setMeetingDate(e.target.value)}
-            className="w-48 px-3 py-2 rounded border border-border bg-overlay text-fac-meta text-text-primary focus:outline-none focus:border-accent"
+            className="w-48"
           />
           <div className="flex flex-col gap-1.5">
             {participants.map((p) => (
               <div key={p} className="flex items-center gap-2 px-3 py-1.5 rounded border border-border bg-overlay/60">
                 <span className="text-fac-meta text-text-primary flex-1">{p}</span>
-                <button onClick={() => removeParticipant(p)} className="text-text-muted hover:text-danger">
+                <button onClick={() => removeParticipant(p)} className="text-text-muted hover:text-danger transition-colors">
                   <Trash2 size={13} />
                 </button>
               </div>
             ))}
             <div className="flex gap-2">
-              <input
+              <Input
                 type="text"
                 placeholder="Add participant..."
                 value={newParticipant}
                 onChange={(e) => setNewParticipant(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addParticipant()}
-                className="flex-1 px-3 py-1.5 rounded border border-border bg-overlay text-fac-meta text-text-primary focus:outline-none focus:border-accent"
+                inputSize="sm"
+                className="flex-1"
               />
-              <button
+              <Button
                 onClick={addParticipant}
                 disabled={!newParticipant.trim()}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-accent/30 text-accent text-fac-meta hover:bg-accent-dim disabled:opacity-40"
+                variant="outline-accent"
+                size="sm"
               >
                 <UserPlus size={13} />
                 Add
-              </button>
+              </Button>
             </div>
           </div>
-        </section>
+        </Panel>
 
-        <section className="rounded-card border border-border bg-surface p-4 flex flex-col gap-3">
-          <h2 className="text-fac-field text-text-primary font-medium">Decision agenda</h2>
+        <Panel title="Decision agenda" className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setAgendaTab('stubs')}
-              className={`px-2.5 py-1.5 rounded text-fac-meta border ${
-                agendaTab === 'stubs'
-                  ? 'border-accent/40 text-accent bg-accent-dim/20'
-                  : 'border-border text-text-muted hover:text-text-primary'
-              }`}
-            >
+            <TabButton active={agendaTab === 'stubs'} onClick={() => setAgendaTab('stubs')} compact>
               Agenda placeholders
-            </button>
-            <button
-              onClick={() => setAgendaTab('open-contexts')}
-              className={`px-2.5 py-1.5 rounded text-fac-meta border ${
-                agendaTab === 'open-contexts'
-                  ? 'border-accent/40 text-accent bg-accent-dim/20'
-                  : 'border-border text-text-muted hover:text-text-primary'
-              }`}
-            >
+            </TabButton>
+            <TabButton active={agendaTab === 'open-contexts'} onClick={() => setAgendaTab('open-contexts')} compact>
               Browse open contexts
-            </button>
+            </TabButton>
           </div>
 
           {agendaTab === 'stubs' ? (
             <div className="flex flex-col gap-2">
               <div className="flex gap-2">
-                <input
+                <Input
                   type="text"
                   placeholder="Decision stub title..."
                   value={stubTitle}
                   onChange={(e) => setStubTitle(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addAgendaStub()}
-                  className="flex-1 px-3 py-1.5 rounded border border-border bg-overlay text-fac-meta text-text-primary focus:outline-none focus:border-accent"
+                  inputSize="sm"
+                  className="flex-1"
                 />
-                <button
+                <Button
                   onClick={addAgendaStub}
                   disabled={!stubTitle.trim()}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-accent/30 text-accent text-fac-meta hover:bg-accent-dim disabled:opacity-40"
+                  variant="outline-accent"
+                  size="sm"
                 >
                   <Plus size={13} />
                   Add
-                </button>
+                </Button>
               </div>
-              {agendaStubs.map((item) => (
-                <div key={item} className="flex items-center gap-2 px-3 py-1.5 rounded border border-border bg-overlay/60">
-                  <ClipboardList size={13} className="text-text-muted" />
-                  <span className="text-fac-meta text-text-primary flex-1">{item}</span>
-                  <button onClick={() => removeAgendaStub(item)} className="text-text-muted hover:text-danger">
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              ))}
+              <div className="flex flex-col gap-2">
+                {agendaStubs.map((item) => (
+                  <div key={item} className="flex items-center gap-2 px-3 py-1.5 rounded border border-border bg-overlay/60">
+                    <ClipboardList size={13} className="text-text-muted" />
+                    <span className="text-fac-meta text-text-primary flex-1">{item}</span>
+                    <IconButton onClick={() => removeAgendaStub(item)} tone="danger" className="w-7 h-7 border-0">
+                      <Trash2 size={13} />
+                    </IconButton>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
@@ -236,72 +232,76 @@ export function FacilitatorMeetingHomePage() {
               />
             </div>
           )}
-        </section>
+        </Panel>
 
-        <section className="lg:col-span-2 rounded-card border border-border bg-surface p-4">
-          <h2 className="text-fac-field text-text-primary font-medium">Agenda overview</h2>
+        <Panel title="Agenda overview" className="lg:col-span-2">
           {agendaStubs.length === 0 && selectedOpenContexts.length === 0 ? (
             <p className="text-fac-meta text-text-muted mt-1">
               Add placeholders or existing contexts to shape meeting agenda before opening a decision workspace.
             </p>
           ) : (
-            <div className="mt-2 flex flex-col gap-1">
-              {agendaStubs.map((item) => (
-                <p key={`stub-${item}`} className="text-fac-meta text-text-primary">
-                  • {item} <span className="text-text-muted">(stub)</span>
-                </p>
-              ))}
-              {selectedOpenContexts.map((ctx) => (
-                <p key={`ctx-${ctx.id}`} className="text-fac-meta text-text-primary">
-                  • {ctx.title} <span className="text-text-muted">(open context)</span>
-                </p>
-              ))}
-            </div>
+            <AgendaList
+              items={[
+                ...agendaStubs.map((item) => ({
+                  id: `stub-${item}`,
+                  title: `${item} (stub)`,
+                  status: 'pending' as const,
+                })),
+                ...selectedOpenContexts.map((ctx) => ({
+                  id: `ctx-${ctx.id}`,
+                  title: `${ctx.title} (open context)`,
+                  status: ctx.status === 'deferred' ? 'deferred' as const : 'drafted' as const,
+                })),
+              ]}
+            />
           )}
           <div className="mt-3 flex items-center gap-2 text-fac-meta text-text-muted">
             <Link2 size={13} />
             Cross-meeting context linking is applied when open contexts are attached in facilitator workspace.
           </div>
-        </section>
+        </Panel>
 
-        <section className="rounded-card border border-border bg-surface p-4 flex flex-col gap-3">
-          <h2 className="text-fac-field text-text-primary font-medium">Meeting materials</h2>
+        <Panel title="Meeting materials" className="flex flex-col gap-3">
           <p className="text-fac-meta text-text-muted">
             Add manual transcripts or background documents for this meeting.
           </p>
           <div className="flex gap-2">
-            <input
+            <Input
               type="text"
               value={manualTranscriptTitle}
               onChange={(e) => setManualTranscriptTitle(e.target.value)}
               placeholder="Add transcript note..."
-              className="flex-1 px-3 py-1.5 rounded border border-border bg-overlay text-fac-meta text-text-primary focus:outline-none focus:border-accent"
+              inputSize="sm"
+              className="flex-1"
             />
-            <button
+            <Button
               onClick={addManualTranscript}
               disabled={!manualTranscriptTitle.trim()}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-accent/30 text-accent text-fac-meta hover:bg-accent-dim disabled:opacity-40"
+              variant="outline-accent"
+              size="sm"
             >
               <FileText size={13} />
               Add
-            </button>
+            </Button>
           </div>
           <div className="flex gap-2">
-            <input
+            <Input
               type="text"
               value={manualBackgroundTitle}
               onChange={(e) => setManualBackgroundTitle(e.target.value)}
               placeholder="Add background document..."
-              className="flex-1 px-3 py-1.5 rounded border border-border bg-overlay text-fac-meta text-text-primary focus:outline-none focus:border-accent"
+              inputSize="sm"
+              className="flex-1"
             />
-            <button
+            <Button
               onClick={addManualBackgroundDoc}
               disabled={!manualBackgroundTitle.trim()}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-accent/30 text-accent text-fac-meta hover:bg-accent-dim disabled:opacity-40"
+              variant="outline-accent"
+              size="sm"
             >
               <BookOpen size={13} />
               Add
-            </button>
+            </Button>
           </div>
           {(manualTranscripts.length > 0 || manualBackgroundDocs.length > 0) && (
             <div className="rounded border border-border bg-overlay/40 p-3">
@@ -313,10 +313,9 @@ export function FacilitatorMeetingHomePage() {
               ))}
             </div>
           )}
-        </section>
+        </Panel>
 
-        <section className="rounded-card border border-border bg-surface p-4 flex flex-col gap-3">
-          <h2 className="text-fac-field text-text-primary font-medium">Attendance and outcomes</h2>
+        <Panel title="Attendance and outcomes" className="flex flex-col gap-3">
           <p className="text-fac-meta text-text-muted">
             Track who is/was in the meeting and review decision outcomes when meeting is closed.
           </p>
@@ -340,7 +339,7 @@ export function FacilitatorMeetingHomePage() {
               </p>
             </div>
           )}
-        </section>
+        </Panel>
 
       </main>
     </div>

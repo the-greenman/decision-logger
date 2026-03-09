@@ -1,6 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Plus, FolderOpen, CalendarDays, Users, X, UserPlus, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { MeetingSearchPanel } from '@/components/shared/MeetingSearchPanel';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Panel } from '@/components/ui/Panel';
 import { MEETINGS } from '@/lib/mock-data';
 import type { Meeting } from '@/lib/mock-data';
 
@@ -48,13 +52,14 @@ export function MeetingListPage() {
           <h1 className="text-fac-title text-text-primary">Decision Logger</h1>
           <p className="text-fac-meta text-text-secondary mt-0.5">Meeting sessions</p>
         </div>
-        <button
+        <Button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-card bg-accent text-white text-fac-field font-medium hover:bg-accent/90 transition-colors"
+          variant="primary"
+          className="text-fac-field font-medium"
         >
           <Plus size={16} />
           New meeting
-        </button>
+        </Button>
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8">
@@ -64,8 +69,7 @@ export function MeetingListPage() {
           </div>
         )}
 
-        <section className="rounded-card border border-border bg-surface p-4 mb-5">
-          <h2 className="text-fac-field text-text-primary font-medium mb-3">Upcoming meetings</h2>
+        <Panel title="Upcoming meetings" className="mb-5">
           {upcomingMeetings.length === 0 ? (
             <p className="text-fac-meta text-text-muted">No upcoming meetings scheduled.</p>
           ) : (
@@ -75,38 +79,25 @@ export function MeetingListPage() {
               ))}
             </div>
           )}
-        </section>
+        </Panel>
 
-        <section className="rounded-card border border-border bg-surface p-4">
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <h2 className="text-fac-field text-text-primary font-medium">Past meetings</h2>
-            <span className="text-fac-meta text-text-muted">Browse by date and tag</span>
-          </div>
-          <div className="flex flex-wrap gap-2 mb-3">
-            <input
-              type="text"
-              value={pastQuery}
-              onChange={(e) => setPastQuery(e.target.value)}
-              placeholder="Search title, participant, date, tag..."
-              className="min-w-72 flex-1 px-3 py-1.5 rounded border border-border bg-overlay text-fac-meta text-text-primary focus:outline-none focus:border-accent"
-            />
-            <input
-              type="month"
-              value={pastMonth}
-              onChange={(e) => setPastMonth(e.target.value)}
-              className="px-2.5 py-1.5 rounded border border-border bg-overlay text-fac-meta text-text-primary focus:outline-none focus:border-accent"
-            />
-            <select
-              value={pastTag}
-              onChange={(e) => setPastTag(e.target.value)}
-              className="px-2.5 py-1.5 rounded border border-border bg-overlay text-fac-meta text-text-primary focus:outline-none focus:border-accent"
-            >
-              <option value="all">All tags</option>
-              {allMeetingTags.map((tag) => (
-                <option key={tag} value={tag}>{tag}</option>
-              ))}
-            </select>
-          </div>
+        <Panel
+          title="Past meetings"
+          right={<span className="text-fac-meta text-text-muted">Browse by date and tag</span>}
+        >
+          <MeetingSearchPanel
+            query={pastQuery}
+            onQueryChange={setPastQuery}
+            month={pastMonth}
+            onMonthChange={setPastMonth}
+            queryPlaceholder="Search title, participant, date, tag..."
+            tagValue={pastTag}
+            onTagChange={setPastTag}
+            tagOptions={[
+              { value: 'all', label: 'All tags' },
+              ...allMeetingTags.map((tag) => ({ value: tag, label: tag })),
+            ]}
+          />
 
           {filteredPastMeetings.length === 0 ? (
             <p className="text-fac-meta text-text-muted italic">No past meetings match current filters.</p>
@@ -117,7 +108,7 @@ export function MeetingListPage() {
               ))}
             </div>
           )}
-        </section>
+        </Panel>
       </main>
     </div>
   );
@@ -160,9 +151,9 @@ function NewMeetingForm({ onCancel }: { onCancel: () => void }) {
     <div className="rounded-card border border-accent/30 bg-accent-dim/10 p-5 flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <span className="text-fac-field text-text-primary font-medium">New meeting</span>
-        <button onClick={onCancel} className="text-text-muted hover:text-text-primary transition-colors">
+        <Button onClick={onCancel} variant="ghost" size="sm" className="p-0">
           <X size={15} />
-        </button>
+        </Button>
       </div>
 
       {/* Title */}
@@ -170,24 +161,24 @@ function NewMeetingForm({ onCancel }: { onCancel: () => void }) {
         <label className="text-fac-label text-text-secondary uppercase tracking-wider">
           Title <span className="text-danger">*</span>
         </label>
-        <input
+        <Input
           type="text"
           autoFocus
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="e.g. Q4 Architecture Review"
-          className="w-full px-3 py-2 rounded border border-border bg-surface text-fac-field text-text-primary focus:outline-none focus:border-accent placeholder:text-text-muted"
+          className="w-full bg-surface text-fac-field"
         />
       </div>
 
       {/* Date */}
       <div className="flex flex-col gap-1.5">
         <label className="text-fac-label text-text-secondary uppercase tracking-wider">Date</label>
-        <input
+        <Input
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className="w-48 px-3 py-2 rounded border border-border bg-surface text-fac-field text-text-primary focus:outline-none focus:border-accent"
+          className="w-48 bg-surface text-fac-field"
         />
       </div>
 
@@ -208,40 +199,42 @@ function NewMeetingForm({ onCancel }: { onCancel: () => void }) {
           ))}
         </div>
         <div className="flex gap-2">
-          <input
+          <Input
             type="text"
             placeholder="Name…"
             value={newParticipant}
             onChange={(e) => setNewParticipant(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addParticipant()}
-            className="flex-1 px-3 py-1.5 rounded border border-border bg-surface text-fac-meta text-text-primary focus:outline-none focus:border-accent placeholder:text-text-muted"
+            inputSize="sm"
+            className="flex-1 bg-surface"
           />
-          <button
+          <Button
             onClick={addParticipant}
             disabled={!newParticipant.trim()}
-            className="flex items-center gap-1 px-3 py-1.5 text-fac-meta text-accent border border-accent/30 rounded hover:bg-accent-dim transition-colors disabled:opacity-30"
+            variant="outline-accent"
+            size="sm"
           >
             <UserPlus size={13} />
             Add
-          </button>
+          </Button>
         </div>
       </div>
 
       <div className="flex gap-2 pt-1">
-        <button
+        <Button
           onClick={onCancel}
-          className="px-4 py-2 text-fac-meta text-text-muted hover:text-text-primary transition-colors"
+          variant="ghost"
         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={handleCreate}
           disabled={!title.trim()}
-          className="flex items-center gap-1.5 px-4 py-2 text-fac-meta bg-accent text-white rounded hover:bg-accent/90 transition-colors disabled:opacity-40"
+          variant="primary"
         >
           <Plus size={13} />
           Create meeting
-        </button>
+        </Button>
       </div>
     </div>
   );

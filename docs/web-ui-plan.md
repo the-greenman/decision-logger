@@ -81,8 +81,12 @@ The web app splits into two modes via separate routes — not a toggle — becau
 **User stories**:
 - As a facilitator, I can return to a meeting homepage at any time to regain high-level orientation.
 - As a facilitator, I can update meeting title/date/participants without opening a specific decision context.
-- As a facilitator, I can draft an initial decision agenda by adding new stubs.
+- As a facilitator, I can manage decision agenda continuously (not just at setup) by adding agenda placeholders.
 - As a facilitator, I can browse and attach open decision contexts from other meetings while planning agenda.
+- As a facilitator, I can attach manual transcripts and background documents to meeting scope.
+- As a facilitator, I can review attendance history (who is/was in meeting) from meeting homepage.
+- As a facilitator, after completion, I can review which decisions were made vs deferred.
+- As a facilitator, I can browse previous meetings directly from this page using calendar + tag filters.
 - As a facilitator, I can transition from meeting setup into facilitator decision workspace only when ready.
 
 **Reusable component rule**:
@@ -110,6 +114,8 @@ The web app splits into two modes via separate routes — not a toggle — becau
 - As a participant, I can see other decisions referenced from this one
 - As a participant, I can watch a field populate progressively during draft generation without visual noise
 - As a participant, I can see when a decision has been finalised and the meeting is ready to move on
+- As a participant, when the facilitator focuses a field, I see a centered zoom overlay for that field on the shared screen
+- As a participant, I can see facilitator-saved field wording updates reflected on the shared screen immediately
 
 **Display rules**:
 - No action buttons, no UUIDs, no chunk counts, no confidence numbers
@@ -120,6 +126,8 @@ The web app splits into two modes via separate routes — not a toggle — becau
 - Agenda panel always visible; workspace fills remaining width
 
 **Live update strategy**: poll `GET /api/meetings/:id/decision-contexts` and `GET /api/decision-contexts/:id` every 3–5 seconds, or subscribe to SSE when the streaming endpoint is available. The facilitator's actions on their device are reflected on the shared screen within the poll interval.
+
+**Prototype sync note**: in the current mocked web prototype, focused-field state and saved field text changes are mirrored to the shared display via a local browser sync channel so wording edits are visible to attendees immediately.
 
 **API**:
 - `GET /api/meetings/:id` — meeting header (title, date, participants)
@@ -147,13 +155,22 @@ The web app splits into two modes via separate routes — not a toggle — becau
 - As a facilitator, I can lock a field when the group agrees on its content
 - As a facilitator, I can unlock a locked field and regenerate it with new guidance
 - As a facilitator, I can zoom into a single field to edit it directly or add specific guidance text
+- As a facilitator, when I save a field text edit, the shared display updates immediately so the group can validate wording together
 - As a facilitator, I can add transcript segments to the active decision context without leaving the workspace
+- As a facilitator, I can change the active context template while facilitation is in progress (for open contexts only)
+- As a facilitator, before applying a template change, I can preview which current fields will become unavailable
+- As a facilitator, before applying a template change, I can manually transfer text from unavailable fields into destination fields in the selected template
 - As a facilitator, I can provide inline text guidance for a specific field's next regeneration
 - As a facilitator, I can paste supplementary text as evidence for a specific field — saved and tagged at the field scope — so the LLM incorporates it on the next regeneration alongside transcript segments *(G4)*
 - As a facilitator, I can add a supplementary text item at the decision context level as supporting material for all fields in that context *(G4)*
 - As a facilitator, I can view the LLM interaction log for the current context (collapsible)
 - As a facilitator, I can view field version history and restore a prior version (within field zoom)
 - As a facilitator, I can finalise the decision with decision method, actors, and logged-by details
+- As a facilitator, after finalising a decision, I remain in the facilitator meeting workspace and can continue with the next agenda item
+- As a facilitator, I can browse the meeting agenda at any time and jump directly to any decision item to review setup or skip ahead
+- As a facilitator, I can reorder non-finalised agenda items in-place while keeping logged items fixed
+- As a facilitator, when a decision context is closed (`logged`), the UI clearly marks it read-only and prevents edits
+- As a facilitator, from a closed context, I can open a fresh decision context and continue meeting work without mutating the closed record
 - As a facilitator, I can add or remove tags on the active context by name
 - As a facilitator, I can add a relation from the current context to another decision or context
 - As a facilitator, I can add an existing open decision context (from a prior meeting or sub-committee) to the current meeting's agenda without cloning it *(G6 — Flow 2)*
@@ -164,7 +181,7 @@ The web app splits into two modes via separate routes — not a toggle — becau
 - As a facilitator, I can quickly flag a future decision by title only — adding it to the candidate queue without switching away from the current active context *(G10 — Flow 2)*
 - As a facilitator, I can defer an open decision context, removing it from today's agenda while preserving all content for resumption in any future meeting *(G11 — Flow 2)*
 
-**Scope boundary**: meeting agenda management (procedural items, running order) is **out of scope**. The `Agenda` tab shows the decision agenda only.
+**Scope boundary**: procedural agenda content (non-decision facilitation notes) is out of scope. Decision-agenda navigation and non-finalised item ordering are in scope in the `Agenda` tab.
 
 **Naming note — two entities, two milestones**: the candidate queue is served by different API families depending on milestone. In M5 (pre-AI-detection), all queue items are `FlaggedDecision` records — `Suggested` tab = `status: pending`, `Agenda` tab = `status: accepted`. In M6+, AI-detected `DecisionCandidate` records also appear in `Suggested`; promoting one creates a `FlaggedDecision`. Web wiring must not conflate these: `/api/meetings/:id/flagged-decisions` (exists from M1) and `/api/meetings/:id/decision-candidates` (added in M6.6) are separate routes for separate entities. Phase 2 implementation uses `flagged-decisions` only.
 
@@ -188,6 +205,7 @@ The web app splits into two modes via separate routes — not a toggle — becau
 - `DELETE /api/decision-contexts/:id/lock-field` — unlock field
 - `POST /api/decision-contexts/:id/fields/:fieldId/regenerate` — regenerate one field
 - `PATCH /api/decision-contexts/:id/fields/:fieldId` — manual field edit
+- `GET /api/decision-templates/:id/fields` — template field metadata for template-change preview and transfer UI
 - `GET /api/decision-contexts/:id/llm-interactions` — LLM log
 - `GET /api/decision-contexts/:id/versions` — draft version history
 - `POST /api/decision-contexts/:id/rollback` — restore prior draft version
@@ -242,6 +260,7 @@ The web app splits into two modes via separate routes — not a toggle — becau
 - As a participant, I can see the tags on this decision
 - As a participant, I can see other decisions related to this one
 - As a facilitator, I can export the decision as markdown or JSON
+- As a facilitator, if an active meeting exists, I can create a follow-up context from this logged decision and add it to the active meeting
 
 **Display rules**: suitable for projection. Export actions are present but visually subordinate to content.
 
@@ -265,6 +284,7 @@ Endpoints that are **missing** and must be added before the dependent screen can
 | `GET /api/meetings/:id/summary` | Screen 2 header stats | M5.1 |
 | `PATCH /api/meetings/:id` | Screen 3 participant updates | M5.1 |
 | `POST /api/decision-contexts/:id/regenerate` | Screen 3 full regen | M5.1 |
+| `GET /api/decision-templates/:id/fields` | Screen 3 template-change field preview/transfer | M5.1 |
 | `GET /api/meetings/:id/transcript-reading` | Screen 4 reading mode | M5.1a |
 | `POST /api/meetings/:id/segment-suggestions` | Screen 4 AI suggestions | M5.1b |
 | Tag endpoints | Screen 2/3/5 tag display and management | M4.10 |

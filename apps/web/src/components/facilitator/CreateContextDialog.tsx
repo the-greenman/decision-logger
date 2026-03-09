@@ -1,11 +1,21 @@
 import { useState } from 'react';
 import { FilePlus2, X } from 'lucide-react';
 import { TEMPLATES } from '@/lib/mock-data';
-import type { Template } from '@/lib/mock-data';
+import type { Template, RelationType } from '@/lib/mock-data';
+import { Select } from '@/components/ui/Select';
 
 interface CreateContextDialogProps {
-  onConfirm: (title: string, summary: string, template: Template) => void;
+  onConfirm: (
+    title: string,
+    summary: string,
+    template: Template,
+    relationType?: RelationType,
+  ) => void;
   onCancel: () => void;
+  initialTitle?: string;
+  initialSummary?: string;
+  relationTargetTitle?: string;
+  initialRelationType?: RelationType;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -17,10 +27,18 @@ const CATEGORY_LABELS: Record<string, string> = {
   proposal: 'Proposal',
 };
 
-export function CreateContextDialog({ onConfirm, onCancel }: CreateContextDialogProps) {
-  const [title, setTitle] = useState('');
-  const [summary, setSummary] = useState('');
+export function CreateContextDialog({
+  onConfirm,
+  onCancel,
+  initialTitle = '',
+  initialSummary = '',
+  relationTargetTitle,
+  initialRelationType = 'related',
+}: CreateContextDialogProps) {
+  const [title, setTitle] = useState(initialTitle);
+  const [summary, setSummary] = useState(initialSummary);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [relationType, setRelationType] = useState<RelationType>(initialRelationType);
 
   const canConfirm = title.trim() && selectedTemplate;
 
@@ -36,6 +54,27 @@ export function CreateContextDialog({ onConfirm, onCancel }: CreateContextDialog
         </div>
 
         <div className="overflow-y-auto p-5 flex flex-col gap-4">
+          {relationTargetTitle && (
+            <div className="flex flex-col gap-1.5 rounded-card border border-border bg-overlay/40 p-3">
+              <label className="text-fac-label text-text-secondary uppercase tracking-wider">
+                Relation to existing decision
+              </label>
+              <p className="text-fac-meta text-text-primary">
+                New context will be linked to: <span className="font-medium">{relationTargetTitle}</span>
+              </p>
+              <Select
+                value={relationType}
+                onChange={(e) => setRelationType(e.target.value as RelationType)}
+                className="w-full max-w-xs"
+              >
+                <option value="related">related</option>
+                <option value="blocks">blocks</option>
+                <option value="blocked_by">blocked_by</option>
+                <option value="supersedes">supersedes</option>
+                <option value="superseded_by">superseded_by</option>
+              </Select>
+            </div>
+          )}
 
           {/* Title */}
           <div className="flex flex-col gap-1.5">
@@ -109,7 +148,15 @@ export function CreateContextDialog({ onConfirm, onCancel }: CreateContextDialog
             Cancel
           </button>
           <button
-            onClick={() => canConfirm && onConfirm(title.trim(), summary.trim(), selectedTemplate!)}
+            onClick={() =>
+              canConfirm &&
+              onConfirm(
+                title.trim(),
+                summary.trim(),
+                selectedTemplate!,
+                relationTargetTitle ? relationType : undefined,
+              )
+            }
             disabled={!canConfirm}
             className="flex items-center gap-1.5 px-4 py-2 text-fac-meta bg-accent text-white rounded hover:bg-accent/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >

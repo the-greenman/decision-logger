@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { CalendarDays } from 'lucide-react';
 import type { OpenContextSummary } from '@/lib/mock-data';
+import { MeetingSearchPanel } from '@/components/shared/MeetingSearchPanel';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 
 interface OpenContextPickerProps {
   contexts: OpenContextSummary[];
@@ -81,53 +84,53 @@ export function OpenContextPicker({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex gap-2">
-        <input
-          list={`${idPrefix}-suggestions`}
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by date, title, or tag..."
-          className="w-full px-3 py-2 rounded border border-border bg-overlay text-fac-meta text-text-primary focus:outline-none focus:border-accent"
-        />
-        <datalist id={`${idPrefix}-suggestions`}>
-          {querySuggestions.map((option) => (
-            <option key={option} value={option} />
-          ))}
-        </datalist>
-        <button
-          onClick={() => setShowCalendar((prev) => !prev)}
-          className={`inline-flex items-center gap-1 px-3 py-2 rounded border text-fac-meta transition-colors ${
-            showCalendar
-              ? 'border-accent/40 text-accent bg-accent-dim/20'
-              : 'border-border text-text-muted hover:text-text-primary'
-          }`}
-        >
-          <CalendarDays size={13} />
-          Calendar
-        </button>
-      </div>
+      <MeetingSearchPanel
+        query={query}
+        onQueryChange={setQuery}
+        month={month}
+        onMonthChange={(value) => {
+          setMonth(value);
+          setSelectedDate('');
+        }}
+        queryPlaceholder="Search by date, title, or tag..."
+        queryListId={`${idPrefix}-suggestions`}
+        querySuggestions={querySuggestions}
+        className="flex flex-wrap gap-2"
+        actions={(
+          <Button
+            onClick={() => setShowCalendar((prev) => !prev)}
+            variant={showCalendar ? 'outline-accent' : 'secondary'}
+            className="px-3 py-2 shrink-0"
+          >
+            <CalendarDays size={13} />
+            Calendar
+          </Button>
+        )}
+      />
 
       {showCalendar && (
         <div className="rounded-card border border-border p-3 bg-overlay/40">
           <div className="flex items-center gap-2 mb-2">
             <label className="text-fac-meta text-text-muted">Month</label>
-            <input
+            <Input
               type="month"
               value={month}
               onChange={(e) => {
                 setMonth(e.target.value);
                 setSelectedDate('');
               }}
-              className="px-2 py-1 rounded border border-border bg-surface text-fac-meta text-text-primary focus:outline-none focus:border-accent"
+              inputSize="sm"
+              className="bg-surface"
             />
             {selectedDate && (
-              <button
+              <Button
                 onClick={() => setSelectedDate('')}
-                className="ml-auto text-fac-meta text-text-muted hover:text-text-primary"
+                variant="ghost"
+                size="sm"
+                className="ml-auto"
               >
                 Clear date
-              </button>
+              </Button>
             )}
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -135,17 +138,15 @@ export function OpenContextPicker({
               <span className="text-fac-meta text-text-muted italic">No related meetings this month.</span>
             )}
             {monthDates.map((date) => (
-              <button
+              <Button
                 key={date}
                 onClick={() => setSelectedDate(date)}
-                className={`px-2 py-1 rounded border text-fac-meta transition-colors ${
-                  selectedDate === date
-                    ? 'border-accent/40 text-accent bg-accent-dim/20'
-                    : 'border-border text-text-muted hover:text-text-primary'
-                }`}
+                size="sm"
+                variant={selectedDate === date ? 'outline-accent' : 'secondary'}
+                className="px-2 py-1"
               >
                 {date}
-              </button>
+              </Button>
             ))}
           </div>
         </div>

@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   RefreshCw,
+  Undo2,
   CheckSquare,
   ExternalLink,
+  Home,
   FilePlus2,
   Upload,
   Lightbulb,
@@ -12,6 +14,9 @@ import {
   Plus,
   Radio,
   Flag,
+  ArrowUp,
+  ArrowDown,
+  ChevronLeft,
   ChevronDown,
   ChevronRight,
   Pencil,
@@ -28,15 +33,19 @@ import {
 } from '@/lib/mock-data';
 import { FacilitatorFieldCard } from '@/components/facilitator/FacilitatorFieldCard';
 import { CandidateCard } from '@/components/facilitator/CandidateCard';
-import { AgendaItem } from '@/components/shared/AgendaItem';
+import { AgendaList } from '@/components/shared/AgendaList';
+import { RelationsAccordion } from '@/components/shared/RelationsAccordion';
 import { TagPill } from '@/components/shared/TagPill';
 import { FieldZoom } from '@/components/facilitator/FieldZoom';
 import { RegenerateDialog } from '@/components/facilitator/RegenerateDialog';
 import { FinaliseDialog } from '@/components/facilitator/FinaliseDialog';
 import { CreateContextDialog } from '@/components/facilitator/CreateContextDialog';
+import { ChangeTemplateDialog } from '@/components/facilitator/ChangeTemplateDialog';
 import { UploadTranscript } from '@/components/facilitator/UploadTranscript';
 import { PromoteCandidateDialog } from '@/components/facilitator/PromoteCandidateDialog';
 import { AddExistingContextDialog } from '@/components/facilitator/AddExistingContextDialog';
+import { IconButton } from '@/components/ui/IconButton';
+import { TabButton } from '@/components/ui/Tabs';
 import type {
   AgendaItemStatus,
   DecisionContext,
@@ -63,6 +72,16 @@ type SegmentSelectionPayload = {
   chunkIds: string[];
 };
 
+type CreateContextDraftPayload = {
+  title?: string;
+  summary?: string;
+  relation?: {
+    targetId: string;
+    targetTitle: string;
+    relationType: RelationType;
+  };
+};
+
 type StreamState = 'idle' | 'connecting' | 'live' | 'stopped';
 type RelatedMeeting = {
   id: string;
@@ -81,6 +100,7 @@ type ModalState =
   | { type: 'regenerate' }
   | { type: 'finalise' }
   | { type: 'create-context' }
+  | { type: 'change-template' }
   | { type: 'upload' }
   | { type: 'promote'; candidateId: string }
   | { type: 'add-existing-context' }
@@ -114,6 +134,7 @@ export function FacilitatorMeetingPage() {
   const [agendaItems, setAgendaItems] = useState<AgendaItemModel[]>(AGENDA_ITEMS);
   const [deferredItems, setDeferredItems] = useState<AgendaItemModel[]>([]);
   const [relatedMeetings, setRelatedMeetings] = useState<RelatedMeeting[]>([]);
+  const [createContextDraft, setCreateContextDraft] = useState<CreateContextDraftPayload | null>(null);
   const [leftTab, setLeftTab] = useState<'candidates' | 'agenda'>('candidates');
   const [zoomedFieldId, setZoomedFieldId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
@@ -133,6 +154,15 @@ export function FacilitatorMeetingPage() {
   const [flagLaterTitle, setFlagLaterTitle] = useState('');
   const [showLLMLog, setShowLLMLog] = useState(false);
   const [llmLog, setLlmLog] = useState(MOCK_LLM_LOG);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(288);
+  const [rightPanelWidth, setRightPanelWidth] = useState(320);
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [dragState, setDragState] = useState<null | {
+    side: 'left' | 'right';
+    startX: number;
+    startWidth: number;
+  }>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(ACTIVE_CONTEXT.title);
   const [editingSummary, setEditingSummary] = useState(false);
@@ -153,6 +183,7 @@ export function FacilitatorMeetingPage() {
   ]);
 
   const activeCandidates = candidates.filter((c) => c.status === 'new');
+  const isClosedContext = activeContext.status === 'logged';
   const unlockedCount = fields.filter((f) => f.status !== 'locked').length;
   const zoomedField = zoomedFieldId ? fields.find((f) => f.id === zoomedFieldId) ?? null : null;
 
@@ -160,6 +191,11 @@ export function FacilitatorMeetingPage() {
     modal?.type === 'promote' ? candidates.find((candidate) => candidate.id === modal.candidateId) ?? null : null;
   const currentMeeting = { id: 'mtg-1', title: 'Q4 Architecture Review', date: '2026-03-08' };
   const meetingFocusKey = `dl:meeting-focus:${currentMeeting.id}`;
+  const meetingFieldKey = `dl:meeting-fields:${currentMeeting.id}`;
+  const leftPanelWidthKey = `dl:fac:left-width:${currentMeeting.id}`;
+  const rightPanelWidthKey = `dl:fac:right-width:${currentMeeting.id}`;
+  const leftPanelCollapsedKey = `dl:fac:left-collapsed:${currentMeeting.id}`;
+  const rightPanelCollapsedKey = `dl:fac:right-collapsed:${currentMeeting.id}`;
 
   const streamBadgeClass = useMemo(() => {
     if (streamState === 'live') return 'bg-settled';
@@ -167,6 +203,69 @@ export function FacilitatorMeetingPage() {
     if (streamState === 'stopped') return 'bg-danger';
     return 'bg-text-muted';
   }, [streamState]);
+
+  useEffect(() => {
+    if (!dragState) return;
+
+    const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const delta = event.clientX - dragState.startX;
+
+      if (dragState.side === 'left') {
+        setLeftPanelWidth(clamp(dragState.startWidth + delta, 240, 460));
+        return;
+      }
+
+      setRightPanelWidth(clamp(dragState.startWidth - delta, 260, 520));
+    };
+
+    const handleMouseUp = () => setDragState(null);
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [dragState]);
+
+  useEffect(() => {
+    try {
+      const savedLeftWidth = Number(localStorage.getItem(leftPanelWidthKey));
+      const savedRightWidth = Number(localStorage.getItem(rightPanelWidthKey));
+      const savedLeftCollapsed = localStorage.getItem(leftPanelCollapsedKey);
+      const savedRightCollapsed = localStorage.getItem(rightPanelCollapsedKey);
+
+      if (!Number.isNaN(savedLeftWidth) && savedLeftWidth > 0) setLeftPanelWidth(savedLeftWidth);
+      if (!Number.isNaN(savedRightWidth) && savedRightWidth > 0) setRightPanelWidth(savedRightWidth);
+      if (savedLeftCollapsed === 'true') setLeftPanelCollapsed(true);
+      if (savedRightCollapsed === 'true') setRightPanelCollapsed(true);
+    } catch {
+      // noop for prototype safety
+    }
+  }, [leftPanelCollapsedKey, leftPanelWidthKey, rightPanelCollapsedKey, rightPanelWidthKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(leftPanelWidthKey, String(leftPanelWidth));
+      localStorage.setItem(rightPanelWidthKey, String(rightPanelWidth));
+      localStorage.setItem(leftPanelCollapsedKey, String(leftPanelCollapsed));
+      localStorage.setItem(rightPanelCollapsedKey, String(rightPanelCollapsed));
+    } catch {
+      // noop for prototype safety
+    }
+  }, [
+    leftPanelCollapsed,
+    leftPanelCollapsedKey,
+    leftPanelWidth,
+    leftPanelWidthKey,
+    rightPanelCollapsed,
+    rightPanelCollapsedKey,
+    rightPanelWidth,
+    rightPanelWidthKey,
+  ]);
 
   // ── Process segment selection returned from transcript page ───────
 
@@ -182,6 +281,15 @@ export function FacilitatorMeetingPage() {
     navigate(location.pathname, { replace: true, state: null });
 
     return () => clearTimeout(timer);
+  }, [location.pathname, location.state, navigate]);
+
+  useEffect(() => {
+    const state = location.state as { createContextDraft?: CreateContextDraftPayload } | null;
+    if (!state?.createContextDraft) return;
+
+    setCreateContextDraft(state.createContextDraft);
+    setModal({ type: 'create-context' });
+    navigate(location.pathname, { replace: true, state: null });
   }, [location.pathname, location.state, navigate]);
 
   // ── Simulate stream rows arriving while live ──────────────────────
@@ -212,6 +320,22 @@ export function FacilitatorMeetingPage() {
     }
   }, [currentMeeting.id, meetingFocusKey, zoomedFieldId]);
 
+  // ── Broadcast field values for shared-display sync ───────────────
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        meetingFieldKey,
+        JSON.stringify({
+          meetingId: currentMeeting.id,
+          fields,
+          updatedAt: new Date().toISOString(),
+        }),
+      );
+    } catch {
+      // noop for prototype safety
+    }
+  }, [currentMeeting.id, fields, meetingFieldKey]);
+
   // ── Field mutations ────────────────────────────────────────────────
 
   function updateField(id: string, patch: Partial<Field>) {
@@ -219,22 +343,27 @@ export function FacilitatorMeetingPage() {
   }
 
   function handleLock(id: string) {
+    if (isClosedContext) return;
     updateField(id, { status: 'locked' });
   }
 
   function handleUnlock(id: string) {
+    if (isClosedContext) return;
     updateField(id, { status: 'idle' });
   }
 
   function handleSaveFieldValue(id: string, value: string) {
+    if (isClosedContext) return;
     updateField(id, { value });
   }
 
   function handleGuidanceChange(id: string, guidance: string) {
+    if (isClosedContext) return;
     updateField(id, { guidance });
   }
 
   function handleRegenerateSingleField(fieldId: string) {
+    if (isClosedContext) return;
     updateField(fieldId, { status: 'generating' });
 
     setTimeout(() => {
@@ -339,6 +468,7 @@ export function FacilitatorMeetingPage() {
   // ── Tag + relation mutations ──────────────────────────────────────
 
   function handleAddTag() {
+    if (isClosedContext) return;
     const name = tagInput.trim();
     if (!name) return;
     const lower = name.toLowerCase();
@@ -360,7 +490,16 @@ export function FacilitatorMeetingPage() {
   }
 
   function handleRemoveTag(tagId: string) {
+    if (isClosedContext) return;
     setActiveContext((prev) => ({ ...prev, tags: prev.tags.filter((tag) => tag.id !== tagId) }));
+  }
+
+  function handleRemoveRelation(relationId: string) {
+    if (isClosedContext) return;
+    setActiveContext((prev) => ({
+      ...prev,
+      relations: prev.relations.filter((relation) => relation.id !== relationId),
+    }));
   }
 
   function refreshSuggestedTagsFromDraft(params: {
@@ -402,6 +541,7 @@ export function FacilitatorMeetingPage() {
   }
 
   function handleApproveSuggestedTag(suggestedTagId: string) {
+    if (isClosedContext) return;
     const match = suggestedTags.find((tag) => tag.id === suggestedTagId);
     if (!match) return;
 
@@ -419,10 +559,12 @@ export function FacilitatorMeetingPage() {
   }
 
   function handleDismissSuggestedTag(suggestedTagId: string) {
+    if (isClosedContext) return;
     setSuggestedTags((prev) => prev.filter((tag) => tag.id !== suggestedTagId));
   }
 
   function handleStartTitleEdit() {
+    if (isClosedContext) return;
     setTitleDraft(activeContext.title);
     setEditingTitle(true);
   }
@@ -433,6 +575,7 @@ export function FacilitatorMeetingPage() {
   }
 
   function handleSaveTitleEdit() {
+    if (isClosedContext) return;
     const next = titleDraft.trim();
     if (!next) return;
     setActiveContext((prev) => ({ ...prev, title: next }));
@@ -441,6 +584,7 @@ export function FacilitatorMeetingPage() {
   }
 
   function handleStartSummaryEdit() {
+    if (isClosedContext) return;
     setSummaryDraft(activeContext.summary);
     setEditingSummary(true);
   }
@@ -451,6 +595,7 @@ export function FacilitatorMeetingPage() {
   }
 
   function handleSaveSummaryEdit() {
+    if (isClosedContext) return;
     const next = summaryDraft.trim();
     if (!next) return;
     setActiveContext((prev) => ({ ...prev, summary: next }));
@@ -497,6 +642,7 @@ export function FacilitatorMeetingPage() {
   }
 
   function handleAddRelationFromContext(context: OpenContextSummary) {
+    if (isClosedContext) return;
     ensureMeetingRelation(context);
 
     const relation: Relation = {
@@ -533,6 +679,7 @@ export function FacilitatorMeetingPage() {
   // ── Context / agenda actions ─────────────────────────────────────
 
   function handleDeferActiveContext() {
+    if (isClosedContext) return;
     const target = agendaItems.find((item) => item.id === activeContext.id);
     if (!target) return;
 
@@ -575,6 +722,117 @@ export function FacilitatorMeetingPage() {
     setModal(null);
   }
 
+  function handleReturnDeferredContext(contextId: string) {
+    const target = deferredItems.find((item) => item.id === contextId);
+    if (!target) return;
+
+    setDeferredItems((prev) => prev.filter((item) => item.id !== contextId));
+
+    const hasActiveAgendaItem = agendaItems.some((item) => item.status === 'active');
+    const nextStatus: AgendaItemStatus = hasActiveAgendaItem ? 'pending' : 'active';
+
+    setAgendaItems((prev) => {
+      if (prev.some((item) => item.id === contextId)) return prev;
+      return [...prev, { ...target, status: nextStatus }];
+    });
+
+    if (!hasActiveAgendaItem) {
+      setActiveContext((prev) => ({
+        ...prev,
+        id: target.id,
+        title: target.title,
+        summary: `Continued discussion context for ${target.title}.`,
+        status: 'active',
+      }));
+      setFinalised(false);
+    }
+
+    setLeftTab('agenda');
+  }
+
+  function handleSelectAgendaItem(itemId: string) {
+    const target = agendaItems.find((item) => item.id === itemId);
+    if (!target) return;
+
+    if (target.status !== 'logged') {
+      setAgendaItems((prev) =>
+        prev.map((item) => {
+          if (item.id === target.id) return { ...item, status: 'active' as const };
+          if (item.status === 'active') return { ...item, status: 'drafted' as const };
+          return item;
+        }),
+      );
+    }
+
+    setActiveContext((prev) => ({
+      ...prev,
+      id: target.id,
+      title: target.title,
+      summary:
+        target.status === 'logged'
+          ? `Reviewing logged decision context for ${target.title}.`
+          : `Active discussion context for ${target.title}.`,
+      status: target.status === 'logged' ? 'logged' : 'active',
+    }));
+
+    setFinalised(target.status === 'logged');
+    setLeftTab('agenda');
+  }
+
+  function handleSelectDeferredItem(itemId: string) {
+    const target = deferredItems.find((item) => item.id === itemId);
+    if (!target) return;
+
+    setActiveContext((prev) => ({
+      ...prev,
+      id: target.id,
+      title: target.title,
+      summary: `Deferred context review for ${target.title}.`,
+      status: 'deferred',
+    }));
+    setFinalised(false);
+    setLeftTab('agenda');
+  }
+
+  function handleMoveAgendaItem(itemId: string, direction: 'up' | 'down') {
+    setAgendaItems((prev) => {
+      const movable = prev
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => item.status !== 'logged');
+
+      const current = movable.findIndex(({ item }) => item.id === itemId);
+      if (current === -1) return prev;
+
+      const target = direction === 'up' ? current - 1 : current + 1;
+      if (target < 0 || target >= movable.length) return prev;
+
+      const sourceIndex = movable[current]?.index;
+      const targetIndex = movable[target]?.index;
+      if (sourceIndex === undefined || targetIndex === undefined) return prev;
+
+      const next = [...prev];
+      [next[sourceIndex], next[targetIndex]] = [next[targetIndex]!, next[sourceIndex]!];
+      return next;
+    });
+  }
+
+  function openCreateContextDialog() {
+    if (isClosedContext) {
+      setCreateContextDraft({
+        title: `Follow-up: ${activeContext.title}`,
+        summary: `Follow-up context linked to closed decision \"${activeContext.title}\".`,
+        relation: {
+          targetId: activeContext.id,
+          targetTitle: activeContext.title,
+          relationType: 'related',
+        },
+      });
+    } else {
+      setCreateContextDraft(null);
+    }
+    setModal({ type: 'create-context' });
+  }
+
   // ── Stream actions ────────────────────────────────────────────────
 
   function handleToggleStream() {
@@ -590,6 +848,7 @@ export function FacilitatorMeetingPage() {
   // ── Regenerate ───────────────────────────────────────────────────
 
   function handleRegenerate(focus: string) {
+    if (isClosedContext) return;
     setModal(null);
     setNewRowsSinceGeneration(0);
 
@@ -618,14 +877,47 @@ export function FacilitatorMeetingPage() {
   // ── Finalise ─────────────────────────────────────────────────────
 
   function handleFinalise(_method: DecisionMethod, _actors: string[], _loggedBy: string) {
+    if (isClosedContext) return;
     setModal(null);
+    const currentContextId = activeContext.id;
+    const nextAgendaItem = agendaItems.find(
+      (item) => item.id !== currentContextId && item.status !== 'logged' && item.status !== 'deferred',
+    );
+
+    setAgendaItems((prev) =>
+      prev.map((item) => {
+        if (item.id === currentContextId) return { ...item, status: 'logged' as const };
+        if (nextAgendaItem && item.id === nextAgendaItem.id) return { ...item, status: 'active' as const };
+        if (item.id !== currentContextId && item.status === 'active') return { ...item, status: 'drafted' as const };
+        return item;
+      }),
+    );
+
+    if (nextAgendaItem) {
+      setActiveContext((prev) => ({
+        ...prev,
+        id: nextAgendaItem.id,
+        title: nextAgendaItem.title,
+        summary: `Continued discussion context for ${nextAgendaItem.title}.`,
+        status: 'active',
+      }));
+      setFinalised(false);
+      setLeftTab('agenda');
+      return;
+    }
+
     setFinalised(true);
-    setTimeout(() => navigate('/decisions/dec-1'), 800);
+    setLeftTab('agenda');
   }
 
   // ── Create context ───────────────────────────────────────────────
 
-  function handleCreateContext(title: string, summary: string, template: Template) {
+  function handleCreateContext(
+    title: string,
+    summary: string,
+    template: Template,
+    relationTypeOverride?: RelationType,
+  ) {
     const contextId = `ctx-${Date.now()}`;
     const newItem: AgendaItemModel = { id: contextId, title, status: 'active' };
 
@@ -647,7 +939,14 @@ export function FacilitatorMeetingPage() {
       status: 'active',
       fields: newFields,
       tags: [],
-      relations: [],
+      relations: createContextDraft?.relation
+        ? [{
+            id: `rel-${Date.now()}`,
+            targetId: createContextDraft.relation.targetId,
+            targetTitle: createContextDraft.relation.targetTitle,
+            relationType: relationTypeOverride ?? createContextDraft.relation.relationType,
+          }]
+        : [],
     });
     refreshSuggestedTagsFromDraft({
       title,
@@ -657,7 +956,21 @@ export function FacilitatorMeetingPage() {
     });
 
     setModal(null);
+    setCreateContextDraft(null);
     setLeftTab('agenda');
+  }
+
+  function handleChangeTemplate(template: Template, nextFields: Field[]) {
+    if (isClosedContext) return;
+
+    setFields(nextFields);
+    setActiveContext((prev) => ({
+      ...prev,
+      templateName: template.name,
+      fields: nextFields,
+    }));
+    setZoomedFieldId(null);
+    setModal(null);
   }
 
   // ── Upload transcript ────────────────────────────────────────────
@@ -689,6 +1002,8 @@ export function FacilitatorMeetingPage() {
     );
   }
 
+  const movableAgendaIds = agendaItems.filter((item) => item.status !== 'logged').map((item) => item.id);
+
   return (
     <div className="density-facilitator min-h-screen bg-base flex flex-col relative">
       {selectionToast && (
@@ -715,6 +1030,21 @@ export function FacilitatorMeetingPage() {
       {modal?.type === 'create-context' && (
         <CreateContextDialog
           onConfirm={handleCreateContext}
+          onCancel={() => {
+            setModal(null);
+            setCreateContextDraft(null);
+          }}
+          initialTitle={createContextDraft?.title}
+          initialSummary={createContextDraft?.summary}
+          relationTargetTitle={createContextDraft?.relation?.targetTitle}
+          initialRelationType={createContextDraft?.relation?.relationType}
+        />
+      )}
+      {modal?.type === 'change-template' && (
+        <ChangeTemplateDialog
+          currentTemplateName={activeContext.templateName}
+          currentFields={fields}
+          onConfirm={handleChangeTemplate}
           onCancel={() => setModal(null)}
         />
       )}
@@ -773,7 +1103,7 @@ export function FacilitatorMeetingPage() {
       )}
 
       {/* ── Header strip ────────────────────────────────────────── */}
-      <header className="border-b border-border px-4 py-3 flex items-center gap-2 shrink-0">
+      <header className="border-b border-border px-4 py-3 flex flex-wrap items-center gap-1.5 shrink-0">
         <span className="text-fac-field text-text-primary font-medium flex-1 truncate">
           Q4 Architecture Review — Facilitator
           {finalised && <span className="ml-2 text-settled text-fac-meta">✓ Logged</span>}
@@ -784,59 +1114,71 @@ export function FacilitatorMeetingPage() {
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
+          title="Open shared view"
         >
           <ExternalLink size={13} />
-          Shared view
+          <span className="hidden xl:inline">Shared view</span>
         </Link>
         <Link
           to="/meetings/mtg-1/facilitator/home"
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
+          title="Open meeting home"
         >
-          <ExternalLink size={13} />
-          Meeting home
+          <Home size={13} />
+          <span className="hidden xl:inline">Meeting home</span>
         </Link>
 
         <button
           onClick={handleToggleStream}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
+          title={streamState === 'live' ? 'Stop stream' : 'Start stream'}
+          aria-label={streamState === 'live' ? 'Stop stream' : 'Start stream'}
         >
           <Radio size={13} />
-          {streamState === 'live' ? 'Stop stream' : 'Start stream'}
+          <span className="hidden xl:inline">{streamState === 'live' ? 'Stop stream' : 'Start stream'}</span>
           <span className={`w-1.5 h-1.5 rounded-full ${streamBadgeClass}`} />
         </button>
 
         <button
           onClick={() => setModal({ type: 'upload' })}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
+          title="Upload transcript"
+          aria-label="Upload transcript"
         >
           <Upload size={13} />
-          Upload transcript
+          <span className="hidden xl:inline">Upload transcript</span>
           {transcriptUploaded && <span className="w-1.5 h-1.5 rounded-full bg-settled" />}
         </button>
 
         <button
           onClick={() => setModal({ type: 'flag-later' })}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
+          title="Flag for later"
+          aria-label="Flag for later"
         >
           <Flag size={13} />
-          Flag for later
+          <span className="hidden xl:inline">Flag for later</span>
         </button>
 
         <button
-          onClick={() => setModal({ type: 'create-context' })}
+          onClick={openCreateContextDialog}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
+          title="New decision"
+          aria-label="New decision"
         >
           <FilePlus2 size={13} />
-          New decision
+          <span className="hidden xl:inline">New decision</span>
         </button>
 
         <button
           onClick={() => setModal({ type: 'regenerate' })}
-          disabled={unlockedCount === 0}
+          disabled={unlockedCount === 0 || isClosedContext}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors disabled:opacity-30"
+          title="Regenerate"
+          aria-label="Regenerate"
         >
           <RefreshCw size={13} />
-          Regenerate
+          <span className="hidden xl:inline">Regenerate</span>
           {newRowsSinceGeneration > 0 && (
             <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-badge bg-caution-dim text-caution border border-caution/30">
               {newRowsSinceGeneration} new
@@ -846,18 +1188,24 @@ export function FacilitatorMeetingPage() {
 
         <button
           onClick={handleDeferActiveContext}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-caution hover:text-caution border border-caution/30 rounded transition-colors"
+          disabled={isClosedContext}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-caution hover:text-caution border border-caution/30 rounded transition-colors disabled:opacity-30"
+          title="Defer"
+          aria-label="Defer"
         >
           <PauseCircle size={13} />
-          Defer
+          <span className="hidden xl:inline">Defer</span>
         </button>
 
         <button
           onClick={() => setModal({ type: 'finalise' })}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-fac-meta bg-settled text-base rounded font-medium hover:bg-settled/90 transition-colors"
+          disabled={isClosedContext}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-fac-meta bg-settled text-base rounded font-medium hover:bg-settled/90 transition-colors disabled:opacity-30"
+          title="Finalise"
+          aria-label="Finalise"
         >
           <CheckSquare size={13} />
-          Finalise
+          <span className="hidden xl:inline">Finalise</span>
         </button>
       </header>
 
@@ -874,7 +1222,11 @@ export function FacilitatorMeetingPage() {
       <div className="flex flex-1 min-h-0">
 
         {/* ── Left panel ──────────────────────────────────────────── */}
-        <aside className="w-72 shrink-0 border-r border-border flex flex-col bg-surface">
+        {!leftPanelCollapsed ? (
+          <aside
+            className="shrink-0 border-r border-border flex flex-col bg-surface"
+            style={{ width: `${leftPanelWidth}px` }}
+          >
           <div className="flex border-b border-border">
             <TabButton active={leftTab === 'candidates'} onClick={() => setLeftTab('candidates')}>
               Suggested
@@ -887,6 +1239,14 @@ export function FacilitatorMeetingPage() {
             <TabButton active={leftTab === 'agenda'} onClick={() => setLeftTab('agenda')}>
               Agenda
             </TabButton>
+            <button
+              onClick={() => setLeftPanelCollapsed(true)}
+              className="shrink-0 px-2 text-text-muted hover:text-text-primary border-l border-border"
+              aria-label="Collapse agenda sidebar"
+              title="Collapse agenda sidebar"
+            >
+              <ChevronLeft size={14} />
+            </button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-2">
@@ -911,27 +1271,60 @@ export function FacilitatorMeetingPage() {
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                {agendaItems.map((item, i) => (
-                  <AgendaItem
-                    key={item.id}
-                    title={item.title}
-                    status={item.status}
-                    position={i + 1}
-                    isActive={item.id === activeContext.id}
-                  />
-                ))}
+                <p className="text-fac-meta text-text-muted px-2">
+                  Click an agenda item to review or jump ahead. Reorder non-finalised items with arrows.
+                </p>
+                <AgendaList
+                  items={agendaItems}
+                  activeId={activeContext.id}
+                  onSelectItem={handleSelectAgendaItem}
+                  renderItemActions={(item) => {
+                    if (item.status === 'logged') return null;
+
+                    const index = movableAgendaIds.indexOf(item.id);
+                    const canMoveUp = index > 0;
+                    const canMoveDown = index >= 0 && index < movableAgendaIds.length - 1;
+
+                    return (
+                      <>
+                        <IconButton
+                          onClick={() => handleMoveAgendaItem(item.id, 'up')}
+                          disabled={!canMoveUp}
+                          className="w-7 h-7"
+                          aria-label={`Move ${item.title} up`}
+                        >
+                          <ArrowUp size={12} />
+                        </IconButton>
+                        <IconButton
+                          onClick={() => handleMoveAgendaItem(item.id, 'down')}
+                          disabled={!canMoveDown}
+                          className="w-7 h-7"
+                          aria-label={`Move ${item.title} down`}
+                        >
+                          <ArrowDown size={12} />
+                        </IconButton>
+                      </>
+                    );
+                  }}
+                />
 
                 {deferredItems.length > 0 && (
                   <div className="mt-3 pt-2 border-t border-border">
                     <p className="text-fac-label text-text-muted uppercase tracking-wider px-2 pb-1">Deferred</p>
-                    {deferredItems.map((item, i) => (
-                      <AgendaItem
-                        key={item.id}
-                        title={item.title}
-                        status="deferred"
-                        position={i + 1}
-                      />
-                    ))}
+                    <AgendaList
+                      items={deferredItems.map((item) => ({ ...item, status: 'deferred' as const }))}
+                      activeId={activeContext.status === 'deferred' ? activeContext.id : undefined}
+                      onSelectItem={handleSelectDeferredItem}
+                      renderItemActions={(item) => (
+                        <IconButton
+                          onClick={() => handleReturnDeferredContext(item.id)}
+                          className="w-7 h-7"
+                          aria-label={`Return ${item.title} to agenda`}
+                        >
+                          <Undo2 size={12} />
+                        </IconButton>
+                      )}
+                    />
                   </div>
                 )}
               </div>
@@ -939,10 +1332,10 @@ export function FacilitatorMeetingPage() {
           </div>
 
           <div className="p-2 border-t border-border flex flex-col gap-1.5">
-            <button
-              onClick={() => setModal({ type: 'add-existing-context' })}
-              className="flex items-center gap-2 px-3 py-2 rounded text-fac-meta text-text-muted hover:text-text-primary hover:bg-overlay transition-colors w-full"
-            >
+                <button
+                  onClick={() => setModal({ type: 'add-existing-context' })}
+                  className="flex items-center gap-2 px-3 py-2 rounded text-fac-meta text-text-muted hover:text-text-primary hover:bg-overlay transition-colors w-full"
+                >
               <Link2 size={14} />
               Add existing context
             </button>
@@ -959,7 +1352,35 @@ export function FacilitatorMeetingPage() {
               )}
             </Link>
           </div>
-        </aside>
+          </aside>
+        ) : (
+          <div className="w-8 shrink-0 border-r border-border bg-surface flex items-start justify-center pt-2">
+            <button
+              onClick={() => setLeftPanelCollapsed(false)}
+              className="p-1 rounded text-text-muted hover:text-text-primary hover:bg-overlay"
+              aria-label="Expand agenda sidebar"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        )}
+
+        {!leftPanelCollapsed && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize agenda sidebar"
+            onMouseDown={(event) =>
+              setDragState({
+                side: 'left',
+                startX: event.clientX,
+                startWidth: leftPanelWidth,
+              })}
+            className={`w-1.5 shrink-0 cursor-col-resize bg-border/40 hover:bg-accent/40 transition-colors ${
+              dragState?.side === 'left' ? 'bg-accent/50' : ''
+            }`}
+          />
+        )}
 
         {/* ── Main workspace ──────────────────────────────────────── */}
         <main className="flex-1 min-w-0 overflow-y-auto px-6 py-5">
@@ -997,6 +1418,7 @@ export function FacilitatorMeetingPage() {
                     <h1 className="text-fac-title text-text-primary">{activeContext.title}</h1>
                     <button
                       onClick={handleStartTitleEdit}
+                      disabled={isClosedContext}
                       className="inline-flex items-center gap-1 text-fac-meta text-text-muted hover:text-text-primary"
                       aria-label="Edit title"
                     >
@@ -1034,6 +1456,7 @@ export function FacilitatorMeetingPage() {
                     <p className="text-fac-meta text-text-secondary">{activeContext.summary}</p>
                     <button
                       onClick={handleStartSummaryEdit}
+                      disabled={isClosedContext}
                       className="inline-flex items-center gap-1 text-fac-meta text-text-muted hover:text-text-primary"
                       aria-label="Edit summary"
                     >
@@ -1046,6 +1469,14 @@ export function FacilitatorMeetingPage() {
               <span className="shrink-0 text-fac-meta text-text-muted border border-border px-2 py-0.5 rounded-badge">
                 {activeContext.templateName}
               </span>
+              {!isClosedContext && (
+                <button
+                  onClick={() => setModal({ type: 'change-template' })}
+                  className="shrink-0 text-fac-meta text-accent hover:text-accent/80"
+                >
+                  Change template
+                </button>
+              )}
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2 items-center">
@@ -1054,6 +1485,7 @@ export function FacilitatorMeetingPage() {
                   <TagPill name={tag.name} category={tag.category} />
                   <button
                     onClick={() => handleRemoveTag(tag.id)}
+                    disabled={isClosedContext}
                     className="text-[11px] text-text-muted hover:text-danger"
                     aria-label={`Remove ${tag.name}`}
                   >
@@ -1107,11 +1539,13 @@ export function FacilitatorMeetingPage() {
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 placeholder="Add tag"
+                disabled={isClosedContext}
                 className="w-44 px-2 py-1.5 rounded border border-border bg-overlay text-fac-meta text-text-primary focus:outline-none focus:border-accent"
               />
               <select
                 value={tagCategory}
                 onChange={(e) => setTagCategory(e.target.value as TagCategory)}
+                disabled={isClosedContext}
                 className="px-2 py-1.5 rounded border border-border bg-overlay text-fac-meta text-text-primary focus:outline-none focus:border-accent"
               >
                 {TAG_CATEGORIES.map((category) => (
@@ -1120,26 +1554,28 @@ export function FacilitatorMeetingPage() {
               </select>
               <button
                 onClick={handleAddTag}
-                disabled={!tagInput.trim()}
+                disabled={!tagInput.trim() || isClosedContext}
                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-accent/30 text-accent text-fac-meta hover:bg-accent-dim transition-colors disabled:opacity-40"
               >
                 <Plus size={12} />
                 Add tag
               </button>
-              <button
-                onClick={() =>
-                  refreshSuggestedTagsFromDraft({
-                    title: activeContext.title,
-                    summary: activeContext.summary,
-                    focus: 'manual request',
-                  })
-                }
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-border text-text-secondary text-fac-meta hover:text-text-primary hover:bg-overlay transition-colors"
-              >
-                <Lightbulb size={12} />
-                Suggest tags
-              </button>
             </div>
+
+            {isClosedContext && (
+              <div className="mt-3 rounded-card border border-settled/35 bg-settled-dim/20 p-3 flex items-center justify-between gap-3">
+                <p className="text-fac-meta text-text-primary">
+                  This decision context is closed and read-only. Open a fresh context to continue the meeting.
+                </p>
+                <button
+                  onClick={openCreateContextDialog}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-accent text-white text-fac-meta hover:bg-accent/90"
+                >
+                  <FilePlus2 size={13} />
+                  Open fresh context
+                </button>
+              </div>
+            )}
 
             <div className="mt-3">
               {relatedMeetings.length > 0 && (
@@ -1158,6 +1594,7 @@ export function FacilitatorMeetingPage() {
                 <select
                   value={relationType}
                   onChange={(e) => setRelationType(e.target.value as RelationType)}
+                  disabled={isClosedContext}
                   className="px-2 py-1.5 rounded border border-border bg-overlay text-fac-meta text-text-primary focus:outline-none focus:border-accent"
                 >
                   {RELATION_TYPES.map((type) => (
@@ -1166,7 +1603,8 @@ export function FacilitatorMeetingPage() {
                 </select>
                 <button
                   onClick={() => setModal({ type: 'add-relation-context' })}
-                  className="inline-flex items-center gap-1 text-fac-meta text-accent hover:text-accent/80"
+                  disabled={isClosedContext}
+                  className="inline-flex items-center gap-1 text-fac-meta text-accent hover:text-accent/80 disabled:opacity-40"
                 >
                   <Link2 size={13} />
                   Add relation
@@ -1174,13 +1612,11 @@ export function FacilitatorMeetingPage() {
               </div>
 
               {activeContext.relations.length > 0 && (
-                <div className="mt-2 flex flex-col gap-1">
-                  {activeContext.relations.map((rel) => (
-                    <p key={rel.id} className="text-fac-meta text-text-muted">
-                      {rel.relationType} · {rel.targetTitle}
-                    </p>
-                  ))}
-                </div>
+                <RelationsAccordion
+                  relations={activeContext.relations}
+                  className="mt-2"
+                  onRemoveRelation={isClosedContext ? undefined : handleRemoveRelation}
+                />
               )}
             </div>
           </div>
@@ -1199,9 +1635,9 @@ export function FacilitatorMeetingPage() {
               <FacilitatorFieldCard
                 key={field.id}
                 field={field}
-                onLock={handleLock}
-                onUnlock={handleUnlock}
-                onZoom={setZoomedFieldId}
+                onLock={isClosedContext ? undefined : handleLock}
+                onUnlock={isClosedContext ? undefined : handleUnlock}
+                onZoom={isClosedContext ? undefined : setZoomedFieldId}
                 supplementaryCount={
                   supplementary.filter((s) => s.scope === 'field' && s.fieldId === field.id).length
                 }
@@ -1210,14 +1646,45 @@ export function FacilitatorMeetingPage() {
           </div>
         </main>
 
-        <aside className="w-80 shrink-0 border-l border-border bg-surface flex flex-col">
-          <button
-            onClick={() => setShowLLMLog((v) => !v)}
-            className="flex items-center gap-2 px-4 py-3 border-b border-border text-fac-meta text-text-secondary hover:text-text-primary"
+        {!rightPanelCollapsed && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize LLM log sidebar"
+            onMouseDown={(event) =>
+              setDragState({
+                side: 'right',
+                startX: event.clientX,
+                startWidth: rightPanelWidth,
+              })}
+            className={`w-1.5 shrink-0 cursor-col-resize bg-border/40 hover:bg-accent/40 transition-colors ${
+              dragState?.side === 'right' ? 'bg-accent/50' : ''
+            }`}
+          />
+        )}
+
+        {!rightPanelCollapsed ? (
+          <aside
+            className="shrink-0 border-l border-border bg-surface flex flex-col"
+            style={{ width: `${rightPanelWidth}px` }}
           >
-            {showLLMLog ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            LLM interaction log
-          </button>
+          <div className="flex items-center border-b border-border">
+            <button
+              onClick={() => setShowLLMLog((v) => !v)}
+              className="flex-1 flex items-center gap-2 px-4 py-3 text-fac-meta text-text-secondary hover:text-text-primary"
+            >
+              {showLLMLog ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              LLM interaction log
+            </button>
+            <button
+              onClick={() => setRightPanelCollapsed(true)}
+              className="shrink-0 px-2 text-text-muted hover:text-text-primary border-l border-border"
+              aria-label="Collapse LLM log sidebar"
+              title="Collapse LLM log sidebar"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
 
           {showLLMLog && (
             <div className="p-3 flex flex-col gap-2 overflow-y-auto">
@@ -1233,31 +1700,19 @@ export function FacilitatorMeetingPage() {
               ))}
             </div>
           )}
-        </aside>
+          </aside>
+        ) : (
+          <div className="w-8 shrink-0 border-l border-border bg-surface flex items-start justify-center pt-2">
+            <button
+              onClick={() => setRightPanelCollapsed(false)}
+              className="p-1 rounded text-text-muted hover:text-text-primary hover:bg-overlay"
+              aria-label="Expand LLM log sidebar"
+            >
+              <ChevronLeft size={14} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-1 px-3 py-2.5 text-fac-meta font-medium border-b-2 transition-colors ${
-        active
-          ? 'border-accent text-accent'
-          : 'border-transparent text-text-muted hover:text-text-secondary'
-      }`}
-    >
-      {children}
-    </button>
   );
 }

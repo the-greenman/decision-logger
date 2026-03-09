@@ -3,12 +3,19 @@ import { useParams } from 'react-router-dom';
 import { X, ZoomIn } from 'lucide-react';
 import { ACTIVE_CONTEXT, AGENDA_ITEMS } from '@/lib/mock-data';
 import { FieldCard } from '@/components/shared/FieldCard';
-import { AgendaItem } from '@/components/shared/AgendaItem';
+import { AgendaList } from '@/components/shared/AgendaList';
 import { TagPill } from '@/components/shared/TagPill';
+import type { Field } from '@/lib/mock-data';
 
 type FocusPayload = {
   meetingId?: string;
   fieldId?: string | null;
+  updatedAt?: string;
+};
+
+type FieldSyncPayload = {
+  meetingId?: string;
+  fields?: Field[];
   updatedAt?: string;
 };
 
@@ -17,11 +24,13 @@ export function SharedMeetingPage() {
   const meetingId = id ?? 'mtg-1';
   const ctx = ACTIVE_CONTEXT;
   const focusStorageKey = `dl:meeting-focus:${meetingId}`;
+  const fieldStorageKey = `dl:meeting-fields:${meetingId}`;
 
   const [focusedFieldId, setFocusedFieldId] = useState<string | null>(null);
   const [focusUpdatedAt, setFocusUpdatedAt] = useState<string | null>(null);
   const [zoomedFieldId, setZoomedFieldId] = useState<string | null>(null);
   const [dismissedFocusKey, setDismissedFocusKey] = useState<string | null>(null);
+  const [displayFields, setDisplayFields] = useState<Field[]>(ACTIVE_CONTEXT.fields);
 
   useEffect(() => {
     const hydrateFromStorage = () => {
@@ -48,6 +57,30 @@ export function SharedMeetingPage() {
     return () => window.removeEventListener('storage', onStorage);
   }, [focusStorageKey]);
 
+  useEffect(() => {
+    const hydrateFieldSync = () => {
+      try {
+        const raw = localStorage.getItem(fieldStorageKey);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as FieldSyncPayload;
+        if (!parsed.fields || parsed.fields.length === 0) return;
+        setDisplayFields(parsed.fields);
+      } catch {
+        setDisplayFields(ACTIVE_CONTEXT.fields);
+      }
+    };
+
+    hydrateFieldSync();
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== fieldStorageKey) return;
+      hydrateFieldSync();
+    };
+
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [fieldStorageKey]);
+
   const currentFocusKey = focusedFieldId && focusUpdatedAt ? `${focusedFieldId}:${focusUpdatedAt}` : null;
 
   // Auto-open overlay whenever facilitator focus changes.
@@ -61,19 +94,19 @@ export function SharedMeetingPage() {
     setZoomedFieldId(focusedFieldId);
   }, [currentFocusKey, dismissedFocusKey, focusedFieldId]);
 
-  const zoomedField = zoomedFieldId ? ctx.fields.find((field) => field.id === zoomedFieldId) ?? null : null;
+  const zoomedField = zoomedFieldId ? displayFields.find((field) => field.id === zoomedFieldId) ?? null : null;
 
   const orderedFields = useMemo(() => {
-    if (!focusedFieldId) return ctx.fields;
-    const focused = ctx.fields.find((field) => field.id === focusedFieldId);
-    if (!focused) return ctx.fields;
-    return [focused, ...ctx.fields.filter((field) => field.id !== focusedFieldId)];
-  }, [ctx.fields, focusedFieldId]);
+    if (!focusedFieldId) return displayFields;
+    const focused = displayFields.find((field) => field.id === focusedFieldId);
+    if (!focused) return displayFields;
+    return [focused, ...displayFields.filter((field) => field.id !== focusedFieldId)];
+  }, [displayFields, focusedFieldId]);
 
   return (
     <div className="density-display min-h-screen bg-base flex relative">
       {zoomedField && (
-        <div className="absolute inset-0 z-30 bg-black/75 backdrop-blur-sm flex items-center justify-center p-8">
+        <div className="fixed inset-0 z-30 bg-black/75 backdrop-blur-sm flex items-center justify-center p-8">
           <div className="w-full max-w-5xl rounded-card border border-border bg-surface p-8">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-display-title text-text-primary">{zoomedField.label}</h2>
@@ -103,15 +136,7 @@ export function SharedMeetingPage() {
           </h2>
         </div>
         <nav className="flex-1 px-2 py-2 overflow-y-auto">
-          {AGENDA_ITEMS.map((item, i) => (
-            <AgendaItem
-              key={item.id}
-              title={item.title}
-              status={item.status}
-              position={i + 1}
-              isActive={item.id === ctx.id}
-            />
-          ))}
+          <AgendaList items={AGENDA_ITEMS} activeId={ctx.id} />
         </nav>
         <div className="px-6 py-4 border-t border-border">
           <p className="text-fac-meta text-text-muted">Q4 Architecture Review</p>
