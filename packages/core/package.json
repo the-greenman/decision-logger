@@ -2,18 +2,21 @@
   "name": "@repo/core",
   "version": "0.0.0",
   "description": "Core business logic and services",
+  "type": "module",
   "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
       "default": "./dist/index.mjs"
     }
   },
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch",
+    "dev": "tsup --watch --no-dts",
     "test": "vitest run",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest run --coverage",

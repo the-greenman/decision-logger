@@ -299,24 +299,23 @@ describe('TranscriptService', () => {
       const transcript = await service.uploadTranscript({
         meetingId,
         source: 'upload',
-        format: 'json',
-        content: JSON.stringify({
-          segments: [
-            { text: 'Hello there', speaker: 'Alice', start: 0, end: 1.2 },
-            { text: 'General Kenobi', start: 1.2, end: 2.5 },
-          ],
-        }),
+        format: 'txt',
+        content: 'Hello there.\n\nGeneral Kenobi.',
+      });
+
+      const processedChunks = await service.processTranscript(transcript.id, {
+        strategy: 'fixed',
+        maxTokens: 50,
+        overlap: 0,
       });
 
       const rows = await service.getReadableTranscriptRows(meetingId);
 
       expect(rows).toHaveLength(2);
       expect(rows[0]?.id).toBe(`${transcript.id}:1`);
-      expect(rows[0]?.displayText).toBe('Hello there');
-      expect(rows[0]?.speaker).toBe('Alice');
-      expect(rows[0]?.startTime).toBe('00:00:00');
-      expect(rows[0]?.endTime).toBe('00:00:01');
-      expect(rows[1]?.displayText).toBe('General Kenobi');
+      expect(rows[0]?.displayText).toBe('Hello there.');
+      expect(rows[0]?.chunkIds).toEqual(processedChunks.map((chunk) => chunk.id));
+      expect(rows[1]?.displayText).toBe('General Kenobi.');
       expect(rows[1]?.rawTranscriptId).toBe(transcript.id);
     });
   });

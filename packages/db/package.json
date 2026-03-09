@@ -2,21 +2,27 @@
   "name": "@repo/db",
   "version": "0.0.0",
   "description": "Drizzle ORM and database layer",
+  "type": "module",
   "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs"
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "default": "./dist/index.mjs"
     },
     "./schema": {
       "types": "./dist/schema.d.mts",
-      "import": "./dist/schema.mjs"
+      "import": "./dist/schema.mjs",
+      "require": "./dist/schema.js",
+      "default": "./dist/schema.mjs"
     }
   },
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch",
+    "dev": "tsup --watch --no-dts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",

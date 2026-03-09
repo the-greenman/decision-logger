@@ -314,10 +314,19 @@ export class TranscriptService {
 
   async getReadableTranscriptRows(meetingId: string): Promise<ReadableTranscriptRow[]> {
     const transcripts = await this.rawTranscriptRepo.findByMeetingId(meetingId);
+    const chunks = await this.chunkRepo.findByMeetingId(meetingId);
+    const chunksByTranscriptId = new Map<string, TranscriptChunk[]>();
+    for (const chunk of chunks) {
+      const existingChunks = chunksByTranscriptId.get(chunk.rawTranscriptId) ?? [];
+      existingChunks.push(chunk);
+      chunksByTranscriptId.set(chunk.rawTranscriptId, existingChunks);
+    }
+
     const rowsByTranscript = await Promise.all(
       transcripts.map(async (rawTranscript) => {
         const result = await this.preprocessorRegistry.preprocess(rawTranscript);
-        return result.segments.map((segment) => this.toReadableTranscriptRow(rawTranscript, segment));
+        const transcriptChunks = chunksByTranscriptId.get(rawTranscript.id) ?? [];
+        return result.segments.map((segment) => this.toReadableTranscriptRow(rawTranscript, segment, transcriptChunks));
       })
     );
 
@@ -335,6 +344,7 @@ export class TranscriptService {
   private toReadableTranscriptRow(
     rawTranscript: RawTranscript,
     segment: CanonicalTranscriptSegment,
+    transcriptChunks: TranscriptChunk[],
   ): ReadableTranscriptRow {
     const row: ReadableTranscriptRow = {
       id: `${rawTranscript.id}:${segment.sequenceNumber}`,
@@ -344,6 +354,7 @@ export class TranscriptService {
       rawTranscriptFormat: rawTranscript.format,
       sequenceNumber: segment.sequenceNumber,
       displayText: segment.text,
+      chunkIds: this.resolveChunkIdsForSegment(segment, transcriptChunks),
     };
 
     if (segment.speaker !== undefined) {
@@ -365,6 +376,39 @@ export class TranscriptService {
     }
 
     return row;
+  }
+
+  private resolveChunkIdsForSegment(segment: CanonicalTranscriptSegment, chunks: TranscriptChunk[]): string[] {
+    if (chunks.length === 0) {
+      return [];
+    }
+
+    const normalizedSegmentText = this.normalizeTranscriptText(segment.text);
+    if (!normalizedSegmentText) {
+      return [];
+    }
+
+    const directMatches = chunks.filter((chunk) => {
+      const normalizedChunkText = this.normalizeTranscriptText(chunk.text);
+      return normalizedChunkText.includes(normalizedSegmentText);
+    });
+    if (directMatches.length > 0) {
+      return directMatches.map((chunk) => chunk.id);
+    }
+
+    const segmentTokens = normalizedSegmentText.split(' ').filter(Boolean);
+    if (segmentTokens.length === 0) {
+      return [];
+    }
+
+    const significantTokenSample = segmentTokens.slice(0, Math.min(8, segmentTokens.length)).join(' ');
+    return chunks
+      .filter((chunk) => this.normalizeTranscriptText(chunk.text).includes(significantTokenSample))
+      .map((chunk) => chunk.id);
+  }
+
+  private normalizeTranscriptText(text: string): string {
+    return text.replace(/\s+/g, ' ').trim().toLowerCase();
   }
 
   private formatTimestamp(timeMs: number | undefined): string | undefined {

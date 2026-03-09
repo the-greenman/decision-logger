@@ -164,6 +164,8 @@ describe('API E2E Tests', () => {
     expect(data.rows.length).toBeGreaterThan(0);
     expect(data.rows[0].meetingId).toBe(createdMeetingId);
     expect(data.rows[0].rawTranscriptId).toBeDefined();
+    expect(data.rows[0].chunkIds).toBeInstanceOf(Array);
+    expect(data.rows[0].chunkIds.length).toBeGreaterThan(0);
     expect(data.rows[0].displayText).toContain('Alice: We should approve the migration.');
   });
 
