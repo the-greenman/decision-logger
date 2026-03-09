@@ -3,13 +3,7 @@
   "compilerOptions": {
     "outDir": "./dist",
     "composite": true,
-    "noEmit": false,
-    "baseUrl": ".",
-    "paths": {
-      "@repo/schema": ["../../packages/schema/dist/index.d.ts"],
-      "@repo/db": ["../../packages/db/dist/index.d.ts"],
-      "@repo/core": ["../../packages/core/dist/index.d.ts"]
-    }
+    "noEmit": false
   },
   "references": [
     { "path": "../../packages/schema" },

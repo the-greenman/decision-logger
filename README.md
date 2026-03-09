@@ -102,6 +102,14 @@ pnpm up:stack
 pnpm build
 ```
 
+### Workspace validation notes
+
+- Run `pnpm build` before assuming downstream workspace packages can consume published declarations.
+- Run `pnpm type-check` after package metadata, tsconfig layering, or declaration output changes.
+- If package-local app type-check differs from root validation, verify whether the app is resolving workspace source paths or published declaration entrypoints.
+- Keep declaration ownership explicit: if `tsc` emits declarations for a package, `tsup` should bundle JavaScript only.
+- `pnpm dev` remains sensitive to workspace declaration surfaces under `tsx`; if dev fails while build and type-check pass, inspect package declaration barrel imports before reopening broader tsconfig changes.
+
 ### Running the system
 
 ```bash

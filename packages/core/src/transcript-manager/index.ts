@@ -1,1 +1,1 @@
-export type { ITranscriptManager } from './i-transcript-manager';
+export type { ITranscriptManager } from './i-transcript-manager.js';

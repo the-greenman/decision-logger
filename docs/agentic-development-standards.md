@@ -88,6 +88,17 @@ To prevent "Schema Drift", we will implement the following automated checks:
 - **Rule**: Repeated inline schema copies across multiple docs are not allowed unless they are generated from a shared source.
 - **Rule**: Proposal docs should explain what is changing; reference docs should explain why it matters; `packages/schema` should define what the structure actually is.
 
+### 4.5 Workspace Package Type And Declaration Guardrails
+- **Rule**: If a workspace package advertises a declaration entrypoint in `package.json` (for example `types: ./dist/index.d.ts`), that file MUST exist after `pnpm build`.
+- **Rule**: A package must have a single clear declaration owner. If declarations are emitted by `tsc`, runtime bundling via `tsup` MUST use `--no-dts` / `dts: false`.
+- **Rule**: If `tsup` cleans `dist`, JavaScript bundling must not remove declarations that downstream packages resolve. Build order and output ownership must be chosen so declarations persist after the full package build.
+- **Rule**: App `tsconfig.json` files used for normal build/dev MUST NOT force workspace packages to resolve to `dist/*.d.ts` files. Runtime and dev startup should resolve workspace packages through their normal package export maps and JavaScript entrypoints.
+- **Rule**: Package-local app type-check may need a dedicated no-emit config that resolves workspace dependencies through published declaration entrypoints instead of workspace source paths.
+- **Rule**: If an app needs declaration-based validation, keep that in a separate `tsconfig.typecheck.json` (or equivalent) rather than reusing the build/dev config.
+- **Rule**: Do not assume root workspace `pnpm type-check` and package-local `tsc --noEmit` exercise identical resolution paths. Validate both when changing package metadata, tsconfig layering, or declaration output layout.
+- **Rule**: If a dedicated package-local type-check uses NodeNext resolution, local relative ESM imports must use explicit `.js` extensions.
+- **Rule**: Watch-mode runtime (`pnpm dev`) should not depend on `.d.ts` files being interpreted as runtime modules. Declaration surfaces must remain type-only and avoid introducing runtime-only resolution requirements during `tsx` startup.
+
 ## 5. Agentic Workflows
 
 When implementing a new feature, agents MUST follow this sequence:

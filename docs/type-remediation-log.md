@@ -395,3 +395,36 @@ packages/core/tsconfig.declarations.json
 - Validation result:
   - `pnpm --filter @repo/api exec tsc --project tsconfig.typecheck.json --noEmit --pretty false` passes
   - `pnpm type-check` passes workspace-wide
+
+## 2026-03-09 - Remaining `pnpm dev` failure is a declaration-runtime resolution edge case in `@repo/core`
+
+### Symptom
+- `pnpm build` passes.
+- `pnpm type-check` passes.
+- `pnpm dev` still fails during `@repo/api` startup under `tsx watch`.
+- The current failure is `ERR_MODULE_NOT_FOUND` originating from `/packages/core/dist/index.d.ts` while `tsx` resolves declaration re-exports like `./llm` or `./llm/index.js` as runtime module targets.
+
+### Trigger observed
+- `@repo/api` dev startup consumes workspace packages through local package resolution while `tsx` is active.
+- `@repo/core` declaration barrels are still close enough to executable module resolution semantics that `tsx` attempts to follow them during startup.
+- This failure persists even after `@repo/db` declaration barrel imports were updated to use explicit `.js` extensions.
+
+### Current interpretation
+1. The type-system remediation is effectively complete for build and type-check acceptance.
+2. The remaining issue is dev-runtime specific and centers on how `tsx` treats workspace `.d.ts` graphs during module resolution.
+3. The active unresolved package surface is now `@repo/core`, not `@repo/db`.
+
+### Current state
+- `pnpm build` is green.
+- `pnpm type-check` is green.
+- `pnpm dev` is still not clean because of declaration/runtime resolution against `@repo/core/dist/index.d.ts`.
+
+### Next debugging direction
+- Keep scope local to `@repo/core` declaration publication and barrel layout.
+- Prefer fixes that keep declaration entrypoints valid for type-check without requiring `tsx` to resolve `.d.ts`-only import graphs as runtime modules.
+- Avoid reopening the broader project-reference and root-tsconfig refactor unless the remaining dev trace proves that architecture incorrect.
+
+### Follow-up structural fix attempted
+- `apps/api/tsconfig.json` no longer overrides `@repo/schema`, `@repo/db`, and `@repo/core` to point at `dist/*.d.ts` files during normal build/dev resolution.
+- The dedicated `apps/api/tsconfig.typecheck.json` remains the declaration-based validation path for package-local API type-check.
+- Working theory: dev/runtime should resolve workspace packages through package export maps and JavaScript entrypoints, while package-local type-check can continue resolving published declaration entrypoints explicitly.
