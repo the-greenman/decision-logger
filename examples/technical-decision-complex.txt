@@ -1,0 +1,162 @@
+Early 2026
+Architecture Review Session - Anonymized Transcript
+
+00:00:00
+
+Facilitator: Before we get into implementation, I want us to be disciplined about what actually counts as a decision.
+
+Engineer: Agreed. The technical problem is straightforward to describe: we need a secure way to receive files from external parties, move them internally, and maintain an audit trail that satisfies regional handling requirements and basic security expectations.
+
+Facilitator: So the discussion is not only “what architecture do we build,” but “which branching points are material enough to log.”
+
+Engineer: Right. My initial architecture proposal has three parts. First, an external upload path. Second, a storage location with retention controls. Third, an internal transfer mechanism for staff use.
+
+00:01:42
+
+Engineer: On the intake side, one option is a simple web-based upload interface. A user uploads a file, we store it temporarily, and authorized staff can then grant controlled access or forward it onward. Links can expire. Files can be short-lived. The system can prioritize limited retention over indefinite storage.
+
+Facilitator: So one decision dimension is not only security, but lifecycle. How long does the data exist, and under what assumptions?
+
+Engineer: Exactly. For internal handling, there are at least two paths. One is direct point-to-point transfer over a secure private network. The other is to expose an internal file transfer service behind that same private network, which gives us a more traditional transactional model.
+
+00:03:08
+
+Engineer: The point-to-point path is appealing because files do not linger in extra internal systems. The layered service path is appealing because it creates clearer operational logs and more familiar workflows.
+
+Facilitator: So we are weighing simplicity and reduced surface area against operational visibility and flexibility.
+
+Engineer: Yes. And before we decide, we need to be more precise about the class of data we are trying to protect. Not every document needs the same handling path.
+
+Facilitator: That feels important. Otherwise we risk over-designing a system for cases that barely occur.
+
+00:05:11
+
+Engineer: My assumption is that the sensitive cases are not ordinary working documents. They are more likely to be exports, datasets, database snapshots, credential-bearing materials, or unreviewed binary bundles that may contain confidential information.
+
+Facilitator: So the secure intake channel should be tied to classification, not used as a universal dropbox for everything.
+
+Engineer: Exactly. That gives us a decision rule: above a certain classification threshold, the data must enter through the secure handling path.
+
+Facilitator: Good. That is a decision we can explain in plain language.
+
+00:07:02
+
+Facilitator: I want to separate architecture description from actual decision points. Listing all the components is useful, but the decisions are really about forks in the road. What choice meaningfully constrains future options?
+
+Engineer: Then one major decision is the primary storage model.
+
+Facilitator: Yes. For example: do we use managed object storage as the canonical resting place, or do we self-host file storage directly?
+
+Engineer: That is the core fork. Then there is a second decision about how humans interact with it. But that is downstream from the storage decision.
+
+00:08:34
+
+Engineer: If we take managed object storage, the benefits are durability, mature access controls, region selection, and less infrastructure we have to operate ourselves. The risks are dependency on a third-party platform and the need to verify storage-region and backup assumptions carefully.
+
+Facilitator: And if we self-host?
+
+Engineer: More direct control, possibly simpler narrative around location, but significantly more operational responsibility. Patching, resilience, recovery, service exposure, and transfer tooling all become our problem.
+
+Facilitator: So this is not “managed vs self-hosted” in the abstract. It is “where do we want complexity to live?”
+
+00:10:16
+
+Engineer: Yes. Another factor is file size. If some transfers are large, managed object storage gives us better resumability and less custom engineering.
+
+Facilitator: Which means the practical baseline may be managed object storage, unless a compliance or trust requirement rules it out.
+
+Engineer: That is where I am leaning.
+
+00:11:34
+
+Facilitator: What conditions would need to be true before we can log that decision responsibly?
+
+Engineer: At minimum:
+1. The primary region must be selectable and documented.
+2. Encryption in transit must be enforced.
+3. Encryption at rest must be enabled.
+4. Access must be isolated in a dedicated project account or equivalent boundary.
+5. We must understand the provider’s resilience and backup behavior well enough to know whether it conflicts with the data-handling expectations.
+
+Facilitator: That sounds like a provisional decision with explicit assumptions.
+
+Engineer: Yes. “Use managed object storage as primary storage, subject to confirmation of region, transport security, at-rest encryption, account isolation, and acceptable resilience behavior.”
+
+00:13:02
+
+Facilitator: Good. I also want to be careful about who is making which decisions. In some cases, stakeholders are not choosing the implementation path directly. They are ratifying that our reasoning meets the required principles.
+
+Engineer: That distinction matters. We are not asking a non-technical sponsor to choose between storage backends. We are saying: based on your priorities, we chose an option and here is the reasoning.
+
+Facilitator: Exactly. We need a clear line between stakeholder principle-setting and team-level implementation choice.
+
+Engineer: So they ratify the assumptions and priorities, not every technical mechanism.
+
+00:14:46
+
+Facilitator: Then another question is how they upload. But that should not be confused with the storage decision.
+
+Engineer: Right. Upload experience is an implementation choice layered on top. It could be a simple web interface, a managed transfer client, or a more specialized workflow depending on user capability.
+
+Facilitator: Which suggests that the storage decision is reversible at a different cost than the access-pattern decision.
+
+Engineer: Yes. Access workflows can evolve more easily if the storage foundation remains sound.
+
+00:16:03
+
+Facilitator: One of my concerns is communicating this in a way non-technical stakeholders can actually respond to. They do not need to understand storage internals. They need to understand the trade-off.
+
+Engineer: Such as: are we optimizing for the simplest path with a trusted managed service, or are we willing to accept more operational complexity to minimize third-party dependence?
+
+Facilitator: Exactly. That is a decision a non-specialist can meaningfully react to.
+
+Engineer: We can also present the cost of each posture in human terms: more complexity, more training, more room for mistakes, more maintenance burden.
+
+00:17:41
+
+Facilitator: Good. That gets closer to a useful workshop question. We can frame it as a trade-off rather than a tool selection exercise.
+
+Engineer: And if the stakeholders are highly hands-off, that makes our internal decision logging even more important. They may never want to arbitrate details, but they will still need evidence that decisions were made responsibly.
+
+Facilitator: Which means our logs need to capture not just conclusions, but assumptions and uncertainties.
+
+Engineer: Yes. Architectural records should say what we know, what we do not know yet, and what would cause us to revisit the choice.
+
+00:19:12
+
+Facilitator: That is the part I care about most. A decision log should not pretend certainty where there is none.
+
+Engineer: Then we should record this one as a provisional architecture decision, with follow-up checks attached.
+
+Facilitator: Agreed.
+
+Engineer: I would summarize today’s result as:
+
+- We need a classified secure-file intake path rather than a one-size-fits-all document path.
+- Managed object storage is the provisional preferred primary store.
+- Access experience is a separate, downstream implementation decision.
+- Internal transfer options remain open pending operational preference.
+- A dedicated isolated account boundary is required.
+- Follow-up validation is needed on region behavior, transport security, at-rest encryption, and resilience assumptions.
+
+00:21:24
+
+Facilitator: That is exactly the kind of structure I want. It makes the branch points visible.
+
+Engineer: We should also turn this into a reusable prompt or template. Something that asks: Is this reversible? Is it a stakeholder decision or a team decision? What assumptions does it rely on? What are the trade-offs?
+
+Facilitator: Yes. If we can standardize that, people will start noticing decisions as they happen rather than reconstructing them later.
+
+Engineer: And we can separate hard commitments from exploratory uncertainty.
+
+00:22:40
+
+Facilitator: Good. Then the output from this conversation is not just an architecture idea. It is also an example of how to log a real technical decision.
+
+Engineer: Which is useful in itself.
+
+Facilitator: Exactly.
+
+Transcription ended after approximately 00:23:00
+
+This example transcript has been strongly anonymized and rewritten to preserve decision structure while removing identifying details.

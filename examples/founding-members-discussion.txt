@@ -1,0 +1,87 @@
+Participant A: One of the patterns I keep seeing is decision blockage. Work gets created, people invest energy, and then nothing formally resolves. It just sits in limbo because everyone says they will circle back later.
+
+Participant B: And when that happens, the damage is not only to that one issue. It drains momentum across the whole project.
+
+Participant A: Exactly. That is why I keep coming back to what I am calling hidden decisions. The group acts as if nothing has been decided, but in practice we have already chosen a trade-off by failing to act.
+
+Participant C: Such as when a team keeps a high-output but harmful contributor because replacing them feels costly. The actual decision is that short-term output is being prioritized over team wellbeing, but nobody says it plainly.
+
+Participant A: Yes. I want language that makes those trade-offs visible. If we are choosing speed over care, or revenue over cohesion, then at least let us name it and own the consequences.
+
+Participant B: That also means decisions should have a shelf life. We should be able to say how long a decision is valid for and what would trigger revisiting it.
+
+Participant C: I keep thinking about governance in living systems. Things do not just grow forever. They cycle, pause, renew, and sometimes stop. Projects should probably do the same.
+
+Participant A: Which means our agreements need to clarify not only what we are doing, but also what we are not doing. Otherwise every operational question turns into a debate about fundamentals.
+
+Participant B: So the function of a founding agreement is not to answer every future question. It is to define the core boundaries inside which people can act.
+
+Participant C: Right. If you want people to have agency, they need guardrails. They need to know how decisions are made, how success is judged, what values are binding, and what behaviors fall outside the boundary.
+
+Participant A: The problem is that groups often write abstract values and stop there. They say things like “we care about stewardship” or “we value community,” but they never operationalize those commitments.
+
+Participant B: Which means no one can be held accountable. If a practical decision conflicts with a stated value, people can always claim they interpreted it differently.
+
+Participant C: A stronger version would say something like: when cost and environmental impact conflict, we are willing to spend more up to a defined threshold to reduce harm. That creates something actionable.
+
+Participant A: Yes. Then a person making an operational decision knows what standard they will be judged against.
+
+Participant B: I am still wary of pretending we can fully specify those standards up front. Some of these boundaries only become visible after a real failure.
+
+Participant A: That is fair. We have already seen examples of that. In one earlier project retreat, I deliberately stepped back to let others lead. I thought the agreements were strong enough. Instead, unclear authority, clashing facilitation styles, and unspoken expectations produced a breakdown.
+
+Participant C: So the failure taught you something real about the system.
+
+Participant A: It did. It taught me that both extremes fail: over-controlling everything, and leaving everything under-defined. I had assumed that preparation alone would create enough shared understanding. It did not.
+
+Participant B: Which suggests a layered model. The founding agreement sets the durable frame. Policies sit on top and can change more easily as experience teaches us where the weak points are.
+
+Participant C: That makes sense. The durable layer should answer things like purpose, decision authority, membership, removal, amendment, and non-negotiable values. The policy layer can handle operational thresholds and evolving practices.
+
+Participant A: And purpose has to include exclusions. If the organization is not primarily profit-seeking, or not primarily a ticketed commercial program, that should be written down. Exclusions focus the work.
+
+Participant B: Also because people join based on purpose. If the purpose is vague, new members can project their own assumptions into it and later feel misled.
+
+Participant C: The same is true of delegated authority. If a board or stewarding group can act independently in some areas, the boundary of that authority needs to be explicit.
+
+Participant A: Otherwise you get symbolic delegation rather than real delegation. Someone is nominally empowered, but the system has not defined the criteria by which their choices will be judged.
+
+Participant B: Then every hard decision gets escalated or quietly undermined.
+
+Participant C: There is also the question of terms and continuity. If people hold formal governance roles, how long do those roles last? When are they reappointed? What requires wider approval?
+
+Participant A: And we need to distinguish clearly between members, board or steward roles, and staff or operational roles. Right now the language all blurs together and that makes the whole structure harder to reason about.
+
+Participant B: I would love a diagram. A real one. Something that shows which body does what, who elects whom, and which decisions require broader consent.
+
+Participant C: We can use plain language names for internal understanding even if legal documents need formal terms.
+
+Participant A: Another thing I am realizing is that membership cannot just mean “whoever cares.” If membership carries governance power, then joining probably needs thresholds.
+
+Participant B: Such as attendance, contribution, probation, training, or some explicit initiation process.
+
+Participant C: That way membership reflects demonstrated commitment rather than loose affiliation.
+
+Participant A: Yes. In a previous community project, one of the failures was that people entered consequential spaces without enough shared preparation or demonstrated understanding. I do not want to repeat that.
+
+Participant B: So the rule could be that the constitution says members must pass an initiation or entry process, but the exact content of that process lives in a policy document that can evolve.
+
+Participant C: That gives you both clarity and adaptability.
+
+Participant A: I like that. The constitution should specify that boundaries exist. The policy should define the current form of the boundary.
+
+Participant B: The broader principle here is that a system gets power from its edges. If the edge is vague, then everything becomes negotiable all the time.
+
+Participant C: And if everything is negotiable all the time, the loudest person or the most exhausted person ends up determining the outcome.
+
+Participant A: Which is exactly what I want to avoid. I do not want a system that depends on one person carrying the whole thing indefinitely.
+
+Participant B: Then the work now is not to solve every future dispute. It is to write down the smallest set of durable agreements that let the group act, learn, and update itself without collapsing.
+
+Participant C: Purpose, values, exclusions, decision rights, membership thresholds, removal pathways, amendment rules, and policy layers.
+
+Participant A: Yes. That feels like a workable starting frame.
+
+Participant B: Good. Then the next step is to turn this conversation into a structured draft rather than trying to remember it later.
+
+Participant C: Agreed. We should treat this as source material for a governance draft, not as a finalized document.

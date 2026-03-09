@@ -1,0 +1,23 @@
+Participant A: We need to decide on a cloud migration direction soon. The delivery timeline is tightening.
+
+Participant B: The realistic options are three major cloud providers. All of them can support the workload, so the decision comes down to trade-offs rather than basic feasibility.
+
+Participant C: From a cost perspective, the most mature option may have the highest upfront spend, but it also appears to have the strongest ecosystem and the lowest uncertainty.
+
+Participant A: We also need strong support for containerized services. That is a hard requirement.
+
+Participant B: All of the candidates can handle that, but they vary in maturity, operational familiarity, and the amount of bespoke setup we would need.
+
+Participant C: Team capability matters too. If we pick a platform the team already knows well, the migration risk is lower.
+
+Participant A: That probably matters more right now than theoretical feature differences.
+
+Participant B: We should also account for hybrid needs. There is a chance we will keep some infrastructure outside the cloud for a while.
+
+Participant C: True, but given the schedule pressure, I think familiarity and implementation speed should outweigh secondary advantages.
+
+Participant A: Then the emerging decision seems to be: choose the platform with the strongest internal familiarity and the lowest execution risk, even if it is not the cheapest option on paper.
+
+Participant B: I agree. We can log that as the rationale and revisit pricing optimization separately.
+
+Participant C: Good. I will record the decision, the trade-offs we considered, and the reason timing and team expertise carried the most weight.
