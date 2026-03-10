@@ -19,6 +19,7 @@ import { LLMInteractionService } from './services/llm-interaction-service.js';
 import { MarkdownExportService } from './services/markdown-export-service.js';
 import { MCPServerService } from './services/mcp-server-service.js';
 import { SupplementaryContentService } from './services/supplementary-content-service.js';
+import { MockLLMService } from './llm/mock-llm-service.js';
 import { VercelAILLMService } from './llm/vercel-ai-llm-service.js';
 import type { ITranscriptManager } from './transcript-manager/index.js';
 import type { IDecisionLogGenerator } from './decision-log-generator/i-decision-log-generator.js';
@@ -45,6 +46,14 @@ import {
   DrizzleMCPServerRepository,
   DrizzleSupplementaryContentRepository,
 } from '@repo/db';
+
+function shouldUseMockLlm(): boolean {
+  return process.env.NODE_ENV === 'test' || process.env.USE_MOCK_LLM === 'true';
+}
+
+function createLlmService(): MockLLMService | VercelAILLMService {
+  return shouldUseMockLlm() ? new MockLLMService() : new VercelAILLMService();
+}
 
 /**
  * Creates a MeetingService with real repositories
@@ -136,7 +145,7 @@ export function createDecisionFieldService(): DecisionFieldService {
  */
 export function createDraftGenerationService(): DraftGenerationService {
   return new DraftGenerationService(
-    new VercelAILLMService(),
+    createLlmService(),
     new DrizzleTranscriptChunkRepository(),
     new DrizzleTemplateFieldAssignmentRepository(),
     new DrizzleDecisionFieldRepository(),
