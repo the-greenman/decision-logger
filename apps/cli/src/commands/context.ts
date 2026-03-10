@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { api, getContext, requireActiveMeeting, type GlobalContext } from '../client.js';
+import { confirmAction } from '../runtime.js';
 
 function printContext(ctx: GlobalContext) {
   console.log(chalk.white('Active context:'));
@@ -40,7 +41,15 @@ contextCommand
 contextCommand
   .command('clear-meeting')
   .description('Clear active meeting (and decision context)')
-  .action(async () => {
+  .option('--yes', 'Skip confirmation prompt')
+  .action(async (opts: { yes?: boolean }) => {
+    if (!opts.yes) {
+      const confirmed = await confirmAction('Clear the active meeting and decision context?');
+      if (!confirmed) {
+        console.log(chalk.yellow('Clear meeting cancelled'));
+        return;
+      }
+    }
     const ctx = await api.delete<GlobalContext>('/api/context/meeting');
     console.log(chalk.green('✓ Active meeting cleared'));
     printContext(ctx);
@@ -65,8 +74,16 @@ contextCommand
   .command('clear-decision')
   .description('Clear active decision context')
   .option('-m, --meeting-id <id>', 'Meeting ID (defaults to active meeting)')
-  .action(async (opts: { meetingId?: string }) => {
+  .option('--yes', 'Skip confirmation prompt')
+  .action(async (opts: { meetingId?: string; yes?: boolean }) => {
     const meetingId = opts.meetingId ?? await requireActiveMeeting();
+    if (!opts.yes) {
+      const confirmed = await confirmAction(`Clear the active decision context for meeting ${meetingId}?`);
+      if (!confirmed) {
+        console.log(chalk.yellow('Clear decision cancelled'));
+        return;
+      }
+    }
     const ctx = await api.delete<GlobalContext>(`/api/meetings/${meetingId}/context/decision`);
     console.log(chalk.green('✓ Active decision cleared'));
     printContext(ctx);
@@ -88,8 +105,16 @@ contextCommand
   .command('clear-field')
   .description('Clear active field focus')
   .option('-m, --meeting-id <id>', 'Meeting ID (defaults to active meeting)')
-  .action(async (opts: { meetingId?: string }) => {
+  .option('--yes', 'Skip confirmation prompt')
+  .action(async (opts: { meetingId?: string; yes?: boolean }) => {
     const meetingId = opts.meetingId ?? await requireActiveMeeting();
+    if (!opts.yes) {
+      const confirmed = await confirmAction(`Clear the active field focus for meeting ${meetingId}?`);
+      if (!confirmed) {
+        console.log(chalk.yellow('Clear field cancelled'));
+        return;
+      }
+    }
     const ctx = await api.delete<GlobalContext>(`/api/meetings/${meetingId}/context/field`);
     console.log(chalk.green('✓ Active field cleared'));
     printContext(ctx);

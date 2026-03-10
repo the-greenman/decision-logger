@@ -5,10 +5,12 @@
   "main": "./dist/index.js",
   "type": "module",
   "bin": {
+    "dlogger": "./dist/index.js",
     "decision-logger": "./dist/index.js"
   },
   "scripts": {
     "build": "tsup",
+    "cli": "dotenv -e ../../.env -- tsx src/index.ts",
     "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
     "start": "dotenv -e ../../.env -- node dist/index.js",
     "test": "vitest run --passWithNoTests",

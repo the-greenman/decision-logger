@@ -18,6 +18,7 @@ import {
   StreamTranscriptResponseSchema,
   CreateSupplementaryContentSchema,
   TranscriptChunkSchema,
+  ApiStatusSchema,
 } from '@repo/schema';
 
 const ErrorResponseSchema = z.object({
@@ -227,6 +228,22 @@ const UpdateFlaggedDecisionRequestSchema = z.object({
   priority: z.number().int().optional(),
   chunkIds: z.array(z.string().uuid()).min(1).optional(),
 }).openapi('UpdateFlaggedDecisionRequest');
+
+export const getApiStatusRoute = createRoute({
+  method: 'get',
+  path: '/api/status',
+  tags: ['system'],
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: ApiStatusSchema,
+        },
+      },
+      description: 'API runtime status returned successfully',
+    },
+  },
+});
 
 export const uploadTranscriptRoute = createRoute({
   method: 'post',

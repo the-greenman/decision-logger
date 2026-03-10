@@ -55,6 +55,7 @@ import {
   exportDecisionLogRoute,
   exportMarkdownRoute,
   flushStreamingRoute,
+  getApiStatusRoute,
   getFlaggedDecisionContextRoute,
   getDecisionLogRoute,
   getFieldTranscriptRoute,
@@ -206,6 +207,24 @@ app.use('*', cors());
 app.use('*', logger());
 
 // Routes
+app.openapi(getApiStatusRoute, async (c) => {
+  const useMockLlm = process.env.NODE_ENV === 'test' || process.env.USE_MOCK_LLM === 'true';
+  const provider = process.env.LLM_PROVIDER ?? 'anthropic';
+  const model = process.env.LLM_MODEL ?? 'claude-opus-4-5';
+
+  return c.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    nodeEnv: process.env.NODE_ENV ?? 'development',
+    databaseConfigured: Boolean(process.env.DATABASE_URL),
+    llm: {
+      mode: useMockLlm ? 'mock' : 'real',
+      provider,
+      model,
+    },
+  });
+});
+
 app.openapi(getContextRoute, async (c) => {
   if (!globalContextService) {
     return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);

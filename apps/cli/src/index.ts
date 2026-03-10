@@ -5,13 +5,15 @@ import { transcriptCommand } from './commands/transcript.js';
 import { decisionsCommand } from './commands/decisions.js';
 import { contextCommand } from './commands/context.js';
 import { draftCommand } from './commands/draft.js';
+import { setCliVerbose } from './runtime.js';
 
 const program = new Command();
 
 program
-  .name('decision-logger')
+  .name('dlogger')
   .description('CLI for the Decision Logger system')
-  .version('1.0.0');
+  .version('1.0.0')
+  .option('--verbose', 'Print raw HTTP request/response details for debugging');
 
 program.addCommand(meetingCommand);
 program.addCommand(transcriptCommand);
@@ -25,6 +27,10 @@ program.configureOutput({
 });
 
 async function main() {
+  program.hook('preAction', (thisCommand) => {
+    const opts = thisCommand.optsWithGlobals<{ verbose?: boolean }>();
+    setCliVerbose(Boolean(opts.verbose));
+  });
   await program.parseAsync(process.argv);
   process.exit(0);
 }

@@ -217,6 +217,40 @@ export const StreamFlushResponseSchema = z.object({
   description: 'Transcript chunks created by flushing the streaming buffer',
 });
 
+export const ApiStatusLlmSchema = z.object({
+  mode: z.enum(['mock', 'real']),
+  provider: z.string(),
+  model: z.string(),
+}).openapi('ApiStatusLlm', {
+  description: 'Safe LLM runtime configuration currently active in the API process',
+  example: {
+    mode: 'real',
+    provider: 'anthropic',
+    model: 'claude-opus-4-5',
+  },
+});
+
+export const ApiStatusSchema = z.object({
+  status: z.literal('ok'),
+  timestamp: z.string().datetime({ offset: true }),
+  nodeEnv: z.string(),
+  databaseConfigured: z.boolean(),
+  llm: ApiStatusLlmSchema,
+}).openapi('ApiStatus', {
+  description: 'Safe runtime diagnostics for the API process',
+  example: {
+    status: 'ok',
+    timestamp: '2026-03-10T22:30:00Z',
+    nodeEnv: 'development',
+    databaseConfigured: true,
+    llm: {
+      mode: 'real',
+      provider: 'anthropic',
+      model: 'claude-opus-4-5',
+    },
+  },
+});
+
 // ============================================================================
 // SUPPLEMENTARY CONTENT SCHEMAS
 // ============================================================================

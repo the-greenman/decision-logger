@@ -31,9 +31,11 @@ decisionsCommand
   .description('List flagged decisions for a meeting')
   .option('-m, --meeting-id <id>', 'Meeting ID (defaults to active meeting)')
   .option('-s, --status <status>', 'Filter by status: pending|accepted|rejected|dismissed')
-  .action(async (opts: { meetingId?: string; status?: string }) => {
-    const meetingId = opts.meetingId ?? await requireActiveMeeting();
-    const qs = opts.status ? `?status=${opts.status}` : '';
+  .action(async (opts: { meetingId?: string; status?: string }, command: Command) => {
+    const resolvedOpts = command.opts<{ meetingId?: string; status?: string }>();
+    const meetingId = resolvedOpts.meetingId || opts.meetingId || await requireActiveMeeting();
+    const status = resolvedOpts.status ?? opts.status;
+    const qs = status ? `?status=${status}` : '';
     const { decisions } = await api.get<{ decisions: FlaggedDecisionListItem[] }>(
       `/api/meetings/${meetingId}/flagged-decisions${qs}`,
     );
@@ -54,13 +56,16 @@ decisionsCommand
   .requiredOption('-t, --title <title>', 'Decision title')
   .option('-m, --meeting-id <id>', 'Meeting ID (defaults to active meeting)')
   .option('-c, --context <summary>', 'Context summary')
-  .action(async (opts: { title: string; meetingId?: string; context?: string }) => {
-    const meetingId = opts.meetingId ?? await requireActiveMeeting();
+  .action(async (opts: { title: string; meetingId?: string; context?: string }, command: Command) => {
+    const resolvedOpts = command.opts<{ title: string; meetingId?: string; context?: string }>();
+    const meetingId = resolvedOpts.meetingId || opts.meetingId || await requireActiveMeeting();
+    const title = resolvedOpts.title ?? opts.title;
+    const contextSummary = resolvedOpts.context ?? opts.context ?? '';
     const decision = await api.post<FlaggedDecision>(
       `/api/meetings/${meetingId}/flagged-decisions`,
       {
-        suggestedTitle: opts.title,
-        contextSummary: opts.context ?? '',
+        suggestedTitle: title,
+        contextSummary,
         confidence: 1.0,
         priority: 0,
         chunkIds: [],

@@ -1532,6 +1532,20 @@ describe('API E2E Tests', () => {
     expect(data.timestamp).toBeDefined();
   });
 
+  it('GET /api/status - should return safe runtime diagnostics', async () => {
+    const response = await app.request('/api/status');
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.status).toBe('ok');
+    expect(data.timestamp).toBeDefined();
+    expect(typeof data.nodeEnv).toBe('string');
+    expect(typeof data.databaseConfigured).toBe('boolean');
+    expect(['mock', 'real']).toContain(data.llm.mode);
+    expect(typeof data.llm.provider).toBe('string');
+    expect(typeof data.llm.model).toBe('string');
+  });
+
   it('GET /openapi.json - should return OpenAPI spec', async () => {
     const response = await app.request('/openapi.json');
     
@@ -1540,6 +1554,7 @@ describe('API E2E Tests', () => {
     const pathKeys = Object.keys(data.paths ?? {});
     expect(data.openapi).toBe('3.0.0');
     expect(data.paths).toHaveProperty('/api/meetings');
+    expect(pathKeys).toContain('/api/status');
     expect(pathKeys).toContain('/api/context');
     expect(pathKeys).toContain('/api/context/meeting');
     expect(pathKeys.some((path) => path.includes('/api/meetings/') && path.endsWith('/context/decision'))).toBe(true);
@@ -1572,6 +1587,10 @@ describe('API E2E Tests', () => {
     expect(decisionLogResponses).toBeDefined();
     expect(decisionLogResponses?.['200']).toBeDefined();
     expect(decisionLogResponses?.['404']).toBeDefined();
+
+    const statusResponses = data.paths['/api/status']?.get?.responses;
+    expect(statusResponses).toBeDefined();
+    expect(statusResponses?.['200']).toBeDefined();
 
     const versionsPath = pathKeys.find((path) => path.includes('/decision-contexts/') && path.endsWith('/versions'));
     expect(versionsPath).toBeDefined();
