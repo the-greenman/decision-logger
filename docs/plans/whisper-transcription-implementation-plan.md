@@ -175,6 +175,11 @@ interface ITranscriptionProvider {
 3. Default while T0 is incomplete: `POST /transcripts/upload` with Whisper JSON (`format: json`)
 4. After T0 lands: support segment streaming to `/transcripts/stream` + `/streaming/flush`
 
+**Integrated smoke mode** (`transcription-service smoke-upload <file.wav> --api-url <url>`):
+1. Create a temporary meeting (unless `--meeting-id` is provided)
+2. Run OpenAI transcription and upload Whisper JSON to `/transcripts/upload`
+3. Fetch `/transcript-reading` and print row/timestamp verification
+
 **Live mode** (`transcription-service live --meeting-id <id>`):
 1. Start capturing audio from mic (via `ffmpeg` or `sox` subprocess)
 2. Every `STREAM_CHUNK_MS` (default 30s): read current buffer, transcribe, POST segments
@@ -284,8 +289,9 @@ export function createProvider(): ITranscriptionProvider {
 - [ ] T0: Explicit `contexts` in body are merged, not replaced, with auto-injected tags
 - [ ] T0: POST `/flush` creates TranscriptChunks with correct context tags in DB
 - [ ] T0: POST `/flush` creates TranscriptChunks with correct timing (`start_time`/`end_time`)
-- [ ] T1: Batch transcription of a `.wav` file produces correct chunks in DB
-- [ ] T1: Segments have `start_time`/`end_time` from Whisper output
+- [x] T1: Uploading Whisper `verbose_json` fixture to `/transcripts/upload` succeeds and `/transcript-reading` exposes expected timestamps
+- [x] T1: Batch transcription of a `.wav` file produces correct chunks in DB
+- [x] T1: Segments have `start_time`/`end_time` from Whisper output
 - [ ] T2: Docker local Whisper produces same output as T1 with same audio
 - [ ] T2: `TRANSCRIPTION_PROVIDER=local` switches provider without code change
 - [ ] T3: CLI end-to-end (audio file → chunks → decision detection) completes successfully

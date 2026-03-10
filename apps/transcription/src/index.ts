@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
 import { resolve } from 'node:path';
-import { runBatchTranscription, runLocalTranscription } from './session.js';
+import { runBatchTranscription, runLocalTranscription, runUploadSmoke } from './session.js';
 
 interface ParsedArgs {
-  command: 'transcribe' | 'transcribe-local' | null;
+  command: 'transcribe' | 'transcribe-local' | 'smoke-upload' | null;
   audioFilePath: string | null;
   meetingId: string | null;
+  apiUrl?: string;
   language?: string;
   outputPath?: string;
   outputTextPath?: string;
@@ -16,8 +17,9 @@ interface ParsedArgs {
 }
 
 function printUsage(): void {
-  console.log('Usage: transcription-service transcribe <audio-file> --meeting-id <uuid> [--language <code>] [--mode upload|stream] [--chunk-strategy fixed|semantic|speaker|streaming]');
+  console.log('Usage: transcription-service transcribe <audio-file> --meeting-id <uuid> [--api-url <url>] [--language <code>] [--mode upload|stream] [--chunk-strategy fixed|semantic|speaker|streaming]');
   console.log('       transcription-service transcribe-local <audio-file> [--language <code>] [--output <path>] [--output-text <path>] [--output-srt <path>]');
+  console.log('       transcription-service smoke-upload <audio-file> [--meeting-id <uuid>] [--api-url <url>] [--language <code>] [--chunk-strategy fixed|semantic|speaker|streaming]');
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -25,7 +27,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 
   const parsed: ParsedArgs = {
     command:
-      command === 'transcribe' || command === 'transcribe-local'
+      command === 'transcribe' || command === 'transcribe-local' || command === 'smoke-upload'
         ? command
         : null,
     audioFilePath: audioFilePath ?? null,
@@ -39,6 +41,15 @@ function parseArgs(argv: string[]): ParsedArgs {
 
     if (token === '--meeting-id' || token === '-m') {
       parsed.meetingId = rest[i + 1] ?? null;
+      i += 1;
+      continue;
+    }
+
+    if (token === '--api-url') {
+      const value = rest[i + 1];
+      if (value !== undefined) {
+        parsed.apiUrl = value;
+      }
       i += 1;
       continue;
     }
@@ -102,6 +113,9 @@ function parseArgs(argv: string[]): ParsedArgs {
 
 async function main(): Promise<void> {
   const parsed = parseArgs(process.argv.slice(2));
+  if (parsed.apiUrl !== undefined) {
+    process.env.DECISION_LOGGER_API_URL = parsed.apiUrl;
+  }
   if (!parsed.command || !parsed.audioFilePath) {
     printUsage();
     process.exit(1);
@@ -114,6 +128,16 @@ async function main(): Promise<void> {
       ...(parsed.outputPath === undefined ? {} : { outputPath: resolve(parsed.outputPath) }),
       ...(parsed.outputTextPath === undefined ? {} : { outputTextPath: resolve(parsed.outputTextPath) }),
       ...(parsed.outputSrtPath === undefined ? {} : { outputSrtPath: resolve(parsed.outputSrtPath) }),
+    });
+    return;
+  }
+
+  if (parsed.command === 'smoke-upload') {
+    await runUploadSmoke({
+      audioFilePath: resolve(parsed.audioFilePath),
+      chunkStrategy: parsed.chunkStrategy,
+      ...(parsed.meetingId === null ? {} : { meetingId: parsed.meetingId }),
+      ...(parsed.language === undefined ? {} : { language: parsed.language }),
     });
     return;
   }

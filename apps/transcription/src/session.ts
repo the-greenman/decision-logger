@@ -3,6 +3,7 @@ import { basename } from 'node:path';
 import { DecisionLoggerApiClient } from './api-client.js';
 import { formatEventPreviewLine, formatEventsAsSrt, formatEventsAsText } from './output-format.js';
 import { createProviderFromEnv } from './providers/index.js';
+import type { ITranscriptionProvider, TranscriptEvent } from './providers/interface.js';
 
 export interface BatchTranscriptionOptions {
   audioFilePath: string;
@@ -10,6 +11,20 @@ export interface BatchTranscriptionOptions {
   language?: string;
   mode: 'upload' | 'stream';
   chunkStrategy: 'fixed' | 'semantic' | 'speaker' | 'streaming';
+}
+
+interface BatchTranscriptionDependencies {
+  provider: ITranscriptionProvider;
+  apiClient: {
+    uploadWhisperJson: (
+      meetingId: string,
+      rawResponse: unknown,
+      chunkStrategy: 'fixed' | 'semantic' | 'speaker' | 'streaming',
+    ) => Promise<{ transcript: { id: string }; chunks: Array<{ id: string }> }>;
+    postStreamEvent: (meetingId: string, event: TranscriptEvent) => Promise<void>;
+    flushStream: (meetingId: string) => Promise<void>;
+  };
+  readAudioFile: (path: string) => Promise<Buffer>;
 }
 
 export interface LocalTranscriptionOptions {
@@ -20,14 +35,29 @@ export interface LocalTranscriptionOptions {
   outputSrtPath?: string;
 }
 
-export async function runBatchTranscription(options: BatchTranscriptionOptions): Promise<void> {
+export interface UploadSmokeOptions {
+  audioFilePath: string;
+  meetingId?: string;
+  language?: string;
+  chunkStrategy: 'fixed' | 'semantic' | 'speaker' | 'streaming';
+}
+
+function buildBatchDependencies(deps?: Partial<BatchTranscriptionDependencies>): BatchTranscriptionDependencies {
   const apiUrl = process.env.DECISION_LOGGER_API_URL ?? 'http://localhost:3000';
   const apiKey = process.env.DECISION_LOGGER_API_KEY;
+  return {
+    provider: deps?.provider ?? createProviderFromEnv(),
+    apiClient: deps?.apiClient ?? new DecisionLoggerApiClient(apiUrl, apiKey),
+    readAudioFile: deps?.readAudioFile ?? readFile,
+  };
+}
 
-  const provider = createProviderFromEnv();
-  const apiClient = new DecisionLoggerApiClient(apiUrl, apiKey);
-
-  const audioBuffer = await readFile(options.audioFilePath);
+export async function runBatchTranscription(
+  options: BatchTranscriptionOptions,
+  deps?: Partial<BatchTranscriptionDependencies>,
+): Promise<void> {
+  const { provider, apiClient, readAudioFile } = buildBatchDependencies(deps);
+  const audioBuffer = await readAudioFile(options.audioFilePath);
   const transcribeOptions: { filename: string; language?: string } = {
     filename: basename(options.audioFilePath),
   };
@@ -91,5 +121,39 @@ export async function runLocalTranscription(options: LocalTranscriptionOptions):
   if (options.outputSrtPath !== undefined) {
     await writeFile(options.outputSrtPath, formatEventsAsSrt(transcription.events), 'utf8');
     console.log(`Saved SRT transcript to ${options.outputSrtPath}`);
+  }
+}
+
+export async function runUploadSmoke(options: UploadSmokeOptions): Promise<void> {
+  const apiUrl = process.env.DECISION_LOGGER_API_URL ?? 'http://localhost:3000';
+  const apiKey = process.env.DECISION_LOGGER_API_KEY;
+  const apiClient = new DecisionLoggerApiClient(apiUrl, apiKey);
+
+  let meetingId = options.meetingId;
+  if (!meetingId) {
+    const createdMeeting = await apiClient.createMeeting({
+      title: `Transcription Smoke ${new Date().toISOString()}`,
+      date: new Date().toISOString(),
+      participants: ['transcription-service'],
+    });
+    meetingId = createdMeeting.id;
+    console.log(`Created smoke meeting: ${meetingId}`);
+  }
+
+  await runBatchTranscription({
+    audioFilePath: options.audioFilePath,
+    meetingId,
+    mode: 'upload',
+    chunkStrategy: options.chunkStrategy,
+    ...(options.language === undefined ? {} : { language: options.language }),
+  }, {
+    apiClient,
+  });
+
+  const reading = await apiClient.getTranscriptReading(meetingId);
+  console.log(`Smoke verification rows: ${reading.rows.length}`);
+  const [first] = reading.rows;
+  if (first) {
+    console.log(`First row: ${first.startTime ?? 'n/a'} -> ${first.endTime ?? 'n/a'} | ${first.displayText}`);
   }
 }

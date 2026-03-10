@@ -8,6 +8,14 @@ interface UploadTranscriptResponse {
   chunks: Array<{ id: string }>;
 }
 
+interface CreateMeetingResponse {
+  id: string;
+}
+
+interface TranscriptReadingResponse {
+  rows: Array<{ id: string; displayText: string; startTime?: string; endTime?: string }>;
+}
+
 export class DecisionLoggerApiClient {
   constructor(
     private readonly baseUrl: string,
@@ -37,6 +45,17 @@ export class DecisionLoggerApiClient {
     });
   }
 
+  async createMeeting(payload: {
+    title: string;
+    date: string;
+    participants: string[];
+  }): Promise<CreateMeetingResponse> {
+    return this.request<CreateMeetingResponse>('/api/meetings', {
+      method: 'POST',
+      body: payload,
+    });
+  }
+
   async uploadWhisperJson(
     meetingId: string,
     rawResponse: unknown,
@@ -52,11 +71,17 @@ export class DecisionLoggerApiClient {
     });
   }
 
+  async getTranscriptReading(meetingId: string): Promise<TranscriptReadingResponse> {
+    return this.request<TranscriptReadingResponse>(`/api/meetings/${meetingId}/transcript-reading`, {
+      method: 'GET',
+    });
+  }
+
   private async request<T>(
     path: string,
     options: {
-      method: 'POST';
-      body: Record<string, unknown>;
+      method: 'GET' | 'POST';
+      body?: Record<string, unknown>;
     },
   ): Promise<T> {
     const headers: Record<string, string> = {
@@ -67,11 +92,15 @@ export class DecisionLoggerApiClient {
       headers['x-api-key'] = this.apiKey;
     }
 
-    const response = await this.fetchImpl(`${this.baseUrl.replace(/\/$/, '')}${path}`, {
+    const requestInit: RequestInit = {
       method: options.method,
       headers,
-      body: JSON.stringify(options.body),
-    });
+    };
+    if (options.body !== undefined) {
+      requestInit.body = JSON.stringify(options.body);
+    }
+
+    const response = await this.fetchImpl(`${this.baseUrl.replace(/\/$/, '')}${path}`, requestInit);
 
     if (!response.ok) {
       const body = await response.text();
