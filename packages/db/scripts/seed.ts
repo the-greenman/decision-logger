@@ -32,6 +32,7 @@ async function seed() {
     TIMELINE: '550e8400-e29b-41d4-a716-446655440008',
     STAKEHOLDERS: '550e8400-e29b-41d4-a716-446655440009',
     RESOURCES: '550e8400-e29b-41d4-a716-446655440010',
+    OUTSTANDING_ISSUES: '550e8400-e29b-41d4-a716-446655440011',
   } as const;
 
   const seedFields: Array<typeof decisionFields.$inferInsert> = [
@@ -155,6 +156,18 @@ async function seed() {
       version: 1,
       isCustom: false,
     },
+    {
+      id: CORE_FIELD_IDS.OUTSTANDING_ISSUES,
+      namespace: 'core',
+      name: 'outstanding_issues',
+      description: 'Unresolved questions, dependencies, or concerns that prevented this decision from being finalised',
+      category: 'evaluation' as const,
+      extractionPrompt: 'Summarise any open questions, unresolved dependencies, or concerns raised during discussion that the group could not answer in this session',
+      fieldType: 'textarea' as const,
+      placeholder: 'What remains unresolved before this decision can proceed?',
+      version: 1,
+      isCustom: false,
+    },
   ];
 
   const fields = [] as Array<(typeof decisionFields.$inferSelect)>;
@@ -198,16 +211,16 @@ async function seed() {
     },
     {
       namespace: 'core',
-      name: 'Technology Selection',
-      description: 'Template for choosing between technical options or tools',
-      category: 'technology' as const,
+      name: 'Proposal Acceptance',
+      description: 'Template for evaluating and accepting proposals',
+      category: 'proposal' as const,
       version: 1,
       isDefault: false,
       isCustom: false,
     },
     {
       namespace: 'core',
-      name: 'Strategic Initiative',
+      name: 'Strategy Decision',
       description: 'Template for strategic business or product decisions',
       category: 'strategy' as const,
       version: 1,
@@ -244,10 +257,21 @@ async function seed() {
   // Seed Template Field Assignments
   console.log('\nSeeding template field assignments...');
   const standardTemplate = templates.find((template) => template.name === 'Standard Decision');
+  const strategyTemplate = templates.find((template) => template.name === 'Strategy Decision');
+  const proposalTemplate = templates.find((template) => template.name === 'Proposal Acceptance');
   const decisionStatementField = fields.find((field) => field.name === 'decision_statement');
   const contextField = fields.find((field) => field.name === 'context');
+  const optionsField = fields.find((field) => field.name === 'options');
+  const criteriaField = fields.find((field) => field.name === 'criteria');
+  const analysisField = fields.find((field) => field.name === 'analysis');
+  const risksField = fields.find((field) => field.name === 'risks');
+  const stakeholdersField = fields.find((field) => field.name === 'stakeholders');
+  const outcomeField = fields.find((field) => field.name === 'outcome');
+  const outstandingIssuesField = fields.find((field) => field.name === 'outstanding_issues');
+  const resourcesField = fields.find((field) => field.name === 'resources');
+  const timelineField = fields.find((field) => field.name === 'timeline');
 
-  if (standardTemplate && decisionStatementField && contextField) {
+  if (standardTemplate && decisionStatementField && contextField && optionsField && criteriaField && outcomeField && outstandingIssuesField) {
     const seedAssignments = [
       {
         templateId: standardTemplate.id,
@@ -260,6 +284,30 @@ async function seed() {
         fieldId: contextField.id,
         order: 1,
         required: true,
+      },
+      {
+        templateId: standardTemplate.id,
+        fieldId: optionsField.id,
+        order: 2,
+        required: true,
+      },
+      {
+        templateId: standardTemplate.id,
+        fieldId: criteriaField.id,
+        order: 3,
+        required: false,
+      },
+      {
+        templateId: standardTemplate.id,
+        fieldId: outcomeField.id,
+        order: 4,
+        required: true,
+      },
+      {
+        templateId: standardTemplate.id,
+        fieldId: outstandingIssuesField.id,
+        order: 5,
+        required: false,
       },
     ];
 
@@ -275,6 +323,172 @@ async function seed() {
     }
 
     console.log('  ✓ Ensured field assignments for Standard Decision template');
+  }
+
+  if (
+    strategyTemplate &&
+    decisionStatementField &&
+    contextField &&
+    optionsField &&
+    criteriaField &&
+    analysisField &&
+    risksField &&
+    stakeholdersField &&
+    outcomeField &&
+    outstandingIssuesField
+  ) {
+    const seedAssignments = [
+      {
+        templateId: strategyTemplate.id,
+        fieldId: decisionStatementField.id,
+        order: 0,
+        required: true,
+      },
+      {
+        templateId: strategyTemplate.id,
+        fieldId: contextField.id,
+        order: 1,
+        required: true,
+      },
+      {
+        templateId: strategyTemplate.id,
+        fieldId: optionsField.id,
+        order: 2,
+        required: true,
+      },
+      {
+        templateId: strategyTemplate.id,
+        fieldId: criteriaField.id,
+        order: 3,
+        required: true,
+      },
+      {
+        templateId: strategyTemplate.id,
+        fieldId: analysisField.id,
+        order: 4,
+        required: true,
+      },
+      {
+        templateId: strategyTemplate.id,
+        fieldId: risksField.id,
+        order: 5,
+        required: true,
+      },
+      {
+        templateId: strategyTemplate.id,
+        fieldId: stakeholdersField.id,
+        order: 6,
+        required: true,
+      },
+      {
+        templateId: strategyTemplate.id,
+        fieldId: outcomeField.id,
+        order: 7,
+        required: true,
+      },
+      {
+        templateId: strategyTemplate.id,
+        fieldId: outstandingIssuesField.id,
+        order: 8,
+        required: false,
+      },
+    ];
+
+    for (const a of seedAssignments) {
+      const existing = await db
+        .select()
+        .from(templateFieldAssignments)
+        .where(and(eq(templateFieldAssignments.templateId, a.templateId), eq(templateFieldAssignments.fieldId, a.fieldId)))
+        .limit(1);
+
+      if (existing[0]) continue;
+      await db.insert(templateFieldAssignments).values(a);
+    }
+
+    console.log('  ✓ Ensured field assignments for Strategy Decision template');
+  }
+
+  if (
+    proposalTemplate &&
+    decisionStatementField &&
+    contextField &&
+    optionsField &&
+    criteriaField &&
+    analysisField &&
+    resourcesField &&
+    timelineField &&
+    outcomeField &&
+    outstandingIssuesField
+  ) {
+    const seedAssignments = [
+      {
+        templateId: proposalTemplate.id,
+        fieldId: decisionStatementField.id,
+        order: 0,
+        required: true,
+      },
+      {
+        templateId: proposalTemplate.id,
+        fieldId: contextField.id,
+        order: 1,
+        required: true,
+      },
+      {
+        templateId: proposalTemplate.id,
+        fieldId: optionsField.id,
+        order: 2,
+        required: true,
+      },
+      {
+        templateId: proposalTemplate.id,
+        fieldId: criteriaField.id,
+        order: 3,
+        required: true,
+      },
+      {
+        templateId: proposalTemplate.id,
+        fieldId: analysisField.id,
+        order: 4,
+        required: true,
+      },
+      {
+        templateId: proposalTemplate.id,
+        fieldId: resourcesField.id,
+        order: 5,
+        required: false,
+      },
+      {
+        templateId: proposalTemplate.id,
+        fieldId: timelineField.id,
+        order: 6,
+        required: false,
+      },
+      {
+        templateId: proposalTemplate.id,
+        fieldId: outcomeField.id,
+        order: 7,
+        required: true,
+      },
+      {
+        templateId: proposalTemplate.id,
+        fieldId: outstandingIssuesField.id,
+        order: 8,
+        required: false,
+      },
+    ];
+
+    for (const a of seedAssignments) {
+      const existing = await db
+        .select()
+        .from(templateFieldAssignments)
+        .where(and(eq(templateFieldAssignments.templateId, a.templateId), eq(templateFieldAssignments.fieldId, a.fieldId)))
+        .limit(1);
+
+      if (existing[0]) continue;
+      await db.insert(templateFieldAssignments).values(a);
+    }
+
+    console.log('  ✓ Ensured field assignments for Proposal Acceptance template');
   }
 
   // Seed Expert Templates

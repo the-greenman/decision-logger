@@ -17,6 +17,7 @@ const CORE_FIELD_IDS = {
   TIMELINE: '550e8400-e29b-41d4-a716-446655440008',
   STAKEHOLDERS: '550e8400-e29b-41d4-a716-446655440009',
   RESOURCES: '550e8400-e29b-41d4-a716-446655440010',
+  OUTSTANDING_ISSUES: '550e8400-e29b-41d4-a716-446655440011',
 } as const;
 
 const assignment = (fieldId: string, order: number, required = true) => ({
@@ -37,6 +38,7 @@ export const STANDARD_TEMPLATE: CreateDecisionTemplate = {
     assignment(CORE_FIELD_IDS.OPTIONS, 2),
     assignment(CORE_FIELD_IDS.CRITERIA, 3, false),
     assignment(CORE_FIELD_IDS.OUTCOME, 4),
+    assignment(CORE_FIELD_IDS.OUTSTANDING_ISSUES, 5, false),
   ],
 };
 
@@ -60,7 +62,7 @@ export const TECHNOLOGY_TEMPLATE: CreateDecisionTemplate = {
 // Strategy Template - For strategic decisions
 export const STRATEGY_TEMPLATE: CreateDecisionTemplate = {
   namespace: 'core',
-  name: 'Strategic Decision',
+  name: 'Strategy Decision',
   description: 'Template for high-level strategic and business decisions',
   category: 'strategy',
   fields: [
@@ -72,6 +74,7 @@ export const STRATEGY_TEMPLATE: CreateDecisionTemplate = {
     assignment(CORE_FIELD_IDS.RISKS, 5),
     assignment(CORE_FIELD_IDS.STAKEHOLDERS, 6),
     assignment(CORE_FIELD_IDS.OUTCOME, 7),
+    assignment(CORE_FIELD_IDS.OUTSTANDING_ISSUES, 8, false),
   ],
 };
 
@@ -113,8 +116,8 @@ export const POLICY_TEMPLATE: CreateDecisionTemplate = {
 // Proposal Template - For evaluating proposals and recommendations
 export const PROPOSAL_TEMPLATE: CreateDecisionTemplate = {
   namespace: 'core',
-  name: 'Proposal Evaluation',
-  description: 'Template for evaluating proposals, recommendations, or suggestions',
+  name: 'Proposal Acceptance',
+  description: 'Template for evaluating and deciding whether to accept proposals, recommendations, or suggestions',
   category: 'proposal',
   fields: [
     assignment(CORE_FIELD_IDS.DECISION_STATEMENT, 0),
@@ -125,6 +128,7 @@ export const PROPOSAL_TEMPLATE: CreateDecisionTemplate = {
     assignment(CORE_FIELD_IDS.RESOURCES, 5, false),
     assignment(CORE_FIELD_IDS.TIMELINE, 6, false),
     assignment(CORE_FIELD_IDS.OUTCOME, 7),
+    assignment(CORE_FIELD_IDS.OUTSTANDING_ISSUES, 8, false),
   ],
 };
 
