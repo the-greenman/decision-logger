@@ -25,6 +25,12 @@ See `docs/transcription-architecture.md` for the full architecture. See `docs/pl
   - `transcribe --mode upload|stream` for API delivery
   - `smoke-upload` and `smoke-stream` integrated smoke flows
   - `live` session mode with chunked capture and final flush
+  - `serve` mode with browser session endpoints (`/sessions/*`)
+- ✅ Local provider implementation exists:
+  - `LocalWhisperProvider` calls `/asr?output=json`
+  - provider factory switches on `TRANSCRIPTION_PROVIDER=local`
+  - `docker-compose.whisper.yml` added for local ASR runtime
+  - unit tests cover local provider mapping and provider-factory switching
 
 ---
 
@@ -117,7 +123,10 @@ Confirm `globalContextService` is accessible in the same service scope as `trans
 
 ## Phase T1: Transcription Service (OpenAI Whisper)
 
-**Goal**: A standalone service that accepts audio, transcribes via the OpenAI Whisper API, and supports both local-only verification (no API integration) and core API delivery.
+**Goal**: A standalone service that accepts audio, transcribes via the OpenAI Whisper API, and supports:
+- local-only verification (no API integration)
+- CLI/API delivery for batch and live dev workflows
+- browser-activated streaming from the meeting screen in the web UI
 
 ### Location
 
@@ -190,12 +199,41 @@ interface ITranscriptionProvider {
 2. Every `STREAM_CHUNK_MS` (default 30s): read current buffer, transcribe, POST segments
 3. On SIGTERM/Ctrl-C: POST final chunk, then POST `/streaming/flush`
 
+**Browser-driven mode** (`web UI meeting page`):
+1. User clicks `Start recording` in an active meeting context
+2. Browser captures audio with `MediaRecorder` (`getUserMedia`)
+3. Browser sends chunk blobs to transcription service session endpoints
+4. Transcription service transcribes each blob and POSTs text events to `/api/meetings/:id/transcripts/stream`
+5. User clicks `Stop recording`; service triggers `/api/meetings/:id/streaming/flush`
+
+### Browser Streaming API (new T1 scope)
+
+Add lightweight HTTP session endpoints to `apps/transcription` so the web UI can control streaming:
+
+- `POST /sessions`
+  - body: `{ meetingId: string, language?: string }`
+  - response: `{ sessionId: string, meetingId: string, startedAt: string }`
+- `POST /sessions/:sessionId/chunks`
+  - multipart or binary body containing one audio blob chunk
+  - response: `{ accepted: true, eventCount: number }`
+- `POST /sessions/:sessionId/stop`
+  - response: `{ flushed: true, chunksPersisted?: number }`
+- `GET /sessions/:sessionId/status`
+  - response: `{ status: 'active' | 'stopping' | 'stopped', bufferedEvents: number }`
+
+Notes:
+- Browser mode is the production web path.
+- Existing `transcription-service live` remains a dev/ops utility for local microphone testing.
+- Browser mode must run behind authenticated app access and service-level API credentials.
+
 ### TDD Checkpoints
 
 - Unit: `OpenAIWhisperProvider` with mock `fetch` - verify segments mapped correctly
 - Local smoke test: `transcription-service transcribe-local test.wav` prints non-empty segments
 - Integration: Send a real `.wav` file (use files from `test-cases/` if audio samples added)
 - End-to-end: `transcription-service transcribe test.wav --meeting-id $ID` → verify DB chunks
+- Integration (browser path): start session, upload chunks, stop session, verify transcript rows
+- UI integration: meeting page start/stop controls drive transcription-session endpoints successfully
 
 ### T1 Integrated Smoke Commands (validated)
 
@@ -265,6 +303,27 @@ export function createProvider(): ITranscriptionProvider {
   # Verify same chunks as T1 test
   ```
 
+### T2 Integrated Validation (validated)
+
+```bash
+# start local whisper (use WHISPER_HOST_PORT override if 9000 is in use)
+docker compose -f docker-compose.whisper.yml up -d
+
+# local provider standalone run
+TRANSCRIPTION_PROVIDER=local \
+WHISPER_LOCAL_URL=http://localhost:9000 \
+pnpm --filter @repo/transcription exec tsx src/index.ts transcribe-local /abs/path/audio.m4a
+
+# local provider integrated stream run
+TRANSCRIPTION_PROVIDER=local \
+WHISPER_LOCAL_URL=http://localhost:9000 \
+pnpm --filter @repo/transcription exec tsx src/index.ts smoke-stream /abs/path/audio.m4a --api-url http://localhost:3001
+```
+
+Validated on March 10, 2026:
+- local provider transcribed sample audio successfully (`419` segments)
+- local provider stream smoke delivered events and flushed successfully (`417` events)
+
 ---
 
 ## Phase T3: CLI Integration
@@ -317,7 +376,9 @@ export function createProvider(): ITranscriptionProvider {
 - [x] T1: Uploading Whisper `verbose_json` fixture to `/transcripts/upload` succeeds and `/transcript-reading` exposes expected timestamps
 - [x] T1: Batch transcription of a `.wav` file produces correct chunks in DB
 - [x] T1: Segments have `start_time`/`end_time` from Whisper output
-- [ ] T2: Docker local Whisper produces same output as T1 with same audio
-- [ ] T2: `TRANSCRIPTION_PROVIDER=local` switches provider without code change
+- [ ] T1: Browser meeting page can start/stop recording and produce flushed transcript rows for that meeting
+- [ ] T1: Browser recording lifecycle handles permission denied and network retry states cleanly
+- [x] T2: Docker local Whisper produces same output as T1 with same audio
+- [x] T2: `TRANSCRIPTION_PROVIDER=local` switches provider without code change
 - [ ] T3: CLI end-to-end (audio file → chunks → decision detection) completes successfully
 - [ ] All tests pass: `pnpm test`

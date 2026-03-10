@@ -216,6 +216,11 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
     }
 
     try {
+      if (method === 'GET' && path === '/health') {
+        sendJson(req, res, 200, { status: 'ok' }, corsOrigin);
+        return;
+      }
+
       if (method === 'POST' && path === '/sessions') {
         type SessionCreateBody = { meetingId?: string; language?: string };
         const body = await parseJsonBody<SessionCreateBody>(req, maxChunkBytes);

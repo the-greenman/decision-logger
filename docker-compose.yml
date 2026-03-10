@@ -55,6 +55,28 @@ services:
         condition: service_healthy
     command: node /app/apps/api/dist/index.js
 
+  transcription:
+    build:
+      context: .
+      dockerfile: apps/transcription/Dockerfile
+    container_name: decision-logger-transcription
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      TRANSCRIPTION_PROVIDER: ${TRANSCRIPTION_PROVIDER:-openai}
+      WHISPER_LOCAL_URL: ${WHISPER_LOCAL_URL:-http://whisper:9000}
+      DECISION_LOGGER_API_KEY: ${DECISION_LOGGER_API_KEY:-}
+      TRANSCRIPTION_CORS_ORIGIN: ${TRANSCRIPTION_CORS_ORIGIN:-*}
+      STREAM_MAX_RETRY_ATTEMPTS: ${STREAM_MAX_RETRY_ATTEMPTS:-5}
+      STREAM_RETRY_BASE_MS: ${STREAM_RETRY_BASE_MS:-250}
+      STREAM_MAX_OUTBOUND_QUEUE: ${STREAM_MAX_OUTBOUND_QUEUE:-200}
+      TRANSCRIPTION_MAX_CHUNK_BYTES: ${TRANSCRIPTION_MAX_CHUNK_BYTES:-25000000}
+    ports:
+      - "${COMPOSE_TRANSCRIPTION_PORT:-8788}:8788"
+    depends_on:
+      api:
+        condition: service_started
+    command: node /app/apps/transcription/dist/index.js serve --api-url http://api:3000 --host 0.0.0.0 --port 8788
+
 volumes:
   postgres_data:
     driver: local

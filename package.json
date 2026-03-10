@@ -13,6 +13,8 @@
     "cli": "pnpm --filter ./apps/cli exec dotenv -e ../../.env -- node dist/index.js",
     "dev": "turbo run dev",
     "up:stack": "bash ./scripts/up-stack.sh",
+    "up:stack:web": "bash ./scripts/up-stack-web.sh",
+    "up:stack:web:local": "bash ./scripts/up-stack-web-local.sh",
     "validate": "pnpm lint:all && pnpm build && pnpm type-check",
     "validate:docker": "docker compose build api",
     "validate:stack": "pnpm up:stack",

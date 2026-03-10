@@ -6,7 +6,8 @@ export function createProviderFromEnv(): ITranscriptionProvider {
   const provider = process.env.TRANSCRIPTION_PROVIDER ?? 'openai';
 
   if (provider === 'local') {
-    return new LocalWhisperProvider();
+    const whisperLocalUrl = process.env.WHISPER_LOCAL_URL ?? 'http://localhost:9000';
+    return new LocalWhisperProvider(whisperLocalUrl);
   }
 
   const apiKey = process.env.OPENAI_API_KEY;

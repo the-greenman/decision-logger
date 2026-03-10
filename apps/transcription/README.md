@@ -93,6 +93,42 @@ export STREAM_RETRY_BASE_MS=250
 export STREAM_MAX_OUTBOUND_QUEUE=200
 ```
 
+## Local Whisper (T2)
+
+Use local Whisper instead of OpenAI:
+
+```bash
+export TRANSCRIPTION_PROVIDER=local
+export WHISPER_LOCAL_URL=http://localhost:9000
+```
+
+Start local Whisper container:
+
+```bash
+docker compose -f docker-compose.whisper.yml up -d
+```
+
+If port `9000` is already taken, override host port:
+
+```bash
+WHISPER_HOST_PORT=9010 docker compose -f docker-compose.whisper.yml up -d
+export WHISPER_LOCAL_URL=http://localhost:9010
+```
+
+Run local-only verification with the local provider:
+
+```bash
+TRANSCRIPTION_PROVIDER=local \
+WHISPER_LOCAL_URL=http://localhost:9000 \
+pnpm --filter @repo/transcription exec tsx src/index.ts transcribe-local /abs/path/audio.m4a
+```
+
+If using the full dockerized web stack, there is a one-command local setup:
+
+```bash
+pnpm up:stack:web:local
+```
+
 ## Audio Stream Setup (Live)
 
 The `live` command captures audio with `ffmpeg`, splits it into chunks, transcribes each chunk, then posts transcript events to:
