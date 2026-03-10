@@ -7,7 +7,9 @@ interface IFlaggedDecisionRepository {
     findById(id: string): Promise<FlaggedDecision | null>;
     findByMeetingId(meetingId: string): Promise<FlaggedDecision[]>;
     update(id: string, data: Partial<Omit<CreateFlaggedDecision, 'meetingId'>>): Promise<FlaggedDecision | null>;
+    updatePriority(id: string, priority: number): Promise<FlaggedDecision | null>;
     updateStatus(id: string, status: FlaggedDecision['status']): Promise<FlaggedDecision | null>;
+    delete(id: string): Promise<boolean>;
 }
 export declare class DrizzleFlaggedDecisionRepository implements IFlaggedDecisionRepository {
     create(data: CreateFlaggedDecision): Promise<FlaggedDecision>;
@@ -16,6 +18,7 @@ export declare class DrizzleFlaggedDecisionRepository implements IFlaggedDecisio
     update(id: string, data: Partial<Omit<CreateFlaggedDecision, 'meetingId'>>): Promise<FlaggedDecision | null>;
     updatePriority(id: string, priority: number): Promise<FlaggedDecision | null>;
     updateStatus(id: string, status: FlaggedDecision['status']): Promise<FlaggedDecision | null>;
+    delete(id: string): Promise<boolean>;
     private mapToSchema;
 }
 export {};

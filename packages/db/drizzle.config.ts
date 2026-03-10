@@ -5,7 +5,7 @@ export default {
   out: './drizzle',
   driver: 'pg',
   dbCredentials: {
-    connectionString: process.env.DATABASE_URL || 'postgresql://localhost:5432/decision_logger',
+    connectionString: process.env.DATABASE_URL || 'postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_dev',
   },
   verbose: true,
   strict: false,
