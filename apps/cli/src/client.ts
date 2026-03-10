@@ -1,3 +1,5 @@
+import { logHttpRequest, logHttpResponse } from './runtime.js';
+
 const BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:3000';
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -7,13 +9,17 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     init.headers = { 'Content-Type': 'application/json' };
     init.body = JSON.stringify(body);
   }
+  logHttpRequest(method, url, body);
   const res = await fetch(url, init);
   if (!res.ok) {
     const payload = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
+    await logHttpResponse(res.status, url, payload);
     throw new Error(payload.error ?? `HTTP ${res.status} ${res.statusText}`);
   }
   if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+  const payload = await res.json() as T;
+  await logHttpResponse(res.status, url, payload);
+  return payload;
 }
 
 export const api = {
@@ -108,6 +114,23 @@ export interface DecisionLog {
   decisionMethod: { type: string; details?: string };
   loggedBy: string;
   loggedAt: string;
+}
+
+export interface DecisionExportResponse {
+  format: 'json' | 'markdown';
+  content: DecisionLog | string;
+}
+
+export interface ApiStatusResponse {
+  status: 'ok';
+  timestamp: string;
+  nodeEnv: string;
+  databaseConfigured: boolean;
+  llm: {
+    mode: 'mock' | 'real';
+    provider: string;
+    model: string;
+  };
 }
 
 export async function getContext(): Promise<GlobalContext> {

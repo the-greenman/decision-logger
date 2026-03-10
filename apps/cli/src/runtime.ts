@@ -45,6 +45,39 @@ export async function confirmAction(message: string): Promise<boolean> {
   }
 }
 
+async function promptLine(message: string): Promise<string | undefined> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return undefined;
+  }
+
+  const rl = createInterface({ input, output });
+  try {
+    return await rl.question(`${message} `);
+  } finally {
+    rl.close();
+  }
+}
+
+export async function promptRequiredString(message: string, currentValue?: string): Promise<string | undefined> {
+  if (currentValue && currentValue.trim().length > 0) {
+    return currentValue.trim();
+  }
+
+  const answer = await promptLine(message);
+  const normalized = answer?.trim();
+  return normalized && normalized.length > 0 ? normalized : undefined;
+}
+
+export async function promptRequiredList(message: string, currentValue?: string): Promise<string | undefined> {
+  const resolved = await promptRequiredString(message, currentValue);
+  if (!resolved) {
+    return undefined;
+  }
+
+  const values = resolved.split(',').map((value) => value.trim()).filter(Boolean);
+  return values.length > 0 ? values.join(',') : undefined;
+}
+
 export async function withSpinner<T>(message: string, task: () => Promise<T>): Promise<T> {
   if (!process.stdout.isTTY) {
     return task();

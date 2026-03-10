@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { api, getContext, requireActiveDecisionContext, type DecisionContext, type DecisionField, type DecisionLog, type DecisionTemplate } from '../client.js';
+import { api, getContext, requireActiveDecisionContext, type DecisionContext, type DecisionExportResponse, type DecisionField, type DecisionLog, type DecisionTemplate } from '../client.js';
+import { confirmAction, promptRequiredString, withSpinner } from '../runtime.js';
 
 async function resolveContextId(flag?: string): Promise<{ contextId: string; meetingId: string }> {
   if (flag) {
@@ -83,8 +84,10 @@ draftCommand
     if (opts.guidance) {
       body.guidance = [{ content: opts.guidance, source: 'user_text' }];
     }
-    console.log(chalk.blue('Generating draft…'));
-    const ctx = await api.post<DecisionContext>(`/api/decision-contexts/${contextId}/generate-draft`, body);
+    const ctx = await withSpinner(
+      'Generating draft…',
+      () => api.post<DecisionContext>(`/api/decision-contexts/${contextId}/generate-draft`, body),
+    );
     console.log(chalk.green('✓ Draft generated'));
     printDraft(ctx);
   });
@@ -108,9 +111,9 @@ draftCommand
   .option('-c, --context-id <id>', 'Decision context ID (defaults to active context)')
   .action(async (opts: { templateId: string; contextId?: string }) => {
     const { contextId } = await resolveContextId(opts.contextId);
-    const ctx = await api.post<DecisionContext>(`/api/decision-contexts/${contextId}/template-change`, {
+    const ctx = await withSpinner('Changing template…', () => api.post<DecisionContext>(`/api/decision-contexts/${contextId}/template-change`, {
       templateId: opts.templateId,
-    });
+    }));
     console.log(chalk.green('✓ Decision context template changed'));
     console.log(chalk.gray(`Context:  ${ctx.id}`));
     console.log(chalk.white(`Template: ${ctx.templateId}`));
@@ -143,7 +146,7 @@ draftCommand
   .option('-c, --context-id <id>', 'Decision context ID (defaults to active context)')
   .action(async (opts: { fieldId: string; contextId?: string }) => {
     const { contextId } = await resolveContextId(opts.contextId);
-    await api.put<DecisionContext>(`/api/decision-contexts/${contextId}/lock-field`, { fieldId: opts.fieldId });
+    await withSpinner('Locking field…', () => api.put<DecisionContext>(`/api/decision-contexts/${contextId}/lock-field`, { fieldId: opts.fieldId }));
     console.log(chalk.green(`✓ Field ${opts.fieldId} locked`));
   });
 
@@ -154,26 +157,62 @@ draftCommand
   .option('-c, --context-id <id>', 'Decision context ID (defaults to active context)')
   .action(async (opts: { fieldId: string; contextId?: string }) => {
     const { contextId } = await resolveContextId(opts.contextId);
-    await api.delete<DecisionContext>(`/api/decision-contexts/${contextId}/lock-field`, { fieldId: opts.fieldId });
+    await withSpinner('Unlocking field…', () => api.delete<DecisionContext>(`/api/decision-contexts/${contextId}/lock-field`, { fieldId: opts.fieldId }));
     console.log(chalk.green(`✓ Field ${opts.fieldId} unlocked`));
   });
 
 draftCommand
   .command('log')
   .description('Finalize and log the decision (immutable record)')
-  .requiredOption('--type <method>', 'Decision method: consensus|vote|authority|defer|reject|manual|ai_assisted')
-  .requiredOption('--by <name>', 'Name of person logging the decision')
+  .option('--type <method>', 'Decision method: consensus|vote|authority|defer|reject|manual|ai_assisted')
+  .option('--by <name>', 'Name of person logging the decision')
   .option('--details <text>', 'Additional decision method details')
   .option('-c, --context-id <id>', 'Decision context ID (defaults to active context)')
-  .action(async (opts: { type: string; by: string; details?: string; contextId?: string }) => {
+  .option('--yes', 'Skip confirmation prompt')
+  .action(async (opts: { type?: string; by?: string; details?: string; contextId?: string; yes?: boolean }) => {
     const { contextId } = await resolveContextId(opts.contextId);
-    const log = await api.post<DecisionLog>(`/api/decision-contexts/${contextId}/log`, {
-      loggedBy: opts.by,
-      decisionMethod: { type: opts.type, details: opts.details },
-    });
+    const type = await promptRequiredString('Decision method (consensus|vote|authority|defer|reject|manual|ai_assisted):', opts.type);
+    const loggedBy = await promptRequiredString('Logged by:', opts.by);
+    if (!type) {
+      throw new Error('Decision method is required. Pass --type or provide it interactively.');
+    }
+    if (!loggedBy) {
+      throw new Error('Logged by is required. Pass --by or provide it interactively.');
+    }
+    if (!opts.yes) {
+      const confirmed = await confirmAction(`Log decision for context ${contextId}?`);
+      if (!confirmed) {
+        console.log(chalk.yellow('Decision logging cancelled'));
+        return;
+      }
+    }
+    const log = await withSpinner('Logging decision…', () => api.post<DecisionLog>(`/api/decision-contexts/${contextId}/log`, {
+      loggedBy,
+      decisionMethod: { type, details: opts.details },
+    }));
     console.log(chalk.green('✓ Decision logged'));
     console.log(chalk.gray(`Log ID:  ${log.id}`));
     console.log(chalk.white(`Method:  ${log.decisionMethod.type}`));
     console.log(chalk.white(`By:      ${log.loggedBy}`));
     console.log(chalk.gray(`Logged:  ${log.loggedAt}`));
+  });
+
+draftCommand
+  .command('export')
+  .description('Export a logged decision in markdown or json format')
+  .argument('<decision-log-id>', 'Logged decision ID')
+  .option('-f, --format <format>', 'Export format: markdown|json', 'markdown')
+  .action(async (decisionLogId: string, opts: { format?: string }) => {
+    const format = opts.format === 'json' ? 'json' : 'markdown';
+    const response = await withSpinner(
+      `Exporting decision as ${format}…`,
+      () => api.get<DecisionExportResponse>(`/api/decisions/${decisionLogId}/export?format=${format}`),
+    );
+
+    if (response.format === 'markdown' && typeof response.content === 'string') {
+      console.log(response.content);
+      return;
+    }
+
+    console.log(JSON.stringify(response.content, null, 2));
   });

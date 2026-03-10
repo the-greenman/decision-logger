@@ -30,6 +30,41 @@ describe('CLI client request shapes', () => {
     );
   });
 
+  it('meeting create posts title, normalized participants, and date when participants are provided explicitly', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: 'meeting-1',
+        title: 'Q1 Planning',
+        date: '2026-03-10T00:00:00Z',
+        participants: ['Alice', 'Bob'],
+        status: 'active',
+        createdAt: 'now',
+      }),
+    });
+
+    const { meetingCommand } = await import('../commands/meeting.js');
+    await meetingCommand.parseAsync(
+      ['node', 'meeting', 'create', 'Q1 Planning', '--participants', 'Alice, Bob', '--date', '2026-03-10'],
+      { from: 'node' },
+    );
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:3000/api/meetings',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Q1 Planning',
+          date: '2026-03-10T00:00:00Z',
+          participants: ['Alice', 'Bob'],
+        }),
+      },
+    );
+  });
+
   it('api throws the server error string for non-ok responses', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
@@ -315,5 +350,78 @@ describe('CLI command request shapes', () => {
         }),
       },
     );
+  });
+
+  it('draft export requests markdown export for a logged decision', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ format: 'markdown', content: '# Decision:\n\nExample export' }),
+    });
+
+    const { draftCommand } = await import('../commands/draft.js');
+    await draftCommand.parseAsync(
+      ['node', 'draft', 'export', 'log-1'],
+      { from: 'node' },
+    );
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:3000/api/decisions/log-1/export?format=markdown',
+      { method: 'GET' },
+    );
+  });
+
+  it('draft export requests json export when explicitly selected', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ format: 'json', content: { id: 'log-1' } }),
+    });
+
+    const { draftCommand } = await import('../commands/draft.js');
+    await draftCommand.parseAsync(
+      ['node', 'draft', 'export', 'log-1', '--format', 'json'],
+      { from: 'node' },
+    );
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:3000/api/decisions/log-1/export?format=json',
+      { method: 'GET' },
+    );
+  });
+
+  it('status command requests API status', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: 'ok',
+        timestamp: '2026-03-10T23:31:00Z',
+        nodeEnv: 'development',
+        databaseConfigured: true,
+        llm: {
+          mode: 'real',
+          provider: 'anthropic',
+          model: 'claude-opus-4-5',
+        },
+      }),
+    });
+
+    const { statusCommand } = await import('../commands/status.js');
+    await statusCommand.parseAsync(
+      ['node', 'status'],
+      { from: 'node' },
+    );
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:3000/api/status',
+      { method: 'GET' },
+    );
+
+    consoleLogSpy.mockRestore();
   });
 });

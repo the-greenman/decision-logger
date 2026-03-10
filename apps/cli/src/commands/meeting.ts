@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { api, type Meeting } from '../client.js';
+import { promptRequiredList, withSpinner } from '../runtime.js';
 
 function printMeeting(m: Meeting) {
   console.log(chalk.gray(`ID:           ${m.id}`));
@@ -17,14 +18,19 @@ meetingCommand
   .command('create')
   .description('Create a new meeting')
   .argument('<title>', 'Meeting title')
-  .requiredOption('-p, --participants <list>', 'Comma-separated participants')
+  .option('-p, --participants <list>', 'Comma-separated participants')
   .option('-d, --date <date>', 'Meeting date (YYYY-MM-DD)', new Date().toISOString().split('T')[0])
-  .action(async (title: string, opts: { participants: string; date: string }) => {
-    const meeting = await api.post<Meeting>('/api/meetings', {
+  .action(async (title: string, opts: { participants?: string; date: string }) => {
+    const participantsInput = await promptRequiredList('Participants (comma-separated):', opts.participants);
+    if (!participantsInput) {
+      throw new Error('Participants are required. Pass --participants "Alice,Bob" or provide them interactively.');
+    }
+
+    const meeting = await withSpinner('Creating meeting…', () => api.post<Meeting>('/api/meetings', {
       title,
       date: `${opts.date}T00:00:00Z`,
-      participants: opts.participants.split(',').map((p) => p.trim()),
-    });
+      participants: participantsInput.split(',').map((p) => p.trim()),
+    }));
     console.log(chalk.green('✓ Meeting created'));
     printMeeting(meeting);
   });

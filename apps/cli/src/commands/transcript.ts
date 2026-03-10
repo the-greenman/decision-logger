@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { readFile } from 'fs/promises';
 import { resolve } from 'path';
 import { api, requireActiveMeeting } from '../client.js';
+import { withSpinner } from '../runtime.js';
 
 export const transcriptCommand = new Command('transcript')
   .description('Transcript management');
@@ -28,7 +29,7 @@ transcriptCommand
       }
     }
 
-    const result = await api.post<{ transcript: { id: string; format: string }; chunks: unknown[] }>(
+    const result = await withSpinner('Uploading transcript…', () => api.post<{ transcript: { id: string; format: string }; chunks: unknown[] }>(
       `/api/meetings/${meetingId}/transcripts/upload`,
       {
         content,
@@ -37,7 +38,7 @@ transcriptCommand
         chunkSize: parseInt(opts.chunkSize, 10),
         overlap: parseInt(opts.overlap, 10),
       },
-    );
+    ));
 
     console.log(chalk.green('✓ Transcript uploaded'));
     console.log(chalk.gray(`Transcript ID: ${result.transcript.id}`));

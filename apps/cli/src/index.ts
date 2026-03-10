@@ -5,6 +5,7 @@ import { transcriptCommand } from './commands/transcript.js';
 import { decisionsCommand } from './commands/decisions.js';
 import { contextCommand } from './commands/context.js';
 import { draftCommand } from './commands/draft.js';
+import { statusCommand } from './commands/status.js';
 import { setCliVerbose } from './runtime.js';
 
 const program = new Command();
@@ -20,6 +21,7 @@ program.addCommand(transcriptCommand);
 program.addCommand(decisionsCommand);
 program.addCommand(contextCommand);
 program.addCommand(draftCommand);
+program.addCommand(statusCommand);
 
 program.configureOutput({
   writeErr: (str) => process.stderr.write(chalk.red(str)),

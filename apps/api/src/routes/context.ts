@@ -193,6 +193,14 @@ export const clearDecisionContextRoute = createRoute({
       },
       description: 'Active decision context cleared successfully',
     },
+    400: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Requested meeting does not match the active meeting context',
+    },
     503: {
       content: {
         'application/json': {
@@ -269,6 +277,14 @@ export const clearFieldContextRoute = createRoute({
         },
       },
       description: 'Active field context cleared successfully',
+    },
+    400: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Requested meeting does not match the active meeting context',
     },
     503: {
       content: {

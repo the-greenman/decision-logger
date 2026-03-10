@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { api, requireActiveMeeting, type FlaggedDecision, type FlaggedDecisionListItem } from '../client.js';
+import { promptRequiredString, withSpinner } from '../runtime.js';
 
 function printDecision(d: FlaggedDecision | FlaggedDecisionListItem, index?: number) {
   const prefix = index !== undefined ? `${index + 1}. ` : '';
@@ -53,15 +54,18 @@ decisionsCommand
 decisionsCommand
   .command('flag')
   .description('Manually flag a decision')
-  .requiredOption('-t, --title <title>', 'Decision title')
+  .option('-t, --title <title>', 'Decision title')
   .option('-m, --meeting-id <id>', 'Meeting ID (defaults to active meeting)')
   .option('-c, --context <summary>', 'Context summary')
-  .action(async (opts: { title: string; meetingId?: string; context?: string }, command: Command) => {
-    const resolvedOpts = command.opts<{ title: string; meetingId?: string; context?: string }>();
+  .action(async (opts: { title?: string; meetingId?: string; context?: string }, command: Command) => {
+    const resolvedOpts = command.opts<{ title?: string; meetingId?: string; context?: string }>();
     const meetingId = resolvedOpts.meetingId || opts.meetingId || await requireActiveMeeting();
-    const title = resolvedOpts.title ?? opts.title;
+    const title = await promptRequiredString('Decision title:', resolvedOpts.title ?? opts.title);
+    if (!title) {
+      throw new Error('Decision title is required. Pass --title "Approve migration" or provide it interactively.');
+    }
     const contextSummary = resolvedOpts.context ?? opts.context ?? '';
-    const decision = await api.post<FlaggedDecision>(
+    const decision = await withSpinner('Flagging decision…', () => api.post<FlaggedDecision>(
       `/api/meetings/${meetingId}/flagged-decisions`,
       {
         suggestedTitle: title,
@@ -70,7 +74,7 @@ decisionsCommand
         priority: 0,
         chunkIds: [],
       },
-    );
+    ));
     console.log(chalk.green('✓ Decision flagged'));
     printDecision(decision);
   });

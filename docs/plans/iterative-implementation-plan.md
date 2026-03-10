@@ -51,7 +51,7 @@ Phases 0–2 are complete: Zod schemas, full service layer, Drizzle repositories
 | M5-CLI: HTTP client CLI | ✅ Done |
 | M5.0: Multi-decision workflow foundation | ⏳ |
 | M5.1: Core API endpoints (meeting, context, flagged-decisions, draft, log, export) | ⏳ |
-| M5.4: Interactive CLI UX (Clack) | ⏳ |
+| M5.4: Interactive CLI UX (Clack) | ✅ Done (implemented without Clack) |
 | M5.5 Phases 0–2: Web scaffolding + shared display + facilitator view (core workflow) | ⏳ |
 
 ### Deferred to post-M5 backlog
@@ -1967,6 +1967,22 @@ pnpm cli meeting list  # "Cannot connect to API at http://localhost:3000"
 - Colored output: locked fields in green, unlocked in yellow
 - Confirmation prompts for destructive actions (delete, rollback)
 - `--verbose` flag: prints raw HTTP request/response for debugging
+
+**Status**: ✅ Complete (implemented with existing commander-based runtime helpers; no Clack adoption needed for M5).
+
+**Delivered so far**:
+- Global `--verbose` flag wired into the CLI runtime
+- Raw HTTP request/response tracing added to the shared API client for debugging
+- Spinner support added for draft generation
+- Confirmation prompt groundwork added for decision logging flows
+- Spinner coverage expanded to high-latency CLI actions such as meeting creation, transcript upload, decision flagging, template changes, field lock/unlock, and decision logging
+- Confirmation prompts added for destructive context-clearing flows and decision logging, with `--yes` bypass for non-interactive runs
+- Interactive prompting for missing high-friction command inputs added using the current runtime helpers (for example missing participants, decision titles, and decision log metadata)
+- Real one-shot CLI usage validated via the local `dlogger` wrapper without introducing a separate prompt framework
+
+**Notes**:
+- The current commander + runtime-helper approach satisfies the M5 UX bar with lower migration risk, so Clack adoption is deferred unless future web/CLI requirements justify it.
+- Future UX polish can still add more command-specific affordances, but M5.4 itself is complete.
 
 ---
 
