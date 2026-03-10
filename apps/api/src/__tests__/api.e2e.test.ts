@@ -273,6 +273,40 @@ describe('API E2E Tests', () => {
     createdChunkId = data.chunks[0].id;
   });
 
+  it('DELETE /api/meetings/:id - should return 409 when dependent transcript records exist', async () => {
+    const meetingResponse = await app.request('/api/meetings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: `Delete Conflict Meeting ${Date.now()}`,
+        date: '2026-03-10T10:00:00Z',
+        participants: ['Dependency Tester'],
+      }),
+    });
+    expect(meetingResponse.status).toBe(201);
+    const meeting = await meetingResponse.json();
+
+    const uploadResponse = await app.request(`/api/meetings/${meeting.id}/transcripts/upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: 'Dependent transcript row for delete conflict validation.',
+        format: 'txt',
+        chunkStrategy: 'fixed',
+      }),
+    });
+    expect(uploadResponse.status).toBe(201);
+
+    const deleteResponse = await app.request(`/api/meetings/${meeting.id}`, {
+      method: 'DELETE',
+    });
+
+    expect(deleteResponse.status).toBe(409);
+    const deleteBody = await deleteResponse.json();
+    expect(typeof deleteBody.error).toBe('string');
+    expect(deleteBody.error.toLowerCase()).toContain('dependent');
+  });
+
   it('POST /api/meetings/:id/transcripts/upload - should accept Whisper verbose_json fixture', async () => {
     const meetingResponse = await app.request('/api/meetings', {
       method: 'POST',
