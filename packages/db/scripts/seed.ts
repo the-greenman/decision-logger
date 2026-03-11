@@ -8,6 +8,7 @@
  */
 
 import { db, client } from '../src/client.js';
+import { prepareTemplatesForSeeding } from '../src/seed-data/decision-templates.js';
 import { 
   decisionFields, 
   decisionTemplates, 
@@ -199,46 +200,20 @@ async function seed() {
 
   // Seed Decision Templates
   console.log('\nSeeding decision templates...');
-  const seedTemplates = [
-    {
-      namespace: 'core',
-      name: 'Standard Decision',
-      description: 'General purpose decision template for any type of decision',
-      category: 'standard' as const,
-      version: 1,
-      isDefault: true,
-      isCustom: false,
-    },
-    {
-      namespace: 'core',
-      name: 'Proposal Acceptance',
-      description: 'Template for evaluating and accepting proposals',
-      category: 'proposal' as const,
-      version: 1,
-      isDefault: false,
-      isCustom: false,
-    },
-    {
-      namespace: 'core',
-      name: 'Strategy Decision',
-      description: 'Template for strategic business or product decisions',
-      category: 'strategy' as const,
-      version: 1,
-      isDefault: false,
-      isCustom: false,
-    },
-  ];
+  const seedTemplates = prepareTemplatesForSeeding();
 
   const templates = [] as Array<(typeof decisionTemplates.$inferSelect)>;
   for (const templateSeed of seedTemplates) {
+    const { fields: templateFields, ...templateRecord } = templateSeed;
+    const templateVersion = 1;
     const existing = await db
       .select()
       .from(decisionTemplates)
       .where(
         and(
-          eq(decisionTemplates.namespace, templateSeed.namespace),
-          eq(decisionTemplates.name, templateSeed.name),
-          eq(decisionTemplates.version, templateSeed.version)
+          eq(decisionTemplates.namespace, templateRecord.namespace),
+          eq(decisionTemplates.name, templateRecord.name),
+          eq(decisionTemplates.version, templateVersion)
         )
       )
       .limit(1);
@@ -248,7 +223,8 @@ async function seed() {
       continue;
     }
 
-    const inserted = await db.insert(decisionTemplates).values(templateSeed).returning();
+    void templateFields;
+    const inserted = await db.insert(decisionTemplates).values(templateRecord).returning();
     if (inserted[0]) templates.push(inserted[0]);
   }
 
@@ -256,239 +232,42 @@ async function seed() {
 
   // Seed Template Field Assignments
   console.log('\nSeeding template field assignments...');
-  const standardTemplate = templates.find((template) => template.name === 'Standard Decision');
-  const strategyTemplate = templates.find((template) => template.name === 'Strategy Decision');
-  const proposalTemplate = templates.find((template) => template.name === 'Proposal Acceptance');
-  const decisionStatementField = fields.find((field) => field.name === 'decision_statement');
-  const contextField = fields.find((field) => field.name === 'context');
-  const optionsField = fields.find((field) => field.name === 'options');
-  const criteriaField = fields.find((field) => field.name === 'criteria');
-  const analysisField = fields.find((field) => field.name === 'analysis');
-  const risksField = fields.find((field) => field.name === 'risks');
-  const stakeholdersField = fields.find((field) => field.name === 'stakeholders');
-  const outcomeField = fields.find((field) => field.name === 'outcome');
-  const outstandingIssuesField = fields.find((field) => field.name === 'outstanding_issues');
-  const resourcesField = fields.find((field) => field.name === 'resources');
-  const timelineField = fields.find((field) => field.name === 'timeline');
+  const templateIdByIdentity = new Map(
+    templates.map((template) => [`${template.namespace}:${template.name}:${template.version ?? 1}`, template.id])
+  );
 
-  if (standardTemplate && decisionStatementField && contextField && optionsField && criteriaField && outcomeField && outstandingIssuesField) {
-    const seedAssignments = [
-      {
-        templateId: standardTemplate.id,
-        fieldId: decisionStatementField.id,
-        order: 0,
-        required: true,
-      },
-      {
-        templateId: standardTemplate.id,
-        fieldId: contextField.id,
-        order: 1,
-        required: true,
-      },
-      {
-        templateId: standardTemplate.id,
-        fieldId: optionsField.id,
-        order: 2,
-        required: true,
-      },
-      {
-        templateId: standardTemplate.id,
-        fieldId: criteriaField.id,
-        order: 3,
-        required: false,
-      },
-      {
-        templateId: standardTemplate.id,
-        fieldId: outcomeField.id,
-        order: 4,
-        required: true,
-      },
-      {
-        templateId: standardTemplate.id,
-        fieldId: outstandingIssuesField.id,
-        order: 5,
-        required: false,
-      },
-    ];
+  for (const templateSeed of seedTemplates) {
+    const templateId = templateIdByIdentity.get(`${templateSeed.namespace}:${templateSeed.name}:1`);
 
-    for (const a of seedAssignments) {
+    if (!templateId || !templateSeed.fields?.length) {
+      continue;
+    }
+
+    for (const assignment of templateSeed.fields) {
       const existing = await db
         .select()
         .from(templateFieldAssignments)
-        .where(and(eq(templateFieldAssignments.templateId, a.templateId), eq(templateFieldAssignments.fieldId, a.fieldId)))
+        .where(
+          and(
+            eq(templateFieldAssignments.templateId, templateId),
+            eq(templateFieldAssignments.fieldId, assignment.fieldId)
+          )
+        )
         .limit(1);
 
-      if (existing[0]) continue;
-      await db.insert(templateFieldAssignments).values(a);
+      if (existing[0]) {
+        continue;
+      }
+
+      await db.insert(templateFieldAssignments).values({
+        templateId,
+        fieldId: assignment.fieldId,
+        order: assignment.order,
+        required: assignment.required,
+      });
     }
 
-    console.log('  ✓ Ensured field assignments for Standard Decision template');
-  }
-
-  if (
-    strategyTemplate &&
-    decisionStatementField &&
-    contextField &&
-    optionsField &&
-    criteriaField &&
-    analysisField &&
-    risksField &&
-    stakeholdersField &&
-    outcomeField &&
-    outstandingIssuesField
-  ) {
-    const seedAssignments = [
-      {
-        templateId: strategyTemplate.id,
-        fieldId: decisionStatementField.id,
-        order: 0,
-        required: true,
-      },
-      {
-        templateId: strategyTemplate.id,
-        fieldId: contextField.id,
-        order: 1,
-        required: true,
-      },
-      {
-        templateId: strategyTemplate.id,
-        fieldId: optionsField.id,
-        order: 2,
-        required: true,
-      },
-      {
-        templateId: strategyTemplate.id,
-        fieldId: criteriaField.id,
-        order: 3,
-        required: true,
-      },
-      {
-        templateId: strategyTemplate.id,
-        fieldId: analysisField.id,
-        order: 4,
-        required: true,
-      },
-      {
-        templateId: strategyTemplate.id,
-        fieldId: risksField.id,
-        order: 5,
-        required: true,
-      },
-      {
-        templateId: strategyTemplate.id,
-        fieldId: stakeholdersField.id,
-        order: 6,
-        required: true,
-      },
-      {
-        templateId: strategyTemplate.id,
-        fieldId: outcomeField.id,
-        order: 7,
-        required: true,
-      },
-      {
-        templateId: strategyTemplate.id,
-        fieldId: outstandingIssuesField.id,
-        order: 8,
-        required: false,
-      },
-    ];
-
-    for (const a of seedAssignments) {
-      const existing = await db
-        .select()
-        .from(templateFieldAssignments)
-        .where(and(eq(templateFieldAssignments.templateId, a.templateId), eq(templateFieldAssignments.fieldId, a.fieldId)))
-        .limit(1);
-
-      if (existing[0]) continue;
-      await db.insert(templateFieldAssignments).values(a);
-    }
-
-    console.log('  ✓ Ensured field assignments for Strategy Decision template');
-  }
-
-  if (
-    proposalTemplate &&
-    decisionStatementField &&
-    contextField &&
-    optionsField &&
-    criteriaField &&
-    analysisField &&
-    resourcesField &&
-    timelineField &&
-    outcomeField &&
-    outstandingIssuesField
-  ) {
-    const seedAssignments = [
-      {
-        templateId: proposalTemplate.id,
-        fieldId: decisionStatementField.id,
-        order: 0,
-        required: true,
-      },
-      {
-        templateId: proposalTemplate.id,
-        fieldId: contextField.id,
-        order: 1,
-        required: true,
-      },
-      {
-        templateId: proposalTemplate.id,
-        fieldId: optionsField.id,
-        order: 2,
-        required: true,
-      },
-      {
-        templateId: proposalTemplate.id,
-        fieldId: criteriaField.id,
-        order: 3,
-        required: true,
-      },
-      {
-        templateId: proposalTemplate.id,
-        fieldId: analysisField.id,
-        order: 4,
-        required: true,
-      },
-      {
-        templateId: proposalTemplate.id,
-        fieldId: resourcesField.id,
-        order: 5,
-        required: false,
-      },
-      {
-        templateId: proposalTemplate.id,
-        fieldId: timelineField.id,
-        order: 6,
-        required: false,
-      },
-      {
-        templateId: proposalTemplate.id,
-        fieldId: outcomeField.id,
-        order: 7,
-        required: true,
-      },
-      {
-        templateId: proposalTemplate.id,
-        fieldId: outstandingIssuesField.id,
-        order: 8,
-        required: false,
-      },
-    ];
-
-    for (const a of seedAssignments) {
-      const existing = await db
-        .select()
-        .from(templateFieldAssignments)
-        .where(and(eq(templateFieldAssignments.templateId, a.templateId), eq(templateFieldAssignments.fieldId, a.fieldId)))
-        .limit(1);
-
-      if (existing[0]) continue;
-      await db.insert(templateFieldAssignments).values(a);
-    }
-
-    console.log('  ✓ Ensured field assignments for Proposal Acceptance template');
+    console.log(`  ✓ Ensured field assignments for ${templateSeed.name} template`);
   }
 
   // Seed Expert Templates
