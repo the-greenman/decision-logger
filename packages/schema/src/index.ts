@@ -217,6 +217,28 @@ export const StreamFlushResponseSchema = z.object({
   description: 'Transcript chunks created by flushing the streaming buffer',
 });
 
+export const AssignTranscriptChunksRequestSchema = z.object({
+  chunkIds: z.array(z.string().uuid()).min(1),
+}).openapi('AssignTranscriptChunksRequest', {
+  description: 'Chunk IDs to tag with transcript context derived from the route scope',
+  example: {
+    chunkIds: [
+      '550e8400-e29b-41d4-a716-446655440002',
+      '550e8400-e29b-41d4-a716-446655440003',
+    ],
+  },
+});
+
+export type AssignTranscriptChunksRequest = z.infer<typeof AssignTranscriptChunksRequestSchema>;
+
+export const AssignTranscriptChunksResponseSchema = z.object({
+  chunks: z.array(TranscriptChunkSchema),
+}).openapi('AssignTranscriptChunksResponse', {
+  description: 'Transcript chunks after assigning context tags',
+});
+
+export type AssignTranscriptChunksResponse = z.infer<typeof AssignTranscriptChunksResponseSchema>;
+
 export const ApiStatusLlmSchema = z.object({
   mode: z.enum(['mock', 'real']),
   provider: z.string(),
@@ -665,6 +687,30 @@ export const DecisionTemplateSchema = z.object({
 });
 
 export type DecisionTemplate = z.infer<typeof DecisionTemplateSchema>;
+
+export const GlobalContextSchema = z.object({
+  activeMeetingId: z.string().uuid().optional(),
+  activeDecisionId: z.string().uuid().optional(),
+  activeDecisionContextId: z.string().uuid().optional(),
+  activeField: z.string().optional(),
+  activeMeeting: MeetingSchema.optional(),
+  activeDecision: FlaggedDecisionSchema.optional(),
+  activeDecisionContext: DecisionContextSchema.optional(),
+  activeTemplate: DecisionTemplateSchema.optional(),
+}).openapi('GlobalContext', {
+  description: 'Current globally selected meeting and decision drafting context',
+});
+
+export type GlobalContext = z.infer<typeof GlobalContextSchema>;
+
+export const ActiveMeetingsContextSummarySchema = z.object({
+  currentContext: GlobalContextSchema,
+  activeMeetings: z.array(MeetingSchema),
+}).openapi('ActiveMeetingsContextSummary', {
+  description: 'Current global context and all meetings whose meeting-record status is active',
+});
+
+export type ActiveMeetingsContextSummary = z.infer<typeof ActiveMeetingsContextSummarySchema>;
 
 export const CreateDecisionTemplateSchema = DecisionTemplateSchema.omit({
   id: true,

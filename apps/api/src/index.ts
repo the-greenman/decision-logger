@@ -38,6 +38,7 @@ import {
   clearDecisionContextRoute,
   clearFieldContextRoute,
   clearMeetingContextRoute,
+  getActiveMeetingsContextSummaryRoute,
   getContextRoute,
   setDecisionContextRoute,
   setFieldContextRoute,
@@ -48,6 +49,8 @@ import {
   changeDecisionContextTemplateRoute,
   createDecisionContextRoute,
   createDecisionContextWindowRoute,
+  assignDecisionTranscriptContextRoute,
+  assignFieldTranscriptContextRoute,
   createSupplementaryContentRoute,
   createFlaggedDecisionRoute,
   deleteFlaggedDecisionRoute,
@@ -236,6 +239,22 @@ app.openapi(getContextRoute, async (c) => {
   return c.json(context);
 });
 
+app.openapi(getActiveMeetingsContextSummaryRoute, async (c) => {
+  if (!globalContextService) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  const [currentContext, meetings] = await Promise.all([
+    globalContextService.getContext(),
+    meetingService.findAll(),
+  ]);
+
+  return c.json({
+    currentContext,
+    activeMeetings: meetings.filter((meeting: { status: string }) => meeting.status === 'active'),
+  });
+});
+
 app.openapi(setMeetingContextRoute, async (c) => {
   if (!globalContextService) {
     return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
@@ -387,11 +406,15 @@ app.openapi(updateMeetingRoute, async (c) => {
 
     const updatePayload: {
       title?: string;
+      date?: string;
       participants?: string[];
     } = {};
 
     if (otherUpdates.title !== undefined) {
       updatePayload.title = otherUpdates.title;
+    }
+    if (otherUpdates.date !== undefined) {
+      updatePayload.date = otherUpdates.date;
     }
     if (otherUpdates.participants !== undefined) {
       updatePayload.participants = otherUpdates.participants;
@@ -1320,6 +1343,69 @@ app.openapi(getFieldTranscriptRoute, async (c) => {
   try {
     const resolvedFieldId = await resolveContextFieldId(services, id, fieldId);
     const chunks = await services.transcriptService.getChunksByContext(`decision:${id}:${resolvedFieldId}`);
+    return c.json({ chunks });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    if (isNotFoundErrorMessage(message)) {
+      return c.json({ error: message }, 404);
+    }
+
+    return c.json({ error: message }, 400);
+  }
+});
+
+app.openapi(assignDecisionTranscriptContextRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  const { id } = c.req.valid('param');
+  const { chunkIds } = c.req.valid('json');
+
+  try {
+    const context = await services.decisionContextRepository.findById(id);
+    if (!context) {
+      return c.json({ error: 'Decision context not found' }, 404);
+    }
+
+    const chunks = await services.transcriptService.assignContextsToChunks({
+      meetingId: context.meetingId,
+      chunkIds,
+      contexts: [`decision:${id}`],
+    });
+    return c.json({ chunks });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    if (isNotFoundErrorMessage(message)) {
+      return c.json({ error: message }, 404);
+    }
+
+    return c.json({ error: message }, 400);
+  }
+});
+
+app.openapi(assignFieldTranscriptContextRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: 'This endpoint requires DATABASE_URL to be configured' }, 503);
+  }
+
+  const { id, fieldId } = c.req.valid('param');
+  const { chunkIds } = c.req.valid('json');
+
+  try {
+    const context = await services.decisionContextRepository.findById(id);
+    if (!context) {
+      return c.json({ error: 'Decision context not found' }, 404);
+    }
+
+    const resolvedFieldId = await resolveContextFieldId(services, id, fieldId);
+    const chunks = await services.transcriptService.assignContextsToChunks({
+      meetingId: context.meetingId,
+      chunkIds,
+      contexts: [`decision:${id}`, `decision:${id}:${resolvedFieldId}`],
+    });
     return c.json({ chunks });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

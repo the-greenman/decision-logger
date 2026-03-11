@@ -66,6 +66,12 @@ export interface AddTranscriptTextData {
   uploadedBy?: string;
 }
 
+export interface AssignChunkContextsData {
+  meetingId: string;
+  chunkIds: string[];
+  contexts: string[];
+}
+
 export class TranscriptService {
   constructor(
     private rawTranscriptRepo: IRawTranscriptRepository,
@@ -152,6 +158,32 @@ export class TranscriptService {
 
   async getChunksByContext(contextTag: string): Promise<TranscriptChunk[]> {
     return this.chunkRepo.findByContext(contextTag);
+  }
+
+  async assignContextsToChunks(data: AssignChunkContextsData): Promise<TranscriptChunk[]> {
+    const chunkIds = Array.from(new Set(data.chunkIds));
+    if (chunkIds.length === 0) {
+      throw new Error('At least one chunk ID is required');
+    }
+
+    const contexts = Array.from(new Set(
+      data.contexts
+        .map((context) => context.trim())
+        .filter((context) => context.length > 0),
+    ));
+    if (contexts.length === 0) {
+      throw new Error('At least one context tag is required');
+    }
+
+    const meetingChunkIds = new Set(
+      (await this.chunkRepo.findByMeetingId(data.meetingId)).map((chunk) => chunk.id),
+    );
+    const missing = chunkIds.filter((chunkId) => !meetingChunkIds.has(chunkId));
+    if (missing.length > 0) {
+      throw new Error(`Chunk ${missing[0]} not found for meeting ${data.meetingId}`);
+    }
+
+    return this.chunkRepo.addContexts(chunkIds, contexts);
   }
 
   async searchChunks(meetingId: string, query: string): Promise<TranscriptChunk[]> {

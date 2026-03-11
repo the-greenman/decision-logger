@@ -5,6 +5,8 @@ import {
   DecisionTemplateSchema,
   DecisionFieldSchema,
   DecisionContextWindowSchema,
+  AssignTranscriptChunksRequestSchema,
+  AssignTranscriptChunksResponseSchema,
   ExpertTemplateSchema,
   FlaggedDecisionSchema,
   FlaggedDecisionListItemSchema,
@@ -1602,6 +1604,106 @@ export const getFieldTranscriptRoute = createRoute({
         },
       },
       description: 'Invalid field transcript request',
+    },
+    404: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Decision context or field not found',
+    },
+    503: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Database-backed endpoint unavailable',
+    },
+  },
+});
+
+export const assignDecisionTranscriptContextRoute = createRoute({
+  method: 'post',
+  path: '/api/decision-contexts/:id/transcript/context',
+  tags: ['decision-contexts', 'transcripts'],
+  request: {
+    params: UuidParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: AssignTranscriptChunksRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: AssignTranscriptChunksResponseSchema,
+        },
+      },
+      description: 'Transcript chunks tagged for the decision context',
+    },
+    400: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Invalid transcript context assignment request',
+    },
+    404: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Decision context not found',
+    },
+    503: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Database-backed endpoint unavailable',
+    },
+  },
+});
+
+export const assignFieldTranscriptContextRoute = createRoute({
+  method: 'post',
+  path: '/api/decision-contexts/:id/fields/:fieldId/transcript/context',
+  tags: ['decision-contexts', 'transcripts'],
+  request: {
+    params: DecisionFieldParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: AssignTranscriptChunksRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: AssignTranscriptChunksResponseSchema,
+        },
+      },
+      description: 'Transcript chunks tagged for the decision field',
+    },
+    400: {
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: 'Invalid field transcript context assignment request',
     },
     404: {
       content: {

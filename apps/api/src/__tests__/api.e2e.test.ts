@@ -269,6 +269,18 @@ describe('API E2E Tests', () => {
     expect(data.activeMeeting?.id).toBe(createdMeetingId);
   });
 
+  it('GET /api/context/active-meetings - should return current context plus meetings with active record status', async () => {
+    const response = await app.request('/api/context/active-meetings');
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.currentContext.activeMeetingId).toBe(createdMeetingId);
+    expect(data.currentContext.activeMeeting?.id).toBe(createdMeetingId);
+    expect(data.activeMeetings).toBeInstanceOf(Array);
+    expect(data.activeMeetings.some((meeting: { id: string }) => meeting.id === createdMeetingId)).toBe(true);
+    expect(data.activeMeetings.some((meeting: { id: string }) => meeting.id === deletableMeetingId)).toBe(true);
+  });
+
   it('GET /api/meetings - should list all meetings', async () => {
     const response = await app.request('/api/meetings');
     
@@ -1132,6 +1144,57 @@ describe('API E2E Tests', () => {
     expect(data.error).toBeDefined();
   });
 
+  it('POST /api/decision-contexts/:id/transcript/context - should tag chunks at decision scope', async () => {
+    const response = await app.request(`/api/decision-contexts/${createdContextId}/transcript/context`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chunkIds: [createdChunkId] }),
+    });
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.chunks).toBeInstanceOf(Array);
+    expect(data.chunks[0].contexts).toContain(`decision:${createdContextId}`);
+  });
+
+  it('POST /api/decision-contexts/:id/transcript/context - should return 404 for missing context', async () => {
+    const response = await app.request('/api/decision-contexts/11111111-1111-4111-8111-111111111111/transcript/context', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chunkIds: [createdChunkId] }),
+    });
+
+    expect(response.status).toBe(404);
+    const data = await response.json();
+    expect(data.error).toBeDefined();
+  });
+
+  it('POST /api/decision-contexts/:id/fields/:fieldId/transcript/context - should tag chunks at field scope', async () => {
+    const response = await app.request(`/api/decision-contexts/${createdContextId}/fields/${createdFieldId}/transcript/context`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chunkIds: [createdChunkId] }),
+    });
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.chunks).toBeInstanceOf(Array);
+    expect(data.chunks[0].contexts).toContain(`decision:${createdContextId}`);
+    expect(data.chunks[0].contexts).toContain(`decision:${createdContextId}:${createdFieldId}`);
+  });
+
+  it('POST /api/decision-contexts/:id/fields/:fieldId/transcript/context - should return 404 for missing field', async () => {
+    const response = await app.request(`/api/decision-contexts/${createdContextId}/fields/11111111-1111-4111-8111-111111111111/transcript/context`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chunkIds: [createdChunkId] }),
+    });
+
+    expect(response.status).toBe(404);
+    const data = await response.json();
+    expect(data.error).toBeDefined();
+  });
+
   it('POST /api/decision-contexts/:id/fields/:fieldId/regenerate - should regenerate a single field', async () => {
     const response = await app.request(`/api/decision-contexts/${createdContextId}/fields/${createdFieldId}/regenerate`, {
       method: 'POST',
@@ -1572,6 +1635,8 @@ describe('API E2E Tests', () => {
     expect(pathKeys.some((path) => path.includes('/decision-contexts/') && path.endsWith('/regenerate'))).toBe(true);
     expect(pathKeys.some((path) => path.includes('/decision-contexts/') && path.includes('/fields/') && path.endsWith('/regenerate'))).toBe(true);
     expect(pathKeys.some((path) => path.includes('/decision-contexts/') && path.includes('/fields/') && path.endsWith('/transcript'))).toBe(true);
+    expect(pathKeys.some((path) => path.includes('/decision-contexts/') && path.endsWith('/transcript/context'))).toBe(true);
+    expect(pathKeys.some((path) => path.includes('/decision-contexts/') && path.includes('/fields/') && path.endsWith('/transcript/context'))).toBe(true);
     expect(pathKeys.some((path) => path.includes('/decision-contexts/') && path.endsWith('/log'))).toBe(true);
     expect(pathKeys.some((path) => path.includes('/api/decisions/') && !path.endsWith('/export'))).toBe(true);
     expect(pathKeys.some((path) => path.includes('/api/decisions/') && path.endsWith('/export'))).toBe(true);

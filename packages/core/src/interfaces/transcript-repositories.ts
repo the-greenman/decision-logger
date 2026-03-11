@@ -25,6 +25,7 @@ export interface ITranscriptChunkRepository {
   findById(id: string): Promise<TranscriptChunk | null>;
   search(meetingId: string, query: string): Promise<TranscriptChunk[]>;
   findByDecisionContext(decisionContextId: string): Promise<TranscriptChunk[]>;
+  addContexts(chunkIds: string[], contexts: string[]): Promise<TranscriptChunk[]>;
 }
 
 export interface IStreamingBufferRepository {
