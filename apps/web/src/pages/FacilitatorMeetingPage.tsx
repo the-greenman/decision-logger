@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   RefreshCw,
   Undo2,
@@ -23,19 +23,31 @@ import {
   Check,
   X,
 } from 'lucide-react';
+import { useMeeting } from '@/hooks/useMeeting';
+import { useMeetingAgenda } from '@/hooks/useMeetingAgenda';
+import { useDecisionContext } from '@/hooks/useDecisionContext';
+import { useTemplates } from '@/hooks/useTemplates';
 import {
-  ACTIVE_CONTEXT,
-  AGENDA_ITEMS,
-  CANDIDATES,
-  MEETINGS,
-  OPEN_CONTEXTS,
-  SUPPLEMENTARY_ITEMS,
-  getMockFieldsForTemplate,
-} from '@/lib/mock-data';
+  lockField,
+  unlockField,
+  updateFieldValue,
+  regenerateField,
+  regenerateDraft,
+  logDecision,
+  updateMeeting,
+  createDecisionContext,
+  updateFlaggedDecision,
+  createFlaggedDecision,
+  listLLMInteractions,
+} from '@/api/endpoints';
+import type { LLMInteraction } from '@/api/types';
+import { buildCandidates, buildAgendaItems } from '@/api/adapters';
 import { FacilitatorFieldCard } from '@/components/facilitator/FacilitatorFieldCard';
 import { CandidateCard } from '@/components/facilitator/CandidateCard';
 import { AgendaList } from '@/components/shared/AgendaList';
+import { AgendaItemAddWidget } from '@/components/shared/AgendaItemAddWidget';
 import { MeetingAttendeesPanel } from '@/components/shared/MeetingAttendeesPanel';
+import { CurrentMeetingWidget } from '@/components/shared/CurrentMeetingWidget';
 import { RelationsAccordion } from '@/components/shared/RelationsAccordion';
 import { TagPill } from '@/components/shared/TagPill';
 import { FieldZoom } from '@/components/facilitator/FieldZoom';
@@ -48,6 +60,7 @@ import { PromoteCandidateDialog } from '@/components/facilitator/PromoteCandidat
 import { AddExistingContextDialog } from '@/components/facilitator/AddExistingContextDialog';
 import { IconButton } from '@/components/ui/IconButton';
 import { TabButton } from '@/components/ui/Tabs';
+import { OPEN_CONTEXTS } from '@/lib/mock-data';
 import type {
   AgendaItemStatus,
   DecisionContext,
@@ -67,11 +80,27 @@ type AgendaItemModel = {
   id: string;
   title: string;
   status: AgendaItemStatus;
+  /** Corresponding API DecisionContext id, null if context not yet created */
+  contextId?: string | null;
+};
+
+const EMPTY_CONTEXT: DecisionContext = {
+  id: '',
+  title: '',
+  summary: '',
+  templateName: '',
+  fields: [],
+  tags: [],
+  relations: [],
+  status: 'pending',
 };
 
 type SegmentSelectionPayload = {
   rowIds: string[];
   chunkIds: string[];
+  decisionContextId?: string;
+  fieldId?: string;
+  scope?: 'meeting' | 'decision' | 'field';
 };
 
 type CreateContextDraftPayload = {
@@ -81,21 +110,6 @@ type CreateContextDraftPayload = {
     targetId: string;
     targetTitle: string;
     relationType: RelationType;
-  };
-};
-
-type SetupDraftPayload = {
-  meetingTitle?: string;
-  meetingDate?: string;
-  participants?: string[];
-  initialCandidates?: string[];
-  initialAgenda?: {
-    openContexts?: Array<{
-      id: string;
-      title: string;
-      sourceMeetingTitle: string;
-      sourceMeetingDate: string;
-    }>;
   };
 };
 
@@ -139,12 +153,13 @@ type ModalState =
 
 const RELATION_TYPES: RelationType[] = ['related', 'blocks', 'blocked_by', 'supersedes', 'superseded_by'];
 const TAG_CATEGORIES: TagCategory[] = ['topic', 'team', 'project'];
-
-const MOCK_LLM_LOG = [
-  { id: 'llm-1', at: '14:12', model: 'claude-opus-4-5', action: 'generate draft', note: 'Initial context generation pass.' },
-  { id: 'llm-2', at: '14:24', model: 'claude-opus-4-5', action: 'regenerate options', note: 'Applied facilitator focus note.' },
-  { id: 'llm-3', at: '14:31', model: 'claude-opus-4-5', action: 'regenerate rationale', note: 'Incorporated supplementary evidence.' },
-];
+const DECISION_METHOD_MAP: Record<DecisionMethod, 'consensus' | 'vote' | 'authority' | 'manual'> = {
+  consensus: 'consensus',
+  unanimous_vote: 'vote',
+  majority_vote: 'vote',
+  executive: 'authority',
+  delegated: 'manual',
+};
 
 const SUGGESTED_TAG_SEEDS: Array<Pick<SuggestedTag, 'name' | 'category' | 'reason'>> = [
   { name: 'timeline risk', category: 'topic', reason: 'Repeated delivery date references.' },
@@ -157,18 +172,38 @@ const SUGGESTED_TAG_SEEDS: Array<Pick<SuggestedTag, 'name' | 'category' | 'reaso
 export function FacilitatorMeetingPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { id: meetingId = '' } = useParams<{ id: string }>();
 
-  const [activeContext, setActiveContext] = useState<DecisionContext>(ACTIVE_CONTEXT);
-  const [fields, setFields] = useState<Field[]>(ACTIVE_CONTEXT.fields);
-  const [candidates, setCandidates] = useState<Candidate[]>(CANDIDATES);
-  const [agendaItems, setAgendaItems] = useState<AgendaItemModel[]>(AGENDA_ITEMS);
+  // ── API data ──────────────────────────────────────────────────────
+  const [activeApiContextId, setActiveApiContextId] = useState<string | null>(null);
+  const { meeting: apiMeeting, refresh: refreshMeeting } = useMeeting(meetingId);
+  const { decisions: apiDecisions, refresh: refreshAgenda } = useMeetingAgenda(meetingId);
+  const {
+    context: apiContext,
+    fields: apiContextFields,
+    templateFields,
+    refresh: refreshContext,
+  } = useDecisionContext(activeApiContextId);
+  const { templates } = useTemplates();
+  const currentMeeting = useMemo(
+    () => ({
+      title: apiMeeting?.title ?? 'Current meeting',
+      date: apiMeeting?.date ?? '',
+    }),
+    [apiMeeting],
+  );
+
+  const [activeContext, setActiveContext] = useState<DecisionContext>(EMPTY_CONTEXT);
+  const [fields, setFields] = useState<Field[]>([]);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [agendaItems, setAgendaItems] = useState<AgendaItemModel[]>([]);
   const [deferredItems, setDeferredItems] = useState<AgendaItemModel[]>([]);
   const [relatedMeetings, setRelatedMeetings] = useState<RelatedMeeting[]>([]);
   const [createContextDraft, setCreateContextDraft] = useState<CreateContextDraftPayload | null>(null);
-  const [leftTab, setLeftTab] = useState<'candidates' | 'agenda'>('candidates');
+  const [leftTab, setLeftTab] = useState<'candidates' | 'agenda'>('agenda');
   const [zoomedFieldId, setZoomedFieldId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
-  const [supplementary, setSupplementary] = useState<SupplementaryItem[]>(SUPPLEMENTARY_ITEMS);
+  const [supplementary, setSupplementary] = useState<SupplementaryItem[]>([]);
   const [finalised, setFinalised] = useState(false);
   const [transcriptUploaded, setTranscriptUploaded] = useState(false);
   const [selectionToast, setSelectionToast] = useState<{ rows: number; chunks: number } | null>(null);
@@ -183,7 +218,8 @@ export function FacilitatorMeetingPage() {
 
   const [flagLaterTitle, setFlagLaterTitle] = useState('');
   const [showLLMLog, setShowLLMLog] = useState(false);
-  const [llmLog, setLlmLog] = useState(MOCK_LLM_LOG);
+  const [llmLog, setLlmLog] = useState<LLMInteraction[]>([]);
+  const [selectedLlmInteractionId, setSelectedLlmInteractionId] = useState<string | null>(null);
   const [leftPanelWidth, setLeftPanelWidth] = useState(288);
   const [rightPanelWidth, setRightPanelWidth] = useState(320);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
@@ -194,55 +230,44 @@ export function FacilitatorMeetingPage() {
     startWidth: number;
   }>(null);
   const [editingTitle, setEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(ACTIVE_CONTEXT.title);
+  const [titleDraft, setTitleDraft] = useState('');
   const [editingSummary, setEditingSummary] = useState(false);
-  const [summaryDraft, setSummaryDraft] = useState(ACTIVE_CONTEXT.summary);
-  const [suggestedTags, setSuggestedTags] = useState<SuggestedTag[]>([
-    {
-      id: 'st-1',
-      name: 'Q4 planning',
-      category: 'project',
-      reason: 'The initial draft emphasized Q4 planning constraints.',
-    },
-    {
-      id: 'st-2',
-      name: 'architecture',
-      category: 'topic',
-      reason: 'The draft linked several points to architecture direction.',
-    },
-  ]);
+  const [summaryDraft, setSummaryDraft] = useState('');
+  const [suggestedTags, setSuggestedTags] = useState<SuggestedTag[]>([]);
+  const [endingMeeting, setEndingMeeting] = useState(false);
+
+  const [attendees, setAttendees] = useState<AttendeePresence[]>([]);
+  const [attendeeEvents, setAttendeeEvents] = useState<AttendeeEvent[]>([]);
+  const [agendaAddError, setAgendaAddError] = useState<string | null>(null);
+  const [addingAgendaItem, setAddingAgendaItem] = useState(false);
+  const leftTabInitializedRef = useRef(false);
+
+  const meetingFocusKey = `dl:meeting-focus:${meetingId}`;
+  const meetingFieldKey = `dl:meeting-fields:${meetingId}`;
+  const activeContextKey = `dl:fac:active-context:${meetingId}`;
+  const meetingSharedPath = `/meetings/${meetingId}`;
+  const meetingHomePath = `/meetings/${meetingId}/facilitator/home`;
+  const transcriptQuery = new URLSearchParams();
+  if (activeApiContextId) transcriptQuery.set('decisionContextId', activeApiContextId);
+  if (activeApiContextId && zoomedFieldId) transcriptQuery.set('fieldId', zoomedFieldId);
+  const meetingTranscriptPath = `/meetings/${meetingId}/facilitator/transcript${
+    transcriptQuery.toString() ? `?${transcriptQuery.toString()}` : ''
+  }`;
+  const leftPanelWidthKey = `dl:fac:left-width:${meetingId}`;
+  const rightPanelWidthKey = `dl:fac:right-width:${meetingId}`;
+  const leftPanelCollapsedKey = `dl:fac:left-collapsed:${meetingId}`;
+  const rightPanelCollapsedKey = `dl:fac:right-collapsed:${meetingId}`;
 
   const activeCandidates = candidates.filter((c) => c.status === 'new');
-  const isClosedContext = activeContext.status === 'logged';
+  const hasSelectedContext = Boolean(activeApiContextId);
+  const isClosedContext = hasSelectedContext && activeContext.status === 'logged';
+  const selectedLlmInteraction = llmLog.find((entry) => entry.id === selectedLlmInteractionId) ?? null;
+  const isMeetingCompleted = apiMeeting?.status === 'completed';
   const unlockedCount = fields.filter((f) => f.status !== 'locked').length;
   const zoomedField = zoomedFieldId ? fields.find((f) => f.id === zoomedFieldId) ?? null : null;
 
   const promoteCandidate =
     modal?.type === 'promote' ? candidates.find((candidate) => candidate.id === modal.candidateId) ?? null : null;
-  const currentMeeting = { id: 'mtg-1', title: 'Q4 Architecture Review', date: '2026-03-08' };
-  const meetingRecord = MEETINGS.find((meeting) => meeting.id === currentMeeting.id) ?? null;
-  const initialAttendeeNames = meetingRecord?.participants ?? ['Alice Chen', 'Bob Marsh', 'Priya Nair'];
-  const [attendees, setAttendees] = useState<AttendeePresence[]>(
-    initialAttendeeNames.map((name) => ({
-      name,
-      status: 'present',
-      updatedAt: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-    })),
-  );
-  const [attendeeEvents, setAttendeeEvents] = useState<AttendeeEvent[]>(
-    initialAttendeeNames.map((name, index) => ({
-      id: `attendee-start-${index}`,
-      attendeeName: name,
-      action: 'entered',
-      at: 'meeting start',
-    })),
-  );
-  const meetingFocusKey = `dl:meeting-focus:${currentMeeting.id}`;
-  const meetingFieldKey = `dl:meeting-fields:${currentMeeting.id}`;
-  const leftPanelWidthKey = `dl:fac:left-width:${currentMeeting.id}`;
-  const rightPanelWidthKey = `dl:fac:right-width:${currentMeeting.id}`;
-  const leftPanelCollapsedKey = `dl:fac:left-collapsed:${currentMeeting.id}`;
-  const rightPanelCollapsedKey = `dl:fac:right-collapsed:${currentMeeting.id}`;
 
   const streamBadgeClass = useMemo(() => {
     if (streamState === 'live') return 'bg-settled';
@@ -284,15 +309,17 @@ export function FacilitatorMeetingPage() {
       const savedRightWidth = Number(localStorage.getItem(rightPanelWidthKey));
       const savedLeftCollapsed = localStorage.getItem(leftPanelCollapsedKey);
       const savedRightCollapsed = localStorage.getItem(rightPanelCollapsedKey);
+      const savedActiveContextId = localStorage.getItem(activeContextKey);
 
       if (!Number.isNaN(savedLeftWidth) && savedLeftWidth > 0) setLeftPanelWidth(savedLeftWidth);
       if (!Number.isNaN(savedRightWidth) && savedRightWidth > 0) setRightPanelWidth(savedRightWidth);
       if (savedLeftCollapsed === 'true') setLeftPanelCollapsed(true);
       if (savedRightCollapsed === 'true') setRightPanelCollapsed(true);
+      if (savedActiveContextId) setActiveApiContextId(savedActiveContextId);
     } catch {
       // noop for prototype safety
     }
-  }, [leftPanelCollapsedKey, leftPanelWidthKey, rightPanelCollapsedKey, rightPanelWidthKey]);
+  }, [activeContextKey, leftPanelCollapsedKey, leftPanelWidthKey, rightPanelCollapsedKey, rightPanelWidthKey]);
 
   useEffect(() => {
     try {
@@ -314,52 +341,35 @@ export function FacilitatorMeetingPage() {
     rightPanelWidthKey,
   ]);
 
-  // ── Process segment selection returned from transcript page ───────
-
   useEffect(() => {
-    const state = location.state as { setupDraft?: SetupDraftPayload } | null;
-    if (!state?.setupDraft) return;
-
-    const { setupDraft } = state;
-
-    if (setupDraft.initialCandidates && setupDraft.initialCandidates.length > 0) {
-      const initialCandidates = setupDraft.initialCandidates;
-      setCandidates((prev) => {
-        const existingTitles = new Set(prev.map((candidate) => candidate.title.toLowerCase()));
-        const manualCandidates = initialCandidates
-          .filter((title) => !existingTitles.has(title.toLowerCase()))
-          .map((title, index) => ({
-            id: `cand-setup-${Date.now()}-${index}`,
-            title,
-            summary: 'Prepared from meeting agenda planning. Requires promotion before entering agenda.',
-            status: 'new' as const,
-            detectedAt: 'setup',
-          }));
-        return [...manualCandidates, ...prev];
-      });
+    try {
+      if (activeApiContextId) {
+        localStorage.setItem(activeContextKey, activeApiContextId);
+      } else {
+        localStorage.removeItem(activeContextKey);
+      }
+    } catch {
+      // noop for prototype safety
     }
+  }, [activeApiContextId, activeContextKey]);
 
-    if (setupDraft.initialAgenda?.openContexts && setupDraft.initialAgenda.openContexts.length > 0) {
-      setAgendaItems((prev) => {
-        const existing = new Set(prev.map((item) => item.id));
-        const additions = setupDraft.initialAgenda?.openContexts
-          ?.filter((ctx) => !existing.has(ctx.id))
-          .map((ctx) => ({ id: ctx.id, title: ctx.title, status: 'pending' as const })) ?? [];
-        return additions.length > 0 ? [...prev, ...additions] : prev;
-      });
-    }
-
-    setLeftTab('candidates');
-    navigate(location.pathname, { replace: true, state: null });
-  }, [location.pathname, location.state, navigate]);
+  // ── Process segment selection returned from transcript page ───────
 
   useEffect(() => {
     const state = location.state as { segmentSelection?: SegmentSelectionPayload } | null;
     if (!state?.segmentSelection) return;
 
-    const { rowIds, chunkIds } = state.segmentSelection;
+    const { rowIds, chunkIds, decisionContextId, fieldId, scope } = state.segmentSelection;
     setContextSegmentRowCount((prev) => prev + rowIds.length);
     setSelectionToast({ rows: rowIds.length, chunks: chunkIds.length });
+
+    if (decisionContextId) {
+      setActiveApiContextId(decisionContextId);
+      setLeftTab('agenda');
+    }
+    if (scope === 'field' && fieldId) {
+      setZoomedFieldId(fieldId);
+    }
 
     const timer = setTimeout(() => setSelectionToast(null), 3200);
     navigate(location.pathname, { replace: true, state: null });
@@ -394,7 +404,7 @@ export function FacilitatorMeetingPage() {
       localStorage.setItem(
         meetingFocusKey,
         JSON.stringify({
-          meetingId: currentMeeting.id,
+          meetingId,
           fieldId: zoomedFieldId,
           updatedAt: new Date().toISOString(),
         }),
@@ -402,7 +412,7 @@ export function FacilitatorMeetingPage() {
     } catch {
       // noop for prototype safety
     }
-  }, [currentMeeting.id, meetingFocusKey, zoomedFieldId]);
+  }, [meetingId, meetingFocusKey, zoomedFieldId]);
 
   // ── Broadcast field values for shared-display sync ───────────────
   useEffect(() => {
@@ -410,7 +420,7 @@ export function FacilitatorMeetingPage() {
       localStorage.setItem(
         meetingFieldKey,
         JSON.stringify({
-          meetingId: currentMeeting.id,
+          meetingId,
           fields,
           updatedAt: new Date().toISOString(),
         }),
@@ -418,7 +428,102 @@ export function FacilitatorMeetingPage() {
     } catch {
       // noop for prototype safety
     }
-  }, [currentMeeting.id, fields, meetingFieldKey]);
+  }, [meetingId, fields, meetingFieldKey]);
+
+  // ── Sync API meeting participants to attendees ─────────────────────
+  useEffect(() => {
+    if (!apiMeeting?.participants?.length) return;
+    setAttendees(
+      apiMeeting.participants.map((name) => ({
+        name,
+        status: 'present' as const,
+        updatedAt: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      })),
+    );
+    setAttendeeEvents(
+      apiMeeting.participants.map((name, index) => ({
+        id: `attendee-start-${index}`,
+        attendeeName: name,
+        action: 'entered' as const,
+        at: 'meeting start',
+      })),
+    );
+  }, [apiMeeting]);
+
+  // ── Sync API flagged decisions to candidates and agenda ───────────
+  useEffect(() => {
+    setCandidates(buildCandidates(apiDecisions));
+    const builtItems = buildAgendaItems(apiDecisions);
+    const mappedAgendaItems = builtItems.map((item) => ({
+      id: item.id,
+      title: item.title,
+      status: item.status,
+      contextId: item.contextId,
+    }));
+    setAgendaItems(mappedAgendaItems);
+
+    const hasSelectedContext = activeApiContextId
+      ? mappedAgendaItems.some((item) => item.contextId === activeApiContextId)
+      : false;
+
+    if (!hasSelectedContext) {
+      const fallbackItem = mappedAgendaItems.find((item) => item.contextId) ?? null;
+      if (fallbackItem?.contextId) {
+        setActiveApiContextId(fallbackItem.contextId);
+        setActiveContext((prev) => ({
+          ...prev,
+          id: fallbackItem.id,
+          title: fallbackItem.title,
+          summary: `Active discussion context for ${fallbackItem.title}.`,
+          status: fallbackItem.status === 'logged' ? 'logged' : 'active',
+        }));
+        setFinalised(fallbackItem.status === 'logged');
+      } else {
+        setActiveApiContextId(null);
+        setActiveContext(EMPTY_CONTEXT);
+        setFinalised(false);
+      }
+    }
+
+    if (!leftTabInitializedRef.current) {
+      setLeftTab('agenda');
+      leftTabInitializedRef.current = true;
+    }
+  }, [activeApiContextId, apiDecisions]);
+
+  // ── Sync API context fields to local fields state ─────────────────
+  useEffect(() => {
+    if (!apiContext) return;
+    const activeTemplate = templates.find((template) => template.id === apiContext.templateId);
+    setFields(apiContextFields);
+    setActiveContext((prev) => ({
+      ...prev,
+      id: apiContext.id,
+      title: apiContext.title,
+      templateName: activeTemplate?.name ?? prev.templateName,
+      status: apiContext.status === 'logged' ? 'logged' : 'active',
+    }));
+    setTitleDraft(apiContext.title);
+  }, [apiContext, apiContextFields, templates]);
+
+  // ── Load LLM log when panel opens ────────────────────────────────
+  useEffect(() => {
+    if (!showLLMLog) return;
+    if (!activeApiContextId) {
+      setLlmLog([]);
+      setSelectedLlmInteractionId(null);
+      return;
+    }
+    void listLLMInteractions(activeApiContextId)
+      .then(({ interactions }) => {
+        setLlmLog(interactions);
+        setSelectedLlmInteractionId(interactions[interactions.length - 1]?.id ?? null);
+      })
+      .catch(() => {
+        setLlmLog([]);
+        setSelectedLlmInteractionId(null);
+      });
+  }, [showLLMLog, activeApiContextId]);
 
   // ── Field mutations ────────────────────────────────────────────────
 
@@ -426,19 +531,43 @@ export function FacilitatorMeetingPage() {
     setFields((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
   }
 
-  function handleLock(id: string) {
-    if (isClosedContext) return;
-    updateField(id, { status: 'locked' });
+  async function handleLock(id: string) {
+    if (isClosedContext || !activeApiContextId) return;
+    updateField(id, { status: 'locked' }); // optimistic
+    try {
+      const updated = await lockField(activeApiContextId, id);
+      setFields((prev) => prev.map((f) => {
+        const locked = updated.lockedFields.includes(f.id);
+        return { ...f, status: locked ? 'locked' : f.status === 'locked' ? 'idle' : f.status };
+      }));
+    } catch {
+      updateField(id, { status: 'idle' }); // revert
+    }
   }
 
-  function handleUnlock(id: string) {
-    if (isClosedContext) return;
-    updateField(id, { status: 'idle' });
+  async function handleUnlock(id: string) {
+    if (isClosedContext || !activeApiContextId) return;
+    updateField(id, { status: 'idle' }); // optimistic
+    try {
+      const updated = await unlockField(activeApiContextId, id);
+      setFields((prev) => prev.map((f) => {
+        const locked = updated.lockedFields.includes(f.id);
+        return { ...f, status: locked ? 'locked' : f.status === 'locked' ? 'idle' : f.status };
+      }));
+    } catch {
+      updateField(id, { status: 'locked' }); // revert
+    }
   }
 
-  function handleSaveFieldValue(id: string, value: string) {
-    if (isClosedContext) return;
-    updateField(id, { value });
+  async function handleSaveFieldValue(id: string, value: string) {
+    if (isClosedContext || !activeApiContextId) return;
+    updateField(id, { value }); // optimistic
+    try {
+      await updateFieldValue(activeApiContextId, id, value);
+    } catch {
+      // field value will be out of sync — refreshContext on next render
+      void refreshContext();
+    }
   }
 
   function handleGuidanceChange(id: string, guidance: string) {
@@ -446,46 +575,47 @@ export function FacilitatorMeetingPage() {
     updateField(id, { guidance });
   }
 
-  function handleRegenerateSingleField(fieldId: string) {
-    if (isClosedContext) return;
+  async function handleRegenerateSingleField(fieldId: string) {
+    if (isClosedContext || !activeApiContextId) return;
     updateField(fieldId, { status: 'generating' });
-
-    setTimeout(() => {
-      setFields((prev) =>
-        prev.map((f) =>
-          f.id !== fieldId || f.status === 'locked'
-            ? f
-            : {
-                ...f,
-                status: 'idle',
-                value: f.value || `[Regenerated field] Updated content for ${f.label}.`,
-              },
-        ),
-      );
-    }, 1200);
+    try {
+      const { value } = await regenerateField(activeApiContextId, fieldId);
+      updateField(fieldId, { status: 'idle', value });
+    } catch {
+      updateField(fieldId, { status: 'idle' });
+    }
   }
 
   // ── Candidate mutations ───────────────────────────────────────────
 
-  function handleDismiss(id: string) {
+  async function handleDismiss(id: string) {
     setCandidates((prev) => prev.map((c) => (c.id === id ? { ...c, status: 'dismissed' as const } : c)));
+    try {
+      await updateFlaggedDecision(id, { status: 'dismissed' });
+      await refreshAgenda();
+    } catch {
+      void refreshAgenda(); // restore from server
+    }
   }
 
-  function handleAddFlagForLater() {
+  async function handleAddFlagForLater() {
     if (!flagLaterTitle.trim()) return;
-
-    const newCandidate: Candidate = {
-      id: `cand-${Date.now()}`,
-      title: flagLaterTitle.trim(),
-      summary: 'Captured quickly for later review.',
-      status: 'new',
-      detectedAt: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setCandidates((prev) => [newCandidate, ...prev]);
+    const title = flagLaterTitle.trim();
     setFlagLaterTitle('');
     setLeftTab('candidates');
     setModal(null);
+    try {
+      await createFlaggedDecision(meetingId, {
+        suggestedTitle: title,
+        contextSummary: 'Captured quickly for later review.',
+        confidence: 1.0,
+        chunkIds: [],
+        priority: candidates.length,
+      });
+      await refreshAgenda();
+    } catch {
+      void refreshAgenda();
+    }
   }
 
   function toggleAttendeeStatus(name: string) {
@@ -539,7 +669,7 @@ export function FacilitatorMeetingPage() {
     return true;
   }
 
-  function handlePromoteConfirm(payload: {
+  async function handlePromoteConfirm(payload: {
     title: string;
     summary: string;
     template: Template;
@@ -547,57 +677,52 @@ export function FacilitatorMeetingPage() {
     beforeIndex: number;
   }) {
     if (!promoteCandidate) return;
-
-    const promotedContextId = `ctx-${Date.now()}`;
-    const promotedItem: AgendaItemModel = {
-      id: promotedContextId,
-      title: payload.title,
-      status: 'active',
-    };
-
-    setCandidates((prev) =>
-      prev.map((candidate) =>
-        candidate.id === promoteCandidate.id ? { ...candidate, status: 'dismissed' as const } : candidate,
-      ),
-    );
-
-    setAgendaItems((prev) => {
-      const demoted = prev.map((item) =>
-        item.status === 'active' ? { ...item, status: 'drafted' as const } : item,
-      );
-
-      const next = [...demoted];
-      const insertAt =
-        payload.insertMode === 'append'
-          ? next.length
-          : Math.max(0, Math.min(next.length, payload.beforeIndex - 1));
-
-      next.splice(insertAt, 0, promotedItem);
-      return next;
-    });
-
-    const newFields = getMockFieldsForTemplate(payload.template.name);
-    setFields(newFields);
-    setActiveContext({
-      ...ACTIVE_CONTEXT,
-      id: promotedContextId,
-      title: payload.title,
-      summary: payload.summary,
-      templateName: payload.template.name,
-      status: 'active',
-      fields: newFields,
-      tags: [],
-      relations: [],
-    });
-    refreshSuggestedTagsFromDraft({
-      title: payload.title,
-      summary: payload.summary,
-      focus: 'initial draft',
-      acceptedTags: [],
-    });
-
     setLeftTab('agenda');
     setModal(null);
+
+    const resolvedTemplate =
+      templates.find((template) => template.name === payload.template.name)
+      ?? templates[0];
+    if (!resolvedTemplate) return;
+
+    const acceptedDecisions = apiDecisions
+      .filter((decision) => decision.status === 'accepted')
+      .sort((a, b) => a.priority - b.priority);
+    const insertAt = payload.insertMode === 'append'
+      ? acceptedDecisions.length
+      : Math.max(0, Math.min(acceptedDecisions.length, payload.beforeIndex - 1));
+    const before = acceptedDecisions[insertAt];
+    const targetPriority = before?.priority ?? acceptedDecisions.length;
+
+    try {
+      await updateFlaggedDecision(promoteCandidate.id, {
+        suggestedTitle: payload.title,
+        contextSummary: payload.summary,
+        status: 'accepted',
+        priority: targetPriority,
+      });
+
+      const createdContext = await createDecisionContext({
+        meetingId,
+        flaggedDecisionId: promoteCandidate.id,
+        title: payload.title,
+        templateId: resolvedTemplate.id,
+      });
+
+      setActiveApiContextId(createdContext.id);
+      await refreshAgenda();
+      void refreshContext();
+      setFinalised(false);
+
+      refreshSuggestedTagsFromDraft({
+        title: payload.title,
+        summary: payload.summary,
+        focus: 'initial draft',
+        acceptedTags: [],
+      });
+    } catch {
+      await refreshAgenda();
+    }
   }
 
   // ── Tag + relation mutations ──────────────────────────────────────
@@ -656,20 +781,6 @@ export function FacilitatorMeetingPage() {
       .filter((tag) => !existingAccepted.has(tag.name.toLowerCase()))
       .slice(0, 3)
       .map((tag) => ({ ...tag, id: `st-${Date.now()}-${tag.name.replace(/\s+/g, '-')}` }));
-
-    setLlmLog((prev) => [
-      {
-        id: `llm-${Date.now()}`,
-        at: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-        model: 'claude-opus-4-5',
-        action: 'suggest tags',
-        note:
-          next.length > 0
-            ? `Generated ${next.length} facilitator-review tags and replaced pending suggestions.`
-            : 'No new tag suggestions generated; accepted tags already cover current draft.',
-      },
-      ...prev,
-    ]);
 
     // Regeneration refreshes pending suggestions only. Accepted tags stay on the context.
     setSuggestedTags(next);
@@ -899,6 +1010,9 @@ export function FacilitatorMeetingPage() {
       );
     }
 
+    // Load the API decision context for this agenda item
+    setActiveApiContextId(target.contextId ?? null);
+
     setActiveContext((prev) => ({
       ...prev,
       id: target.id,
@@ -982,117 +1096,155 @@ export function FacilitatorMeetingPage() {
 
   // ── Regenerate ───────────────────────────────────────────────────
 
-  function handleRegenerate(focus: string) {
-    if (isClosedContext) return;
+  async function handleRegenerate(_focus: string) {
+    if (isClosedContext || !activeApiContextId) return;
     setModal(null);
     setNewRowsSinceGeneration(0);
 
     setFields((prev) => prev.map((f) => (f.status === 'locked' ? f : { ...f, status: 'generating' })));
 
-    setTimeout(() => {
-      setFields((prev) =>
-        prev.map((f) =>
-          f.status === 'generating'
-            ? {
-                ...f,
-                status: 'idle',
-                value: f.value || `[Regenerated${focus ? ` — focus: "${focus}"` : ''}] Sample content for ${f.label}.`,
-              }
-            : f,
-        ),
+    try {
+      const updated = await regenerateDraft(activeApiContextId);
+      setFields(
+        templateFields.map((f) => ({
+          id: f.id,
+          label: f.name.split('_').map((w) => w.length > 0 ? w[0].toUpperCase() + w.slice(1) : w).join(' '),
+          value: updated.draftData?.[f.id] ?? '',
+          status: updated.lockedFields.includes(f.id) ? 'locked' as const : 'idle' as const,
+          required: false,
+        })),
       );
-      refreshSuggestedTagsFromDraft({
-        title: activeContext.title,
-        summary: activeContext.summary,
-        focus,
-      });
-    }, 2000);
+    } catch {
+      setFields((prev) => prev.map((f) => (f.status === 'generating' ? { ...f, status: 'idle' } : f)));
+    }
   }
 
   // ── Finalise ─────────────────────────────────────────────────────
 
-  function handleFinalise(_method: DecisionMethod, _actors: string[], _loggedBy: string) {
-    if (isClosedContext) return;
+  async function handleFinalise(method: DecisionMethod, actors: string[], loggedBy: string) {
+    if (isClosedContext || !activeApiContextId) return;
     setModal(null);
-    const currentContextId = activeContext.id;
-    const nextAgendaItem = agendaItems.find(
-      (item) => item.id !== currentContextId && item.status !== 'logged' && item.status !== 'deferred',
-    );
-
-    setAgendaItems((prev) =>
-      prev.map((item) => {
-        if (item.id === currentContextId) return { ...item, status: 'logged' as const };
-        if (nextAgendaItem && item.id === nextAgendaItem.id) return { ...item, status: 'active' as const };
-        if (item.id !== currentContextId && item.status === 'active') return { ...item, status: 'drafted' as const };
-        return item;
-      }),
-    );
-
-    if (nextAgendaItem) {
-      setActiveContext((prev) => ({
-        ...prev,
-        id: nextAgendaItem.id,
-        title: nextAgendaItem.title,
-        summary: `Continued discussion context for ${nextAgendaItem.title}.`,
-        status: 'active',
-      }));
-      setFinalised(false);
+    try {
+      const logged = await logDecision(activeApiContextId, {
+        loggedBy,
+        decisionMethod: {
+          type: DECISION_METHOD_MAP[method],
+          ...(actors.length > 0 ? { details: `Actors: ${actors.join(', ')}` } : {}),
+        },
+      });
+      await refreshAgenda();
+      setFinalised(true);
       setLeftTab('agenda');
-      return;
+      navigate(`/decisions/${logged.id}`);
+    } catch {
+      await refreshAgenda();
     }
-
-    setFinalised(true);
-    setLeftTab('agenda');
   }
 
   // ── Create context ───────────────────────────────────────────────
 
-  function handleCreateContext(
+  async function handleCreateContext(
     title: string,
     summary: string,
     template: Template,
     relationTypeOverride?: RelationType,
   ) {
-    const contextId = `ctx-${Date.now()}`;
-    const newItem: AgendaItemModel = { id: contextId, title, status: 'active' };
-
-    setAgendaItems((prev) => {
-      const demoted = prev.map((item) =>
-        item.status === 'active' ? { ...item, status: 'drafted' as const } : item,
-      );
-      return [newItem, ...demoted];
-    });
-
-    const newFields = getMockFieldsForTemplate(template.name);
-    setFields(newFields);
-    setActiveContext({
-      ...ACTIVE_CONTEXT,
-      id: contextId,
-      title,
-      summary,
-      templateName: template.name,
-      status: 'active',
-      fields: newFields,
-      tags: [],
-      relations: createContextDraft?.relation
-        ? [{
-            id: `rel-${Date.now()}`,
-            targetId: createContextDraft.relation.targetId,
-            targetTitle: createContextDraft.relation.targetTitle,
-            relationType: relationTypeOverride ?? createContextDraft.relation.relationType,
-          }]
-        : [],
-    });
-    refreshSuggestedTagsFromDraft({
-      title,
-      summary,
-      focus: 'initial draft',
-      acceptedTags: [],
-    });
-
     setModal(null);
-    setCreateContextDraft(null);
     setLeftTab('agenda');
+    const resolvedTemplate =
+      templates.find((candidateTemplate) => candidateTemplate.name === template.name)
+      ?? templates[0];
+    if (!resolvedTemplate) return;
+
+    try {
+      const createdDecision = await createFlaggedDecision(meetingId, {
+        suggestedTitle: title,
+        contextSummary: summary || 'Manually created decision context.',
+        confidence: 1,
+        chunkIds: [],
+        priority: apiDecisions.filter((decision) => decision.status === 'accepted').length,
+      });
+
+      await updateFlaggedDecision(createdDecision.id, {
+        status: 'accepted',
+        priority: createdDecision.priority,
+      });
+
+      const createdContext = await createDecisionContext({
+        meetingId,
+        flaggedDecisionId: createdDecision.id,
+        title,
+        templateId: resolvedTemplate.id,
+      });
+
+      setActiveApiContextId(createdContext.id);
+      setCreateContextDraft(null);
+      await refreshAgenda();
+      void refreshContext();
+      setFinalised(false);
+
+      refreshSuggestedTagsFromDraft({
+        title,
+        summary,
+        focus: relationTypeOverride ? `relation:${relationTypeOverride}` : 'initial draft',
+        acceptedTags: [],
+      });
+    } catch {
+      await refreshAgenda();
+    }
+  }
+
+  async function handleAddAgendaItem(title: string) {
+    if (!meetingId || isMeetingCompleted) return;
+    setAgendaAddError(null);
+    setAddingAgendaItem(true);
+
+    const template = templates.find((candidate) => candidate.isDefault) ?? templates[0];
+    if (!template) {
+      setAgendaAddError('No template available. Seed templates first.');
+      setAddingAgendaItem(false);
+      return;
+    }
+
+    const acceptedDecisions = apiDecisions
+      .filter((decision) => decision.status === 'accepted')
+      .sort((a, b) => a.priority - b.priority);
+    const nextPriority = acceptedDecisions.length > 0
+      ? Math.max(...acceptedDecisions.map((decision) => decision.priority)) + 1
+      : 0;
+
+    try {
+      const flagged = await createFlaggedDecision(meetingId, {
+        suggestedTitle: title,
+        contextSummary: 'Added from facilitator workspace.',
+        confidence: 1,
+        chunkIds: [],
+        priority: nextPriority,
+      });
+
+      await updateFlaggedDecision(flagged.id, {
+        status: 'accepted',
+        priority: nextPriority,
+      });
+
+      const createdContext = await createDecisionContext({
+        meetingId,
+        flaggedDecisionId: flagged.id,
+        title,
+        templateId: template.id,
+      });
+
+      setActiveApiContextId(createdContext.id);
+      setLeftTab('agenda');
+      setFinalised(false);
+      await refreshAgenda();
+      void refreshContext();
+    } catch (err) {
+      setAgendaAddError(err instanceof Error ? err.message : 'Failed to add agenda item');
+      await refreshAgenda();
+    } finally {
+      setAddingAgendaItem(false);
+    }
   }
 
   function handleChangeTemplate(template: Template, nextFields: Field[]) {
@@ -1116,6 +1268,28 @@ export function FacilitatorMeetingPage() {
     setLeftTab('candidates');
   }
 
+  function handleSelectFieldTranscript(fieldId: string) {
+    const query = new URLSearchParams();
+    if (activeApiContextId) query.set('decisionContextId', activeApiContextId);
+    query.set('fieldId', fieldId);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    navigate(`/meetings/${meetingId}/facilitator/transcript${suffix}`);
+  }
+
+  async function handleEndMeeting() {
+    if (!meetingId || isMeetingCompleted || endingMeeting) return;
+    const confirmed = window.confirm('End this meeting? This marks it as completed.');
+    if (!confirmed) return;
+
+    setEndingMeeting(true);
+    try {
+      await updateMeeting(meetingId, { status: 'completed' });
+      await refreshMeeting();
+    } finally {
+      setEndingMeeting(false);
+    }
+  }
+
   // ── Field zoom ───────────────────────────────────────────────────
 
   if (zoomedField) {
@@ -1123,7 +1297,7 @@ export function FacilitatorMeetingPage() {
       <FieldZoom
         field={zoomedField}
         supplementaryItems={supplementary}
-        meetingId="mtg-1"
+        meetingId={meetingId}
         contextId={activeContext.id}
         onClose={() => setZoomedFieldId(null)}
         onSave={handleSaveFieldValue}
@@ -1133,6 +1307,7 @@ export function FacilitatorMeetingPage() {
         onGuidanceChange={handleGuidanceChange}
         onAddSupplementary={handleAddSupplementary}
         onRemoveSupplementary={handleRemoveSupplementary}
+        onSelectTranscript={handleSelectFieldTranscript}
       />
     );
   }
@@ -1239,13 +1414,17 @@ export function FacilitatorMeetingPage() {
 
       {/* ── Header strip ────────────────────────────────────────── */}
       <header className="border-b border-border px-4 py-3 flex flex-wrap items-center gap-1.5 shrink-0">
-        <span className="text-fac-field text-text-primary font-medium flex-1 truncate">
-          Q4 Architecture Review — Facilitator
-          {finalised && <span className="ml-2 text-settled text-fac-meta">✓ Logged</span>}
-        </span>
+        <CurrentMeetingWidget
+          meetingId={meetingId}
+          title={apiMeeting?.title ?? currentMeeting.title}
+          date={apiMeeting?.date ?? currentMeeting.date}
+          status={apiMeeting?.status}
+          subtitle={finalised ? 'Facilitator workspace · Logged' : 'Facilitator workspace'}
+          titleTo={meetingHomePath}
+        />
 
         <Link
-          to="/meetings/mtg-1"
+          to={meetingSharedPath}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
@@ -1255,16 +1434,17 @@ export function FacilitatorMeetingPage() {
           <span className="hidden xl:inline">Shared view</span>
         </Link>
         <Link
-          to="/meetings/mtg-1/facilitator/home"
+          to={meetingHomePath}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
           title="Open meeting home"
         >
           <Home size={13} />
-          <span className="hidden xl:inline">Meeting home</span>
+          <span>Meeting home</span>
         </Link>
 
         <button
           onClick={handleToggleStream}
+          disabled={isMeetingCompleted}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
           title={streamState === 'live' ? 'Stop stream' : 'Start stream'}
           aria-label={streamState === 'live' ? 'Stop stream' : 'Start stream'}
@@ -1276,6 +1456,7 @@ export function FacilitatorMeetingPage() {
 
         <button
           onClick={() => setModal({ type: 'upload' })}
+          disabled={isMeetingCompleted}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
           title="Upload transcript"
           aria-label="Upload transcript"
@@ -1287,6 +1468,7 @@ export function FacilitatorMeetingPage() {
 
         <button
           onClick={() => setModal({ type: 'flag-later' })}
+          disabled={isMeetingCompleted}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
           title="Flag for later"
           aria-label="Flag for later"
@@ -1297,6 +1479,7 @@ export function FacilitatorMeetingPage() {
 
         <button
           onClick={openCreateContextDialog}
+          disabled={isMeetingCompleted}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
           title="New decision"
           aria-label="New decision"
@@ -1307,7 +1490,7 @@ export function FacilitatorMeetingPage() {
 
         <button
           onClick={() => setModal({ type: 'regenerate' })}
-          disabled={unlockedCount === 0 || isClosedContext}
+          disabled={unlockedCount === 0 || isClosedContext || isMeetingCompleted || !hasSelectedContext}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors disabled:opacity-30"
           title="Regenerate"
           aria-label="Regenerate"
@@ -1323,7 +1506,7 @@ export function FacilitatorMeetingPage() {
 
         <button
           onClick={handleDeferActiveContext}
-          disabled={isClosedContext}
+          disabled={isClosedContext || isMeetingCompleted || !hasSelectedContext}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-caution hover:text-caution border border-caution/30 rounded transition-colors disabled:opacity-30"
           title="Defer"
           aria-label="Defer"
@@ -1334,13 +1517,26 @@ export function FacilitatorMeetingPage() {
 
         <button
           onClick={() => setModal({ type: 'finalise' })}
-          disabled={isClosedContext}
+          disabled={isClosedContext || isMeetingCompleted || !hasSelectedContext}
           className="flex items-center gap-1.5 px-3 py-1.5 text-fac-meta bg-settled text-base rounded font-medium hover:bg-settled/90 transition-colors disabled:opacity-30"
           title="Finalise"
           aria-label="Finalise"
         >
           <CheckSquare size={13} />
           <span className="hidden xl:inline">Finalise</span>
+        </button>
+
+        <button
+          onClick={() => void handleEndMeeting()}
+          disabled={isMeetingCompleted || endingMeeting}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-fac-meta border border-danger/30 text-danger rounded transition-colors hover:bg-danger-dim/30 disabled:opacity-30"
+          title="End meeting"
+          aria-label="End meeting"
+        >
+          <X size={13} />
+          <span className="hidden xl:inline">
+            {isMeetingCompleted ? 'Meeting ended' : endingMeeting ? 'Ending…' : 'End meeting'}
+          </span>
         </button>
       </header>
 
@@ -1364,11 +1560,7 @@ export function FacilitatorMeetingPage() {
           >
           <section className="border-b border-border px-3 py-3 flex flex-col gap-2">
             <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-fac-label text-text-secondary uppercase tracking-wider">Meeting context</p>
-                <p className="text-fac-field text-text-primary mt-1">{currentMeeting.title}</p>
-                <p className="text-fac-meta text-text-muted">{currentMeeting.date}</p>
-              </div>
+              <p className="text-fac-label text-text-secondary uppercase tracking-wider">Attendees</p>
               <button
                 onClick={() => setLeftPanelCollapsed(true)}
                 className="shrink-0 p-1.5 rounded text-text-muted hover:text-text-primary hover:bg-overlay border border-border"
@@ -1484,6 +1676,14 @@ export function FacilitatorMeetingPage() {
           </div>
 
           <div className="p-2 border-t border-border flex flex-col gap-1.5">
+            <AgendaItemAddWidget
+              onAdd={handleAddAgendaItem}
+              loading={addingAgendaItem}
+              error={agendaAddError}
+              disabled={isMeetingCompleted}
+              placeholder="New agenda item..."
+              buttonLabel="Add"
+            />
                 <button
                   onClick={() => setModal({ type: 'add-existing-context' })}
                   className="flex items-center gap-2 px-3 py-2 rounded text-fac-meta text-text-muted hover:text-text-primary hover:bg-overlay transition-colors w-full"
@@ -1492,7 +1692,7 @@ export function FacilitatorMeetingPage() {
               Add existing context
             </button>
             <Link
-              to="/meetings/mtg-1/facilitator/transcript"
+              to={meetingTranscriptPath}
               className="flex items-center gap-2 px-3 py-2 rounded text-fac-meta text-text-muted hover:text-text-primary hover:bg-overlay transition-colors w-full"
             >
               <FilePlus2 size={14} />
@@ -1537,6 +1737,21 @@ export function FacilitatorMeetingPage() {
         {/* ── Main workspace ──────────────────────────────────────── */}
         <main className="flex-1 min-w-0 overflow-y-auto px-6 py-5">
 
+          {!hasSelectedContext ? (
+            <div className="mb-5 rounded-card border border-border bg-overlay/30 p-4">
+              <h2 className="text-fac-field text-text-primary">No decision selected</h2>
+              {agendaItems.length > 0 ? (
+                <p className="text-fac-meta text-text-muted mt-1">
+                  Select an item from the Agenda tab to start editing this decision context.
+                </p>
+              ) : (
+                <p className="text-fac-meta text-text-muted mt-1">
+                  Add your first agenda item from the left panel to begin.
+                </p>
+              )}
+            </div>
+          ) : (
+          <>
           {/* Context header */}
           <div className="mb-5">
             <div className="flex items-start gap-2">
@@ -1796,6 +2011,8 @@ export function FacilitatorMeetingPage() {
               />
             ))}
           </div>
+          </>
+          )}
         </main>
 
         {!rightPanelCollapsed && (
@@ -1840,16 +2057,59 @@ export function FacilitatorMeetingPage() {
 
           {showLLMLog && (
             <div className="p-3 flex flex-col gap-2 overflow-y-auto">
-              {llmLog.map((entry) => (
-                <article key={entry.id} className="rounded-card border border-border p-3 bg-overlay/30">
-                  <div className="flex items-center justify-between">
-                    <span className="text-fac-meta text-text-primary font-medium">{entry.action}</span>
-                    <span className="text-fac-meta text-text-muted">{entry.at}</span>
-                  </div>
-                  <p className="text-fac-meta text-text-muted mt-1">{entry.model}</p>
-                  <p className="text-fac-meta text-text-secondary mt-2">{entry.note}</p>
-                </article>
-              ))}
+              {llmLog.length === 0 ? (
+                <p className="text-fac-meta text-text-muted">No LLM interactions recorded for this context yet.</p>
+              ) : (
+                <>
+                  {llmLog.map((entry) => {
+                    const totalTokens = (entry.tokenCount?.input ?? 0) + (entry.tokenCount?.output ?? 0);
+                    const createdAt = new Date(entry.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                    const isSelected = selectedLlmInteractionId === entry.id;
+
+                    return (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        onClick={() => setSelectedLlmInteractionId(entry.id)}
+                        className={`rounded-card border p-3 bg-overlay/30 text-left ${
+                          isSelected ? 'border-accent bg-accent/10' : 'border-border'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-fac-meta text-text-primary font-medium">{entry.operation}</span>
+                          <span className="text-fac-meta text-text-muted">{createdAt}</span>
+                        </div>
+                        <p className="text-fac-meta text-text-muted mt-1">{entry.provider}/{entry.model}</p>
+                        <p className="text-fac-meta text-text-secondary mt-2">{totalTokens} tokens · {entry.latencyMs ?? 0}ms</p>
+                      </button>
+                    );
+                  })}
+
+                  {selectedLlmInteraction && (
+                    <article className="rounded-card border border-border p-3 bg-background">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-fac-meta font-medium text-text-primary">Selected interaction</h3>
+                        <span className="text-fac-meta text-text-muted">
+                          {new Date(selectedLlmInteraction.createdAt).toLocaleString('en-GB')}
+                        </span>
+                      </div>
+                      <p className="text-fac-meta text-text-secondary mt-1">
+                        {selectedLlmInteraction.operation} · {selectedLlmInteraction.provider}/{selectedLlmInteraction.model}
+                      </p>
+
+                      <h4 className="mt-3 text-fac-meta font-medium text-text-primary">Prompt</h4>
+                      <pre className="mt-1 max-h-56 overflow-auto rounded border border-border bg-overlay/20 p-2 text-xs text-text-secondary whitespace-pre-wrap">
+                        {selectedLlmInteraction.promptText}
+                      </pre>
+
+                      <h4 className="mt-3 text-fac-meta font-medium text-text-primary">Response</h4>
+                      <pre className="mt-1 max-h-56 overflow-auto rounded border border-border bg-overlay/20 p-2 text-xs text-text-secondary whitespace-pre-wrap">
+                        {selectedLlmInteraction.responseText}
+                      </pre>
+                    </article>
+                  )}
+                </>
+              )}
             </div>
           )}
           </aside>
