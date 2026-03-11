@@ -1340,6 +1340,20 @@ app.openapi(logDecisionRoute, async (c) => {
   try {
     const { id } = c.req.valid('param');
     const payload = c.req.valid('json');
+
+    // Auto-advance context status to 'locked' if it is still in drafting/reviewing.
+    // This avoids requiring separate submit + approve API calls for the common case
+    // where the user has locked all fields and simply wants to log the decision.
+    const ctx = await services.decisionContextService.getById(id);
+    if (ctx && ctx.status === 'drafting') {
+      const reviewed = await services.decisionContextService.submitForReview(id);
+      if (reviewed && reviewed.status === 'reviewing') {
+        await services.decisionContextService.approveAndLock(id);
+      }
+    } else if (ctx && ctx.status === 'reviewing') {
+      await services.decisionContextService.approveAndLock(id);
+    }
+
     const decision = await services.decisionLogGenerator.logDecision(id, {
       loggedBy: payload.loggedBy,
       decisionMethod: payload.decisionMethod.details === undefined
