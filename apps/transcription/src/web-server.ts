@@ -25,6 +25,7 @@ export interface StartWebServerOptions {
     baseBackoffMs: number;
     maxQueueSize: number;
   };
+  autoFlushMs?: number;
   corsOrigin?: string;
 }
 
@@ -37,6 +38,7 @@ interface SessionState {
   stoppedAt?: string;
   eventsAccepted: number;
   nextSequenceNumber: number;
+  lastFlushedAtMs: number;
 }
 
 interface RunningWebServer {
@@ -44,6 +46,20 @@ interface RunningWebServer {
   port: number;
   host: string;
   close: () => Promise<void>;
+}
+
+async function probeUrlOk(url: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const response = await fetch(url, { method: "GET" });
+    return response.ok
+      ? { ok: true }
+      : { ok: false, error: `HTTP ${response.status}` };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 function wait(ms: number): Promise<void> {
@@ -137,13 +153,41 @@ function resolveChunkFilename(req: IncomingMessage, fallback: string): string {
   const requestUrl = new URL(req.url ?? "/", "http://localhost");
   const fromQuery = requestUrl.searchParams.get("filename") ?? undefined;
   const fromHeader = req.headers["x-audio-filename"];
-  if (typeof fromHeader === "string" && fromHeader.trim().length > 0) {
-    return fromHeader;
+  const candidate =
+    typeof fromHeader === "string" && fromHeader.trim().length > 0
+      ? fromHeader
+      : fromQuery && fromQuery.trim().length > 0
+        ? fromQuery
+        : fallback;
+
+  const supported = ["flac", "m4a", "mp3", "mp4", "mpeg", "mpga", "oga", "ogg", "wav", "webm"];
+  const ext = candidate.split(".").pop()?.toLowerCase() ?? "";
+  if (supported.includes(ext)) {
+    return candidate;
   }
-  if (fromQuery && fromQuery.trim().length > 0) {
-    return fromQuery;
+
+  const contentType = (req.headers["content-type"] ?? "").toLowerCase();
+  if (contentType.includes("ogg") || contentType.includes("oga")) {
+    return `${candidate}.ogg`;
   }
-  return fallback;
+  if (contentType.includes("mp4") || contentType.includes("m4a")) {
+    return `${candidate}.m4a`;
+  }
+  if (
+    contentType.includes("mp3") ||
+    contentType.includes("mpeg") ||
+    contentType.includes("mpga")
+  ) {
+    return `${candidate}.mp3`;
+  }
+  if (contentType.includes("wav")) {
+    return `${candidate}.wav`;
+  }
+  if (contentType.includes("flac")) {
+    return `${candidate}.flac`;
+  }
+
+  return `${candidate}.webm`;
 }
 
 export async function startWebServer(options?: StartWebServerOptions): Promise<RunningWebServer> {
@@ -158,6 +202,8 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
     options?.maxChunkBytes ??
     parsePositiveInt(process.env.TRANSCRIPTION_MAX_CHUNK_BYTES, 25_000_000);
   const corsOrigin = options?.corsOrigin ?? process.env.TRANSCRIPTION_CORS_ORIGIN ?? "*";
+  const autoFlushMs =
+    options?.autoFlushMs ?? parsePositiveInt(process.env.STREAM_AUTO_FLUSH_MS, 10_000);
 
   const sessions = new Map<string, SessionState>();
 
@@ -179,6 +225,41 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
         return;
       }
 
+      if (method === "GET" && path === "/status") {
+        const provider = process.env.TRANSCRIPTION_PROVIDER ?? "openai";
+        const apiProbe = await probeUrlOk(`${apiUrl.replace(/\/$/, "")}/health`);
+        const whisperUrl = process.env.WHISPER_LOCAL_URL ?? "http://whisper:9000";
+        const whisperProbe =
+          provider === "local"
+            ? await probeUrlOk(`${whisperUrl.replace(/\/$/, "")}/`)
+            : null;
+
+        sendJson(
+          req,
+          res,
+          200,
+          {
+            status: "ok",
+            provider,
+            api: {
+              url: apiUrl,
+              ...apiProbe,
+            },
+            whisper:
+              whisperProbe === null
+                ? { enabled: false }
+                : {
+                    enabled: true,
+                    url: whisperUrl,
+                    ...whisperProbe,
+                  },
+            sessionCount: sessions.size,
+          },
+          corsOrigin,
+        );
+        return;
+      }
+
       if (method === "POST" && path === "/sessions") {
         type SessionCreateBody = { meetingId?: string; language?: string };
         const body = await parseJsonBody<SessionCreateBody>(req, maxChunkBytes);
@@ -196,6 +277,7 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
           startedAt: new Date().toISOString(),
           eventsAccepted: 0,
           nextSequenceNumber: 1,
+          lastFlushedAtMs: Date.now(),
         };
         sessions.set(session.id, session);
 
@@ -258,6 +340,14 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
         session.nextSequenceNumber += normalizedEvents.length;
         session.eventsAccepted += normalizedEvents.length;
 
+        const now = Date.now();
+        let autoFlushed = false;
+        if (now - session.lastFlushedAtMs >= autoFlushMs) {
+          await apiClient.flushStream(session.meetingId);
+          session.lastFlushedAtMs = now;
+          autoFlushed = true;
+        }
+
         sendJson(
           req,
           res,
@@ -265,6 +355,7 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
           {
             accepted: true,
             eventCount: normalizedEvents.length,
+            autoFlushed,
           },
           corsOrigin,
         );
@@ -301,6 +392,7 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
 
         session.status = "stopping";
         await apiClient.flushStream(session.meetingId);
+        session.lastFlushedAtMs = Date.now();
         session.status = "stopped";
         session.stoppedAt = new Date().toISOString();
 

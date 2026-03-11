@@ -35,6 +35,7 @@ describe("web transcription server", () => {
       host: "127.0.0.1",
       provider,
       apiClient,
+      autoFlushMs: 1,
     });
     runningServers.push(server);
 
@@ -65,8 +66,12 @@ describe("web transcription server", () => {
     );
 
     expect(chunkResponse.status).toBe(200);
-    const chunkPayload = (await chunkResponse.json()) as { accepted: boolean; eventCount: number };
-    expect(chunkPayload).toEqual({ accepted: true, eventCount: 2 });
+    const chunkPayload = (await chunkResponse.json()) as {
+      accepted: boolean;
+      eventCount: number;
+      autoFlushed: boolean;
+    };
+    expect(chunkPayload).toEqual({ accepted: true, eventCount: 2, autoFlushed: true });
 
     expect(provider.transcribe).toHaveBeenCalledWith(Buffer.from("fake-audio"), {
       filename: "first.webm",
@@ -96,7 +101,8 @@ describe("web transcription server", () => {
       method: "POST",
     });
     expect(stopResponse.status).toBe(200);
-    expect(apiClient.flushStream).toHaveBeenCalledWith("meeting-browser-1");
+    expect(apiClient.flushStream).toHaveBeenNthCalledWith(1, "meeting-browser-1");
+    expect(apiClient.flushStream).toHaveBeenNthCalledWith(2, "meeting-browser-1");
 
     const stoppedStatusResponse = await fetch(
       `${baseUrl}/sessions/${createPayload.sessionId}/status`,

@@ -9,7 +9,13 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { getFieldTranscriptChunks, getTranscriptReading, listMeetingChunks } from "@/api/endpoints";
+import {
+  assignDecisionTranscriptChunks,
+  assignFieldTranscriptChunks,
+  getFieldTranscriptChunks,
+  getTranscriptReading,
+  listMeetingChunks,
+} from "@/api/endpoints";
 import type { ReadableTranscriptRow, TranscriptChunk } from "@/api/types";
 import { MainHeader } from "@/components/shared/MainHeader";
 
@@ -67,6 +73,7 @@ export function TranscriptPage() {
   const [scope, setScope] = useState<TranscriptScope>(defaultScope);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
 
@@ -270,7 +277,7 @@ export function TranscriptPage() {
     updateDragSelection(rowEl.dataset.rowId);
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
     const rowIds = Array.from(selected);
     const selectedRowMap = new Map(filtered.map((row) => [row.id, row]));
     const chunkIdSet = new Set<string>();
@@ -283,11 +290,36 @@ export function TranscriptPage() {
       }
     }
 
+    const chunkIds = Array.from(chunkIdSet);
+    if (chunkIds.length === 0) return;
+
+    setConfirming(true);
+    setError(null);
+
+    try {
+      if (scope === "field") {
+        if (!decisionContextId || !fieldId) {
+          throw new Error("Field scope needs both decision context and field.");
+        }
+        await assignFieldTranscriptChunks(decisionContextId, fieldId, chunkIds);
+      } else if (scope === "decision") {
+        if (!decisionContextId) {
+          throw new Error("Decision scope needs a decision context.");
+        }
+        await assignDecisionTranscriptChunks(decisionContextId, chunkIds);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to assign transcript chunks");
+      setConfirming(false);
+      return;
+    }
+
+    setConfirming(false);
     navigate(`/meetings/${meetingId}/facilitator`, {
       state: {
         segmentSelection: {
           rowIds,
-          chunkIds: Array.from(chunkIdSet),
+          chunkIds,
           decisionContextId: decisionContextId || undefined,
           fieldId: fieldId || undefined,
           scope,
@@ -311,12 +343,12 @@ export function TranscriptPage() {
         subtitle={`${selected.size} row${selected.size !== 1 ? "s" : ""} selected`}
         actions={
           <button
-            disabled={selected.size === 0}
-            onClick={handleConfirm}
+            disabled={selected.size === 0 || confirming}
+            onClick={() => void handleConfirm()}
             className="flex items-center gap-1.5 px-3 py-1.5 text-fac-meta bg-settled text-base rounded font-medium hover:bg-settled/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Check size={13} />
-            Confirm selection
+            {confirming ? "Saving…" : "Confirm selection"}
           </button>
         }
       />
