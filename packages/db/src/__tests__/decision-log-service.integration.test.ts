@@ -25,6 +25,28 @@ describe('Decision Log Service Integration Tests', () => {
   let reasonFieldId: string;
   let impactFieldId: string;
 
+  const createLockedContext = async (title: string) => {
+    const [decisionContext] = await db
+      .insert(decisionContexts)
+      .values({
+        meetingId: testMeetingId,
+        flaggedDecisionId: testFlaggedDecisionId,
+        title,
+        templateId: testTemplateId,
+        activeField: null,
+        lockedFields: [decisionFieldId, reasonFieldId, impactFieldId],
+        draftData: {
+          [decisionFieldId]: 'Approved',
+          [reasonFieldId]: 'Meets all criteria',
+          [impactFieldId]: 'Low',
+        },
+        status: 'locked',
+      })
+      .returning();
+
+    return decisionContext!;
+  };
+
   beforeAll(async () => {
     // Initialize repositories and service
     decisionLogRepository = new DrizzleDecisionLogRepository();
@@ -265,7 +287,9 @@ describe('Decision Log Service Integration Tests', () => {
         decisionMethod: { type: 'manual' },
       });
 
-      await decisionLogService.logDecision(testDecisionContextId, {
+      const secondContext = await createLockedContext('Test Decision Context 2');
+
+      await decisionLogService.logDecision(secondContext.id, {
         loggedBy: 'user-2',
         decisionMethod: { type: 'consensus' },
       });
@@ -301,12 +325,16 @@ describe('Decision Log Service Integration Tests', () => {
         decisionMethod: { type: 'manual' },
       });
 
-      await decisionLogService.logDecision(testDecisionContextId, {
+      const secondContext = await createLockedContext('User Log Context 2');
+
+      await decisionLogService.logDecision(secondContext.id, {
         loggedBy: 'user-2',
         decisionMethod: { type: 'manual' },
       });
 
-      await decisionLogService.logDecision(testDecisionContextId, {
+      const thirdContext = await createLockedContext('User Log Context 3');
+
+      await decisionLogService.logDecision(thirdContext.id, {
         loggedBy: 'user-1',
         decisionMethod: { type: 'ai_assisted' },
       });
@@ -349,17 +377,23 @@ describe('Decision Log Service Integration Tests', () => {
         decisionMethod: { type: 'manual' },
       });
 
-      await decisionLogService.logDecision(testDecisionContextId, {
+      const secondContext = await createLockedContext('Stats Context 2');
+
+      await decisionLogService.logDecision(secondContext.id, {
         loggedBy: 'user-2',
         decisionMethod: { type: 'manual' },
       });
 
-      await decisionLogService.logDecision(testDecisionContextId, {
+      const thirdContext = await createLockedContext('Stats Context 3');
+
+      await decisionLogService.logDecision(thirdContext.id, {
         loggedBy: 'user-1',
         decisionMethod: { type: 'ai_assisted' },
       });
 
-      await decisionLogService.logDecision(testDecisionContextId, {
+      const fourthContext = await createLockedContext('Stats Context 4');
+
+      await decisionLogService.logDecision(fourthContext.id, {
         loggedBy: 'user-3',
         decisionMethod: { type: 'consensus' },
       });

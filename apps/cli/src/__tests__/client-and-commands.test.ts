@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 const stderrWriteSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+const baseUrl = process.env.API_BASE_URL ?? 'http://localhost:3000';
 
 describe('CLI client request shapes', () => {
   beforeEach(() => {
@@ -21,7 +22,7 @@ describe('CLI client request shapes', () => {
     await api.delete('/api/decision-contexts/ctx/lock-field', { fieldId: 'field-1' });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:3000/api/decision-contexts/ctx/lock-field',
+      `${baseUrl}/api/decision-contexts/ctx/lock-field`,
       {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
@@ -52,7 +53,7 @@ describe('CLI client request shapes', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:3000/api/meetings',
+      `${baseUrl}/api/meetings`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,12 +121,12 @@ describe('CLI command request shapes', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:3000/api/context',
+      `${baseUrl}/api/context`,
       { method: 'GET' },
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:3000/api/decision-contexts/ctx-1/lock-field',
+      `${baseUrl}/api/decision-contexts/ctx-1/lock-field`,
       {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
@@ -152,7 +153,7 @@ describe('CLI command request shapes', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:3000/api/decision-contexts/ctx-1/lock-field',
+      `${baseUrl}/api/decision-contexts/ctx-1/lock-field`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -182,12 +183,12 @@ describe('CLI command request shapes', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:3000/api/context',
+      `${baseUrl}/api/context`,
       { method: 'GET' },
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:3000/api/meetings/meeting-1/context/decision',
+      `${baseUrl}/api/meetings/meeting-1/context/decision`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -208,7 +209,7 @@ describe('CLI command request shapes', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:3000/api/context/meeting',
+      `${baseUrl}/api/context/meeting`,
       { method: 'DELETE' },
     );
   });
@@ -231,7 +232,7 @@ describe('CLI command request shapes', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:3000/api/meetings/meeting-1/context/decision',
+      `${baseUrl}/api/meetings/meeting-1/context/decision`,
       { method: 'DELETE' },
     );
   });
@@ -254,7 +255,7 @@ describe('CLI command request shapes', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:3000/api/meetings/meeting-1/context/field',
+      `${baseUrl}/api/meetings/meeting-1/context/field`,
       { method: 'DELETE' },
     );
   });
@@ -275,7 +276,7 @@ describe('CLI command request shapes', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:3000/api/meetings/meeting-1/flagged-decisions',
+      `${baseUrl}/api/meetings/meeting-1/flagged-decisions`,
       { method: 'GET' },
     );
   });
@@ -304,7 +305,7 @@ describe('CLI command request shapes', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:3000/api/meetings/meeting-1/flagged-decisions',
+      `${baseUrl}/api/meetings/meeting-1/flagged-decisions`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -340,7 +341,7 @@ describe('CLI command request shapes', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'http://localhost:3000/api/decision-contexts/ctx-1/log',
+      `${baseUrl}/api/decision-contexts/ctx-1/log`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -367,7 +368,7 @@ describe('CLI command request shapes', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:3000/api/decisions/log-1/export?format=markdown',
+      `${baseUrl}/api/decisions/log-1/export?format=markdown`,
       { method: 'GET' },
     );
   });
@@ -387,7 +388,7 @@ describe('CLI command request shapes', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:3000/api/decisions/log-1/export?format=json',
+      `${baseUrl}/api/decisions/log-1/export?format=json`,
       { method: 'GET' },
     );
   });
@@ -418,7 +419,7 @@ describe('CLI command request shapes', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://localhost:3000/api/status',
+      `${baseUrl}/api/status`,
       { method: 'GET' },
     );
 

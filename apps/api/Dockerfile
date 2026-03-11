@@ -12,6 +12,7 @@ COPY tsconfig.json ./
 COPY tsconfig.base.json ./
 COPY packages/schema/package.json packages/schema/
 COPY packages/schema/tsconfig.json packages/schema/
+COPY packages/schema/tsconfig.declarations.json packages/schema/
 COPY packages/core/package.json packages/core/
 COPY packages/core/tsconfig.json packages/core/
 COPY packages/core/tsconfig.declarations.json packages/core/

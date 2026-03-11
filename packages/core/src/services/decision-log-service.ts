@@ -78,13 +78,9 @@ export class DecisionLogService implements IDecisionLogService {
           throw new Error('Decision has already been logged');
         }
 
-        // Auto-lock all fields if context is not already locked
+        // Require decision context to be locked before logging
         if (context.status !== 'locked') {
-          logger.info('Auto-locking all fields before logging', { decisionContextId, status: context.status });
-          await this.decisionContextRepository.lockAllFields(decisionContextId);
-          await this.decisionContextRepository.updateStatus(decisionContextId, 'locked');
-          const locked = await this.decisionContextRepository.findById(decisionContextId);
-          if (locked) Object.assign(context, locked);
+          throw new Error('Decision context must be locked before logging');
         }
 
         const template = await this.decisionTemplateRepository.findById(context.templateId);
