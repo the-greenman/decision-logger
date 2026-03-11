@@ -31,7 +31,13 @@ function printUsage(): void {
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const [command, audioFilePath, ...rest] = argv;
+  const [command, ...remaining] = argv;
+  const requiresAudioFile = command === 'transcribe'
+    || command === 'transcribe-local'
+    || command === 'smoke-upload'
+    || command === 'smoke-stream';
+  const audioFilePath = requiresAudioFile ? (remaining[0] ?? null) : null;
+  const rest = requiresAudioFile ? remaining.slice(1) : remaining;
 
   const parsed: ParsedArgs = {
     command:
@@ -41,7 +47,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       || command === 'serve'
         ? command
         : null,
-    audioFilePath: audioFilePath ?? null,
+    audioFilePath,
     meetingId: null,
     mode: 'upload',
     chunkStrategy: 'speaker',

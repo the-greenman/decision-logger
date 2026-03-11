@@ -464,6 +464,93 @@ describe('CLI command request shapes', () => {
     consoleLogSpy.mockRestore();
   });
 
+  it('transcript status requests stream status and transcript rows', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'active', eventCount: 5 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ rows: [{ id: 'row-1', displayText: 'Stored text' }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ chunks: [{ id: 'chunk-1', wordCount: 4, createdAt: '2026-03-11T13:17:37.564Z' }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ok' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'ok' }),
+      });
+
+    const { transcriptCommand } = await import('../commands/transcript.js');
+    await transcriptCommand.parseAsync(
+      ['node', 'transcript', 'status', '--meeting-id', 'meeting-1'],
+      { from: 'node' },
+    );
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      `${baseUrl}/api/meetings/meeting-1/streaming/status`,
+      { method: 'GET' },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `${baseUrl}/api/meetings/meeting-1/transcript-reading`,
+      { method: 'GET' },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      `${baseUrl}/api/meetings/meeting-1/chunks`,
+      { method: 'GET' },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      'http://localhost:8788/health',
+      { method: 'GET' },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      'http://localhost:9000/openapi.json',
+      { method: 'GET' },
+    );
+
+    consoleLogSpy.mockRestore();
+  });
+
+  it('transcript flush requests stream flush for the provided meeting', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ chunks: [{ id: 'chunk-1' }, { id: 'chunk-2' }] }),
+    });
+
+    const { transcriptCommand } = await import('../commands/transcript.js');
+    await transcriptCommand.parseAsync(
+      ['node', 'transcript', 'flush', '--meeting-id', 'meeting-1'],
+      { from: 'node' },
+    );
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      `${baseUrl}/api/meetings/meeting-1/streaming/flush`,
+      { method: 'POST' },
+    );
+
+    consoleLogSpy.mockRestore();
+  });
+
   it('transcript transcribe-file launches the external transcription client', async () => {
     const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     spawnMock.mockReturnValue({
@@ -513,7 +600,7 @@ describe('CLI command request shapes', () => {
     consoleLogSpy.mockRestore();
   });
 
-  it('transcript live --watch launches transcription and polls transcript rows', async () => {
+  it('transcript live --watch --flush launches transcription and flushes before polling transcript rows', async () => {
     const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     spawnMock.mockReturnValue({
       on: (event: string, handler: (code?: number) => void) => {
@@ -521,6 +608,11 @@ describe('CLI command request shapes', () => {
           setTimeout(() => handler(0), 0);
         }
       },
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ chunks: [] }),
     });
     fetchMock.mockResolvedValueOnce({
       ok: true,
@@ -540,7 +632,7 @@ describe('CLI command request shapes', () => {
 
     const { transcriptCommand } = await import('../commands/transcript.js');
     await transcriptCommand.parseAsync(
-      ['node', 'transcript', 'live', '--meeting-id', 'meeting-1', '--watch', '--interval-ms', '1'],
+      ['node', 'transcript', 'live', '--meeting-id', 'meeting-1', '--watch', '--flush', '--interval-ms', '1'],
       { from: 'node' },
     );
 
@@ -568,6 +660,11 @@ describe('CLI command request shapes', () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
+      `${baseUrl}/api/meetings/meeting-1/streaming/flush`,
+      { method: 'POST' },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
       `${baseUrl}/api/meetings/meeting-1/transcript-reading`,
       { method: 'GET' },
     );

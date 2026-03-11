@@ -17,8 +17,34 @@ interface TranscriptReadingRow {
   endTime?: string;
 }
 
+interface StreamingStatusResponse {
+  status: 'active' | 'idle' | 'flushing';
+  eventCount: number;
+}
+
+interface TranscriptChunkSummary {
+  id: string;
+  wordCount?: number;
+  createdAt: string;
+}
+
+interface TranscriptionServiceHealth {
+  reachable: boolean;
+  status: 'ok' | 'unreachable' | 'error';
+  url: string;
+  error?: string;
+}
+
 function resolveApiUrl(): string {
   return process.env.DECISION_LOGGER_API_URL ?? process.env.API_BASE_URL ?? 'http://localhost:3001';
+}
+
+function resolveTranscriptionServiceUrl(): string {
+  return process.env.TRANSCRIPTION_SERVICE_URL ?? process.env.TRANSCRIPTION_URL ?? 'http://localhost:8788';
+}
+
+function resolveWhisperLocalUrl(): string {
+  return process.env.WHISPER_LOCAL_URL ?? 'http://localhost:9000';
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -40,6 +66,82 @@ async function getTranscriptRows(meetingId: string): Promise<TranscriptReadingRo
   return response.rows;
 }
 
+async function getStreamingStatus(meetingId: string): Promise<StreamingStatusResponse> {
+  return api.get<StreamingStatusResponse>(`/api/meetings/${meetingId}/streaming/status`);
+}
+
+async function flushTranscriptStream(meetingId: string): Promise<number> {
+  const response = await api.post<{ chunks: Array<{ id: string }> }>(`/api/meetings/${meetingId}/streaming/flush`);
+  return response.chunks.length;
+}
+
+async function getTranscriptChunks(meetingId: string): Promise<TranscriptChunkSummary[]> {
+  const response = await api.get<{ chunks: TranscriptChunkSummary[] }>(`/api/meetings/${meetingId}/chunks`);
+  return response.chunks;
+}
+
+async function getTranscriptionServiceHealth(): Promise<TranscriptionServiceHealth> {
+  const baseUrl = resolveTranscriptionServiceUrl().replace(/\/$/, '');
+  const url = `${baseUrl}/health`;
+
+  try {
+    const response = await fetch(url, { method: 'GET' });
+    if (!response.ok) {
+      return {
+        reachable: false,
+        status: 'error',
+        url,
+        error: `${response.status} ${response.statusText}`.trim(),
+      };
+    }
+
+    const payload = await response.json().catch(() => ({})) as { status?: string };
+    return {
+      reachable: true,
+      status: payload.status === 'ok' ? 'ok' : 'error',
+      url,
+      ...(payload.status === 'ok' ? {} : { error: 'Unexpected health response' }),
+    };
+  } catch (error) {
+    return {
+      reachable: false,
+      status: 'unreachable',
+      url,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function getWhisperLocalHealth(): Promise<TranscriptionServiceHealth> {
+  const baseUrl = resolveWhisperLocalUrl().replace(/\/$/, '');
+  const url = `${baseUrl}/openapi.json`;
+
+  try {
+    const response = await fetch(url, { method: 'GET' });
+    if (!response.ok) {
+      return {
+        reachable: false,
+        status: 'error',
+        url,
+        error: `${response.status} ${response.statusText}`.trim(),
+      };
+    }
+
+    return {
+      reachable: true,
+      status: 'ok',
+      url,
+    };
+  } catch (error) {
+    return {
+      reachable: false,
+      status: 'unreachable',
+      url,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 function launchTranscriptionClient(args: string[], apiUrl: string): Promise<void> {
   const child = spawn('pnpm', args, {
     stdio: 'inherit',
@@ -50,10 +152,43 @@ function launchTranscriptionClient(args: string[], apiUrl: string): Promise<void
     },
   });
 
+  let signalForwarded = false;
+  const forwardShutdownSignal = (signal: NodeJS.Signals): void => {
+    if (signalForwarded) {
+      return;
+    }
+    signalForwarded = true;
+    if (!child.killed) {
+      child.kill(signal);
+    }
+  };
+
+  const handleSigint = (): void => {
+    forwardShutdownSignal('SIGINT');
+  };
+
+  const handleSigterm = (): void => {
+    forwardShutdownSignal('SIGTERM');
+  };
+
+  process.once('SIGINT', handleSigint);
+  process.once('SIGTERM', handleSigterm);
+
   return new Promise<void>((resolvePromise, rejectPromise) => {
+    const cleanupHandlers = (): void => {
+      process.off('SIGINT', handleSigint);
+      process.off('SIGTERM', handleSigterm);
+    };
+
     child.on('error', rejectPromise);
     child.on('exit', (code) => {
+      cleanupHandlers();
       if (code === 0) {
+        resolvePromise();
+        return;
+      }
+
+      if (signalForwarded && code === 130) {
         resolvePromise();
         return;
       }
@@ -66,11 +201,15 @@ function launchTranscriptionClient(args: string[], apiUrl: string): Promise<void
 async function watchTranscript(
   meetingId: string,
   intervalMs: number,
+  flushBeforeRead: boolean = false,
   shouldContinue: () => boolean = () => true,
 ): Promise<void> {
   const seenRowIds = new Set<string>();
 
   while (shouldContinue()) {
+    if (flushBeforeRead) {
+      await flushTranscriptStream(meetingId);
+    }
     const rows = await getTranscriptRows(meetingId);
     for (const row of rows) {
       if (seenRowIds.has(row.id)) {
@@ -92,6 +231,7 @@ async function runTranscriptionWithOptionalWatch(
   args: string[],
   watch: boolean,
   intervalMs: number,
+  flushBeforeRead: boolean,
 ): Promise<void> {
   if (!watch) {
     await launchTranscriptionClient(args, apiUrl);
@@ -104,11 +244,88 @@ async function runTranscriptionWithOptionalWatch(
       launchTranscriptionClient(args, apiUrl).finally(() => {
         keepWatching = false;
       }),
-      watchTranscript(meetingId, intervalMs, () => keepWatching),
+      watchTranscript(meetingId, intervalMs, flushBeforeRead, () => keepWatching),
     ]);
   } finally {
     keepWatching = false;
   }
+}
+
+function formatRelativeActivity(timestamp: string | undefined): string {
+  if (!timestamp) {
+    return 'n/a';
+  }
+
+  const parsed = Date.parse(timestamp);
+  if (Number.isNaN(parsed)) {
+    return timestamp;
+  }
+
+  const diffSeconds = Math.max(0, Math.floor((Date.now() - parsed) / 1000));
+  if (diffSeconds < 60) {
+    return `${diffSeconds}s ago`;
+  }
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+  const diffHours = Math.floor(diffMinutes / 60);
+  return `${diffHours}h ago`;
+}
+
+function buildActivitySparkline(chunks: TranscriptChunkSummary[]): string {
+  if (chunks.length === 0) {
+    return '.....';
+  }
+
+  const bars = '._-~=^#';
+  const recent = chunks.slice(-8);
+  const maxWords = Math.max(...recent.map((chunk) => chunk.wordCount ?? 0), 1);
+  return recent.map((chunk) => {
+    const value = chunk.wordCount ?? 0;
+    const index = Math.min(bars.length - 1, Math.floor((value / maxWords) * (bars.length - 1)));
+    return bars[index] ?? bars[0];
+  }).join('');
+}
+
+function printTranscriptionStatus(
+  meetingId: string,
+  streamStatus: StreamingStatusResponse,
+  persistedRows: number,
+  chunks: TranscriptChunkSummary[],
+  serviceHealth: TranscriptionServiceHealth,
+  whisperHealth: TranscriptionServiceHealth,
+): void {
+  const lastChunk = chunks[chunks.length - 1];
+  const lastPersistedAt = lastChunk?.createdAt;
+  const lastSentRecent = lastPersistedAt !== undefined && Date.now() - Date.parse(lastPersistedAt) < 90_000;
+  const activityLabel = streamStatus.eventCount > 0 || lastSentRecent
+    ? 'sending_to_meeting_context'
+    : 'idle';
+
+  console.log(chalk.white(`Meeting:           ${meetingId}`));
+  console.log(chalk.white(`API URL:           ${resolveApiUrl()}`));
+  console.log(chalk.white(`Transcription URL: ${serviceHealth.url}`));
+  console.log(chalk.white(`Service health:    ${serviceHealth.status}`));
+  if (serviceHealth.error) {
+    console.log(chalk.white(`Service detail:    ${serviceHealth.error}`));
+  }
+  console.log(chalk.white(`Whisper URL:       ${whisperHealth.url}`));
+  console.log(chalk.white(`Whisper health:    ${whisperHealth.status}`));
+  if (whisperHealth.error) {
+    console.log(chalk.white(`Whisper detail:    ${whisperHealth.error}`));
+  }
+  console.log(chalk.white(`Activity:          ${activityLabel}`));
+  console.log(chalk.white(`Buffer state:      ${streamStatus.status}`));
+  console.log(chalk.white(`Buffered events:   ${streamStatus.eventCount}`));
+  console.log(chalk.white(`Persisted rows:    ${persistedRows}`));
+  console.log(chalk.white(`Persisted chunks:  ${chunks.length}`));
+  console.log(chalk.white(`Last persisted:    ${formatRelativeActivity(lastPersistedAt)}`));
+  console.log(chalk.white(`Recent activity:   ${buildActivitySparkline(chunks)}`));
+  console.log(chalk.white(`FFmpeg binary:     ${process.env.FFMPEG_BIN ?? 'ffmpeg'}`));
+  console.log(chalk.white(`Input format:      ${process.env.TRANSCRIPTION_LIVE_INPUT_FORMAT ?? 'pulse'}`));
+  console.log(chalk.white(`Input device:      ${process.env.TRANSCRIPTION_LIVE_INPUT_DEVICE ?? 'default'}`));
+  console.log(chalk.white(`Chunk duration ms: ${process.env.STREAM_CHUNK_MS ?? '30000'}`));
 }
 
 transcriptCommand
@@ -158,6 +375,7 @@ transcriptCommand
   .option('--mode <mode>', 'Delivery mode: upload|stream', 'upload')
   .option('--chunk-strategy <strategy>', 'Chunk strategy: fixed|semantic|speaker|streaming', 'speaker')
   .option('-w, --watch', 'Watch the transcript as it is generated')
+  .option('--flush', 'Flush buffered stream events before each transcript watch poll')
   .option('--interval-ms <milliseconds>', 'Interval between transcript checks', '2000')
   .action(async (
     file: string,
@@ -167,6 +385,7 @@ transcriptCommand
       mode: string;
       chunkStrategy: string;
       watch?: boolean;
+      flush?: boolean;
       intervalMs?: string;
     },
   ) => {
@@ -203,6 +422,7 @@ transcriptCommand
       args,
       opts.watch === true,
       Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 2000,
+      opts.flush === true,
     );
   });
 
@@ -225,16 +445,45 @@ transcriptCommand
   });
 
 transcriptCommand
+  .command('status')
+  .description('Show transcription stream status and local capture configuration for a meeting')
+  .option('-m, --meeting-id <id>', 'Meeting ID (defaults to active meeting)')
+  .action(async (opts: { meetingId?: string }) => {
+    const meetingId = opts.meetingId ?? await requireActiveMeeting();
+    const [streamStatus, rows, chunks, serviceHealth, whisperHealth] = await withSpinner('Loading transcription status…', () => Promise.all([
+      getStreamingStatus(meetingId),
+      getTranscriptRows(meetingId),
+      getTranscriptChunks(meetingId),
+      getTranscriptionServiceHealth(),
+      getWhisperLocalHealth(),
+    ]));
+
+    printTranscriptionStatus(meetingId, streamStatus, rows.length, chunks, serviceHealth, whisperHealth);
+  });
+
+transcriptCommand
+  .command('flush')
+  .description('Flush buffered transcript stream events into persisted transcript rows')
+  .option('-m, --meeting-id <id>', 'Meeting ID (defaults to active meeting)')
+  .action(async (opts: { meetingId?: string }) => {
+    const meetingId = opts.meetingId ?? await requireActiveMeeting();
+    const chunkCount = await withSpinner('Flushing transcript stream…', () => flushTranscriptStream(meetingId));
+    console.log(chalk.green('✓ Transcript stream flushed'));
+    console.log(chalk.white(`Chunks created: ${chunkCount}`));
+  });
+
+transcriptCommand
   .command('watch')
   .description('Watch transcript rows arrive in real time for a meeting')
   .option('-m, --meeting-id <id>', 'Meeting ID (defaults to active meeting)')
   .option('--interval-ms <milliseconds>', 'Interval between transcript checks', '2000')
-  .action(async (opts: { meetingId?: string; intervalMs?: string }) => {
+  .option('--flush', 'Flush buffered stream events before each read poll')
+  .action(async (opts: { meetingId?: string; intervalMs?: string; flush?: boolean }) => {
     const meetingId = opts.meetingId ?? await requireActiveMeeting();
     const intervalMs = Number.parseInt(opts.intervalMs ?? '2000', 10);
 
     console.log(chalk.gray(`Watching transcript stream for meeting ${meetingId}`));
-    await watchTranscript(meetingId, Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 2000);
+    await watchTranscript(meetingId, Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 2000, opts.flush === true);
   });
 
 transcriptCommand
@@ -245,7 +494,8 @@ transcriptCommand
   .option('--chunk-ms <milliseconds>', 'Chunk duration in milliseconds')
   .option('-w, --watch', 'Watch the transcript as it is generated')
   .option('--interval-ms <milliseconds>', 'Interval between transcript checks', '2000')
-  .action(async (opts: { meetingId?: string; language?: string; chunkMs?: string; watch?: boolean; intervalMs?: string }) => {
+  .option('--flush', 'Flush buffered stream events before each transcript watch poll')
+  .action(async (opts: { meetingId?: string; language?: string; chunkMs?: string; watch?: boolean; intervalMs?: string; flush?: boolean }) => {
     const meetingId = opts.meetingId ?? await requireActiveMeeting();
     const apiUrl = resolveApiUrl();
     const args = [
@@ -278,5 +528,6 @@ transcriptCommand
       args,
       opts.watch === true,
       Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 2000,
+      opts.flush === true,
     );
   });
