@@ -52,6 +52,30 @@ interface ITemplateFieldAssignmentRepository {
   deleteByTemplate(templateId: string): Promise<boolean>;
 }
 
+function toDecisionTemplateInsert(
+  data: CreateDecisionTemplate,
+): typeof decisionTemplates.$inferInsert {
+  return {
+    namespace: data.namespace,
+    name: data.name,
+    description: data.description,
+    category: data.category,
+    ...(data.promptTemplate !== undefined ? { promptTemplate: data.promptTemplate } : {}),
+  };
+}
+
+function toDecisionTemplateUpdate(
+  data: Partial<CreateDecisionTemplate>,
+): Partial<typeof decisionTemplates.$inferInsert> {
+  return {
+    ...(data.namespace !== undefined ? { namespace: data.namespace } : {}),
+    ...(data.name !== undefined ? { name: data.name } : {}),
+    ...(data.description !== undefined ? { description: data.description } : {}),
+    ...(data.category !== undefined ? { category: data.category } : {}),
+    ...(data.promptTemplate !== undefined ? { promptTemplate: data.promptTemplate } : {}),
+  };
+}
+
 export class DrizzleDecisionTemplateRepository implements IDecisionTemplateRepository {
   private mapToSchema(
     row: DecisionTemplateSelect & { fields?: TemplateFieldAssignment[] },
@@ -81,7 +105,7 @@ export class DrizzleDecisionTemplateRepository implements IDecisionTemplateRepos
   }
 
   async create(data: CreateDecisionTemplate): Promise<DecisionTemplate> {
-    const [row] = await db.insert(decisionTemplates).values(data).returning();
+    const [row] = await db.insert(decisionTemplates).values(toDecisionTemplateInsert(data)).returning();
 
     if (!row) {
       throw new Error("Failed to create template");
@@ -225,7 +249,7 @@ export class DrizzleDecisionTemplateRepository implements IDecisionTemplateRepos
   ): Promise<DecisionTemplate | null> {
     const [row] = await db
       .update(decisionTemplates)
-      .set(data)
+      .set(toDecisionTemplateUpdate(data))
       .where(eq(decisionTemplates.id, id))
       .returning();
 
@@ -333,7 +357,10 @@ export class DrizzleDecisionTemplateRepository implements IDecisionTemplateRepos
   }
 
   async createMany(templates: CreateDecisionTemplate[]): Promise<DecisionTemplate[]> {
-    const rows = await db.insert(decisionTemplates).values(templates).returning();
+    const rows = await db
+      .insert(decisionTemplates)
+      .values(templates.map((template) => toDecisionTemplateInsert(template)))
+      .returning();
 
     return rows.map((row) => this.mapToSchema(row));
   }

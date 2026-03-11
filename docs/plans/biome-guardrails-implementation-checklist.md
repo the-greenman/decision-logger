@@ -127,16 +127,16 @@ pnpm build
 
 ### Checklist
 
-- [ ] Add a fast validation command for routine local use.
-- [ ] Add a strict validation command for release-grade or schema-affecting changes.
-- [ ] Keep database-specific validation available as a separate focused command.
-- [ ] Document when to use each command.
+- [x] Add a fast validation command for routine local use.
+- [x] Add a strict validation command for release-grade or schema-affecting changes.
+- [x] Keep database-specific validation available as a separate focused command.
+- [x] Document when to use each command.
 
 ### Recommended scripts
 
-- [ ] `validate:fast`
-- [ ] `validate:strict`
-- [ ] `validate:db`
+- [x] `validate:fast`
+- [x] `validate:strict`
+- [x] `validate:db`
 
 ### Suggested command behavior
 
@@ -168,6 +168,13 @@ pnpm db:migrate
 pnpm --filter @repo/db test
 ```
 
+### Implemented script ownership
+
+- `pnpm validate` = `pnpm validate:strict`
+- `pnpm validate:fast` = fast local gate
+- `pnpm validate:strict` = full build/type/database gate
+- `pnpm validate:db` = DB-focused validation gate
+
 ### Files likely affected
 
 - `package.json`
@@ -186,21 +193,27 @@ pnpm --filter @repo/db test
 
 ### Checklist
 
-- [ ] Add a database artifact drift check.
-- [ ] Make drift detection fail when committed Drizzle artifacts do not match generated output.
+- [x] Add a database artifact drift check.
+- [x] Make drift detection fail when committed Drizzle artifacts do not match generated output.
 - [ ] Optionally add declaration artifact checks where package export validation is not already sufficient.
-- [ ] Decide whether drift detection runs in CI only, strict validation only, or both.
+- [x] Decide whether drift detection runs in CI only, strict validation only, or both.
 
 ### Database artifact targets
 
-- [ ] `packages/db/drizzle/*.sql`
-- [ ] `packages/db/drizzle/meta/*`
+- [x] `packages/db/drizzle/*.sql`
+- [x] `packages/db/drizzle/meta/*`
 
 ### Suggested implementation shape
 
-- [ ] Run `pnpm db:generate` in a validation script.
-- [ ] Fail if tracked migration or metadata files change unexpectedly.
-- [ ] Keep output readable so contributors know exactly what to regenerate or commit.
+- [x] Run `pnpm db:generate` in a validation script.
+- [x] Fail if tracked migration or metadata files change unexpectedly.
+- [x] Keep output readable so contributors know exactly what to regenerate or commit.
+
+### Implemented script ownership
+
+- `pnpm db:drift-check` = generates DB artifacts and fails if tracked Drizzle SQL/meta files change unexpectedly
+- `pnpm validate:db` = `pnpm db:drift-check && pnpm db:validate && pnpm db:migrate && pnpm --filter @repo/db test`
+- Status: verified on 2026-03-11 with both `pnpm db:drift-check` and `pnpm validate:db` passing.
 
 ### Files likely affected
 
@@ -218,19 +231,31 @@ pnpm --filter @repo/db test
 
 ### Checklist
 
-- [ ] Identify the intended import boundaries between apps and packages.
-- [ ] Enforce package-layer boundaries using Biome where possible.
-- [ ] Keep repo-specific boundary checks in custom scripts where Biome rules are insufficient.
+- [x] Identify the intended import boundaries between apps and packages.
+- [x] Enforce package-layer boundaries using Biome where possible.
+- [x] Keep repo-specific boundary checks in custom scripts where Biome rules are insufficient.
 - [ ] Prevent deep imports into private package internals unless exported intentionally.
 - [ ] Decide whether environment access should be restricted to configuration/bootstrap layers.
 
 ### Boundary rules to enforce
 
 - [ ] apps may import package entrypoints but not package private internals
-- [ ] packages must not import app code
+- [x] packages must not import app code
 - [ ] `@repo/db` must not depend on `@repo/core` unless explicitly intended
-- [ ] build/dev code must not import `dist/**`
-- [ ] source code must not import another package's `src/**`
+- [x] build/dev code must not import `dist/**`
+- [x] source code must not import another package's `src/**`
+
+### Implemented enforcement scope
+
+- Packages are blocked from importing app packages:
+  - `@repo/api`
+  - `@repo/web`
+  - `@repo/transcription`
+- Packages are blocked from importing app-local aliases such as `@/*`.
+- Source files are still blocked from importing workspace build artifacts under `dist/**`.
+- Source files are still blocked from importing another workspace package's `src/**` directly.
+- Explicit `.js` extension enforcement remains in place for runtime relative ESM imports in `apps/api`, `packages/core`, and `packages/db`.
+- Deeper package-layer restrictions are intentionally deferred because the current repo structure still includes legitimate `@repo/core -> @repo/db` wiring via the service factory.
 
 ### Validation
 
@@ -249,16 +274,35 @@ pnpm type-check
 
 ### Checklist
 
-- [ ] Add dependency cycle detection across workspace packages.
-- [ ] Optionally add cycle detection inside critical packages such as `packages/core` and `packages/db`.
-- [ ] Add validation that package export maps point to real built outputs.
+- [x] Add dependency cycle detection across workspace packages.
+- [x] Optionally add cycle detection inside critical packages such as `packages/core` and `packages/db`.
+- [x] Add validation that package export maps point to real built outputs.
 - [ ] Consider snapshotting or otherwise checking critical package public API surfaces.
 
 ### Suggested targets
 
-- [ ] no cycles across workspace packages
-- [ ] no broken `exports` or `types` paths after build
+- [x] no cycles across workspace packages
+- [x] no broken `exports` or `types` paths after build
 - [ ] no accidental expansion of public package API without intentional review
+
+### Implemented enforcement scope
+
+- `pnpm check:exports` validates that package `main`, `module`, `types`, and `exports` targets resolve to real built files for:
+  - `packages/core`
+  - `packages/db`
+  - `packages/schema`
+- `pnpm check:cycles` validates that workspace package dependencies do not contain cycles across:
+  - `apps/api`
+  - `apps/cli`
+  - `apps/transcription`
+  - `apps/web`
+  - `packages/core`
+  - `packages/db`
+  - `packages/schema`
+- `pnpm validate:strict` includes `pnpm check:exports` after `pnpm build`.
+- `pnpm validate:strict` includes `pnpm check:cycles` after `pnpm check:exports`.
+- The `@repo/db` build was updated to emit the advertised `./schema` runtime entrypoint so package metadata and built outputs now match.
+- Status: verified on 2026-03-11 with both `pnpm check:exports` and `pnpm check:cycles` passing.
 
 ### Files likely affected
 

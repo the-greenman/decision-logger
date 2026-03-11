@@ -25,14 +25,39 @@ interface IDecisionFieldRepository {
   delete(id: string): Promise<boolean>;
 }
 
+function toDecisionFieldInsert(data: CreateDecisionField): typeof decisionFields.$inferInsert {
+  return {
+    namespace: data.namespace,
+    name: data.name,
+    description: data.description,
+    category: data.category,
+    extractionPrompt: data.extractionPrompt,
+    fieldType: data.fieldType,
+    placeholder: data.placeholder ?? null,
+    ...(data.instructions !== undefined ? { instructions: data.instructions } : {}),
+    ...(data.validationRules !== undefined ? { validationRules: data.validationRules } : {}),
+  };
+}
+
+function toDecisionFieldUpdate(data: Partial<CreateDecisionField>): Partial<typeof decisionFields.$inferInsert> {
+  return {
+    ...(data.namespace !== undefined ? { namespace: data.namespace } : {}),
+    ...(data.name !== undefined ? { name: data.name } : {}),
+    ...(data.description !== undefined ? { description: data.description } : {}),
+    ...(data.category !== undefined ? { category: data.category } : {}),
+    ...(data.extractionPrompt !== undefined ? { extractionPrompt: data.extractionPrompt } : {}),
+    ...(data.fieldType !== undefined ? { fieldType: data.fieldType } : {}),
+    ...(data.placeholder !== undefined ? { placeholder: data.placeholder ?? null } : {}),
+    ...(data.instructions !== undefined ? { instructions: data.instructions } : {}),
+    ...(data.validationRules !== undefined ? { validationRules: data.validationRules } : {}),
+  };
+}
+
 export class DrizzleDecisionFieldRepository implements IDecisionFieldRepository {
   async create(data: CreateDecisionField): Promise<DecisionField> {
     const [row] = await db
       .insert(decisionFields)
-      .values({
-        ...data,
-        placeholder: data.placeholder || null,
-      })
+      .values(toDecisionFieldInsert(data))
       .returning();
 
     return this.mapToSchema(row);
@@ -80,10 +105,7 @@ export class DrizzleDecisionFieldRepository implements IDecisionFieldRepository 
   }
 
   async update(id: string, data: Partial<CreateDecisionField>): Promise<DecisionField | null> {
-    const updateData: any = { ...data };
-    if (data.placeholder !== undefined) {
-      updateData.placeholder = data.placeholder || null;
-    }
+    const updateData = toDecisionFieldUpdate(data);
 
     const [row] = await db
       .update(decisionFields)
@@ -103,12 +125,7 @@ export class DrizzleDecisionFieldRepository implements IDecisionFieldRepository 
   async createMany(fields: CreateDecisionField[]): Promise<DecisionField[]> {
     const rows = await db
       .insert(decisionFields)
-      .values(
-        fields.map((field) => ({
-          ...field,
-          placeholder: field.placeholder || null,
-        })),
-      )
+      .values(fields.map((field) => toDecisionFieldInsert(field)))
       .returning();
 
     return rows.map((row) => this.mapToSchema(row));

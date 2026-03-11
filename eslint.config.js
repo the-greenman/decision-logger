@@ -45,6 +45,23 @@ export default tseslint.config(
     },
   },
   {
+    files: ["packages/**/*.ts", "packages/**/*.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@repo/api", "@repo/api/*", "@repo/web", "@repo/web/*", "@repo/transcription", "@repo/transcription/*", "@/*"],
+              message:
+                "Packages must not import application code or app-local aliases. Keep package layers independent from apps.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["apps/api/src/**/*.ts", "packages/core/src/**/*.ts", "packages/db/src/**/*.ts"],
     ignores: ["**/__tests__/**", "packages/db/src/scripts/**"],
     rules: {
