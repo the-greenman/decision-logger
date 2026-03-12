@@ -82,7 +82,7 @@ describe("web transcription server", () => {
     expect(chunkPayload).toEqual({ accepted: true, eventCount: 2, autoFlushed: true });
 
     expect(provider.transcribe).toHaveBeenCalledWith(Buffer.from("fake-audio"), {
-      filename: "first.webm",
+      filename: expect.stringMatching(/^window-\d+\.webm$/),
       language: "en",
     });
     expect(apiClient.postStreamEvent).toHaveBeenNthCalledWith(1, "meeting-browser-1", {
@@ -268,5 +268,74 @@ describe("web transcription server", () => {
     expect(statusPayload.bufferedEvents).toBe(1);
 
     expect(apiClient.postStreamEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("transcribes a rolling window using the latest window-sized chunk history", async () => {
+    const provider: ITranscriptionProvider = {
+      transcribe: vi
+        .fn()
+        .mockResolvedValue({ events: [{ text: "line", startTimeSeconds: 0.2 }], rawResponse: {} }),
+    };
+
+    const apiClient = {
+      postStreamEvent: vi.fn().mockResolvedValue(undefined),
+      flushStream: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const server = await startWebServer({
+      port: 0,
+      host: "127.0.0.1",
+      provider,
+      apiClient,
+      autoFlushMs: 100_000,
+    });
+    runningServers.push(server);
+
+    const baseUrl = `http://127.0.0.1:${server.port}`;
+    const createResponse = await fetch(`${baseUrl}/sessions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        meetingId: "meeting-browser-window",
+        windowMs: 30_000,
+        stepMs: 10_000,
+      }),
+    });
+    const createPayload = (await createResponse.json()) as { sessionId: string };
+
+    const chunks = [Buffer.from("a"), Buffer.from("b"), Buffer.from("c"), Buffer.from("d")];
+    for (const [index, chunk] of chunks.entries()) {
+      const response = await fetch(
+        `${baseUrl}/sessions/${createPayload.sessionId}/chunks?filename=chunk-${index + 1}.webm`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/octet-stream" },
+          body: chunk,
+        },
+      );
+      expect(response.status).toBe(200);
+    }
+
+    expect(provider.transcribe).toHaveBeenCalledTimes(4);
+    expect(provider.transcribe).toHaveBeenNthCalledWith(
+      1,
+      Buffer.concat([Buffer.from("a")]),
+      expect.objectContaining({ filename: expect.stringMatching(/^window-\d+\.webm$/) }),
+    );
+    expect(provider.transcribe).toHaveBeenNthCalledWith(
+      2,
+      Buffer.concat([Buffer.from("a"), Buffer.from("b")]),
+      expect.objectContaining({ filename: expect.stringMatching(/^window-\d+\.webm$/) }),
+    );
+    expect(provider.transcribe).toHaveBeenNthCalledWith(
+      3,
+      Buffer.concat([Buffer.from("a"), Buffer.from("b"), Buffer.from("c")]),
+      expect.objectContaining({ filename: expect.stringMatching(/^window-\d+\.webm$/) }),
+    );
+    expect(provider.transcribe).toHaveBeenNthCalledWith(
+      4,
+      Buffer.concat([Buffer.from("b"), Buffer.from("c"), Buffer.from("d")]),
+      expect.objectContaining({ filename: expect.stringMatching(/^window-\d+\.webm$/) }),
+    );
   });
 });

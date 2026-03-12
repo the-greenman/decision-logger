@@ -54,6 +54,7 @@ interface SessionState {
   stepMs: number;
   dedupeHorizonMs: number;
   dedupeSeenAtMs: Map<string, number>;
+  chunkHistory: Array<{ audio: Buffer; filename: string; receivedAtMs: number }>;
 }
 
 interface RunningWebServer {
@@ -228,6 +229,11 @@ function purgeDedupeHistory(
   }
 }
 
+function extensionFromFilename(filename: string): string {
+  const ext = filename.split(".").pop()?.trim().toLowerCase();
+  return ext && ext.length > 0 ? ext : "webm";
+}
+
 export async function startWebServer(options?: StartWebServerOptions): Promise<RunningWebServer> {
   const apiUrl = resolveDecisionLoggerApiUrl();
   const apiKey = process.env.DECISION_LOGGER_API_KEY;
@@ -349,6 +355,7 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
           stepMs: parsed.data.stepMs,
           dedupeHorizonMs: parsed.data.dedupeHorizonMs,
           dedupeSeenAtMs: new Map<string, number>(),
+          chunkHistory: [],
         };
         sessions.set(session.id, session);
 
@@ -396,12 +403,20 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
 
         const fallback = `chunk-${Date.now()}.webm`;
         const filename = resolveChunkFilename(req, fallback);
-        const transcription = await provider.transcribe(audio, {
-          filename,
+        const nowMs = Date.now();
+        const windowChunkCount = Math.max(1, Math.ceil(session.windowMs / session.stepMs));
+        session.chunkHistory.push({ audio, filename, receivedAtMs: nowMs });
+        if (session.chunkHistory.length > windowChunkCount) {
+          session.chunkHistory.splice(0, session.chunkHistory.length - windowChunkCount);
+        }
+
+        const windowAudio = Buffer.concat(session.chunkHistory.map((chunk) => chunk.audio));
+        const transcriptionFilename = `window-${nowMs}.${extensionFromFilename(filename)}`;
+        const transcription = await provider.transcribe(windowAudio, {
+          filename: transcriptionFilename,
           ...(session.language === undefined ? {} : { language: session.language }),
         });
 
-        const nowMs = Date.now();
         purgeDedupeHistory(session.dedupeSeenAtMs, nowMs, session.dedupeHorizonMs);
         const dedupedEvents = transcription.events.filter((event) => {
           const fingerprint = buildEventFingerprint(event);
