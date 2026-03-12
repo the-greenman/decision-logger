@@ -33,6 +33,7 @@ import {
   updateFieldValue,
   changeDecisionContextTemplate,
   createDecisionFeedback,
+  listFieldDecisionFeedback,
   regenerateField,
   regenerateDraft,
   logDecision,
@@ -57,7 +58,7 @@ import {
   getTranscriptionServiceStatus,
   type TranscriptionServiceStatus,
 } from "@/api/transcription-client";
-import type { ApiStatus, LLMInteraction } from "@/api/types";
+import type { ApiStatus, DecisionFeedback, LLMInteraction } from "@/api/types";
 import { buildCandidates, buildAgendaItems } from "@/api/adapters";
 import { FacilitatorFieldCard } from "@/components/facilitator/FacilitatorFieldCard";
 import { CandidateCard } from "@/components/facilitator/CandidateCard";
@@ -238,6 +239,8 @@ export function FacilitatorMeetingPage() {
   const [zoomedFieldId, setZoomedFieldId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const [supplementary, setSupplementary] = useState<SupplementaryItem[]>([]);
+  const [fieldFeedback, setFieldFeedback] = useState<DecisionFeedback[]>([]);
+  const [fieldFeedbackLoading, setFieldFeedbackLoading] = useState(false);
   const [finalised, setFinalised] = useState(false);
   const [transcriptUploaded, setTranscriptUploaded] = useState(false);
   const [selectionToast, setSelectionToast] = useState<{ rows: number; chunks: number } | null>(
@@ -520,6 +523,35 @@ export function FacilitatorMeetingPage() {
   }, [activeApiContextId, meetingId, zoomedFieldId]);
 
   useEffect(() => {
+    if (!activeApiContextId || !zoomedFieldId) {
+      setFieldFeedback([]);
+      setFieldFeedbackLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setFieldFeedbackLoading(true);
+
+    void listFieldDecisionFeedback(activeApiContextId, zoomedFieldId)
+      .then(({ items }) => {
+        if (cancelled) return;
+        setFieldFeedback(items);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setFieldFeedback([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setFieldFeedbackLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeApiContextId, zoomedFieldId]);
+
+  useEffect(() => {
     if (!meetingId) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -759,6 +791,32 @@ export function FacilitatorMeetingPage() {
     } catch {
       updateField(fieldId, { status: "idle" });
     }
+  }
+
+  async function handleSubmitFieldFeedback(
+    fieldId: string,
+    payload: { comment: string; rating: "approved" | "needs_work" | "rejected" },
+  ) {
+    if (isClosedContext || !activeApiContextId) return;
+
+    await createDecisionFeedback(activeApiContextId, {
+      fieldId,
+      draftVersionNumber: null,
+      fieldVersionId: null,
+      rating: payload.rating,
+      source: "user",
+      authorId: "facilitator",
+      comment: payload.comment,
+      textReference: null,
+      referenceId: null,
+      referenceUrl: null,
+      excludeFromRegeneration: false,
+    });
+
+    if (zoomedFieldId !== fieldId) return;
+
+    const { items } = await listFieldDecisionFeedback(activeApiContextId, fieldId);
+    setFieldFeedback(items);
   }
 
   // ── Candidate mutations ───────────────────────────────────────────
@@ -1733,11 +1791,14 @@ export function FacilitatorMeetingPage() {
       <FieldZoom
         field={zoomedField}
         supplementaryItems={supplementary}
+        feedbackItems={fieldFeedback}
+        feedbackLoading={fieldFeedbackLoading}
         meetingId={meetingId}
         contextId={activeContext.id}
         onClose={() => setZoomedFieldId(null)}
         onSave={handleSaveFieldValue}
         onRegenerate={handleRegenerateSingleField}
+        onSubmitFeedback={handleSubmitFieldFeedback}
         onLock={handleLock}
         onUnlock={handleUnlock}
         onAddSupplementary={handleAddSupplementary}

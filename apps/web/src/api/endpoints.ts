@@ -220,6 +220,16 @@ export function createDecisionFeedback(
   });
 }
 
+export function listDecisionFeedback(contextId: string) {
+  return apiFetch<{ items: DecisionFeedback[] }>(`/api/decision-contexts/${contextId}/feedback`);
+}
+
+export function listFieldDecisionFeedback(contextId: string, fieldId: string) {
+  return apiFetch<{ items: DecisionFeedback[] }>(
+    `/api/decision-contexts/${contextId}/feedback/field/${fieldId}`,
+  );
+}
+
 export function getFieldTranscriptChunks(contextId: string, fieldId: string) {
   return apiFetch<{ chunks: TranscriptChunk[] }>(
     `/api/decision-contexts/${contextId}/fields/${fieldId}/transcript`,

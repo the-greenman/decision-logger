@@ -10,14 +10,21 @@ import {
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
+import type { DecisionFeedback } from "@/api/types";
 import type { Field, FieldVersion, SupplementaryItem } from "@/lib/mock-data";
 
 interface FieldZoomProps {
   field: Field;
   supplementaryItems: SupplementaryItem[];
+  feedbackItems: DecisionFeedback[];
+  feedbackLoading: boolean;
   onClose: () => void;
   onSave: (fieldId: string, value: string) => void;
   onRegenerate: (fieldId: string) => void;
+  onSubmitFeedback: (
+    fieldId: string,
+    payload: { comment: string; rating: "approved" | "needs_work" | "rejected" },
+  ) => Promise<void>;
   onLock: (fieldId: string) => void;
   onUnlock: (fieldId: string) => void;
   onAddSupplementary: (item: Omit<SupplementaryItem, "id" | "createdAt">) => void;
@@ -30,9 +37,12 @@ interface FieldZoomProps {
 export function FieldZoom({
   field,
   supplementaryItems,
+  feedbackItems,
+  feedbackLoading,
   onClose,
   onSave,
   onRegenerate,
+  onSubmitFeedback,
   onLock,
   onUnlock,
   onAddSupplementary,
@@ -42,6 +52,12 @@ export function FieldZoom({
   const [editValue, setEditValue] = useState(field.value);
   const [showHistory, setShowHistory] = useState(false);
   const [showAddEvidence, setShowAddEvidence] = useState(false);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackRating, setFeedbackRating] = useState<"approved" | "needs_work" | "rejected">(
+    "needs_work",
+  );
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newBody, setNewBody] = useState("");
   const isLocked = field.status === "locked";
@@ -72,6 +88,23 @@ export function FieldZoom({
   function handleRestoreVersion(v: FieldVersion) {
     setEditValue(v.value);
     setShowHistory(false);
+  }
+
+  async function handleSubmitFeedback() {
+    const comment = feedbackComment.trim();
+    if (!comment) return;
+
+    setSubmittingFeedback(true);
+    setFeedbackError(null);
+    try {
+      await onSubmitFeedback(field.id, { comment, rating: feedbackRating });
+      setFeedbackComment("");
+      setFeedbackRating("needs_work");
+    } catch (error) {
+      setFeedbackError(error instanceof Error ? error.message : "Failed to save feedback");
+    } finally {
+      setSubmittingFeedback(false);
+    }
   }
 
   return (
@@ -188,6 +221,18 @@ export function FieldZoom({
               setNewBody("");
             }}
           />
+
+          <FieldFeedbackSection
+            items={feedbackItems}
+            loading={feedbackLoading}
+            comment={feedbackComment}
+            rating={feedbackRating}
+            error={feedbackError}
+            submitting={submittingFeedback}
+            onCommentChange={setFeedbackComment}
+            onRatingChange={setFeedbackRating}
+            onSubmit={handleSubmitFeedback}
+          />
         </div>
 
         {/* Right sidebar — version history */}
@@ -219,6 +264,121 @@ export function FieldZoom({
           </aside>
         )}
       </div>
+    </div>
+  );
+}
+
+interface FieldFeedbackSectionProps {
+  items: DecisionFeedback[];
+  loading: boolean;
+  comment: string;
+  rating: "approved" | "needs_work" | "rejected";
+  error: string | null;
+  submitting: boolean;
+  onCommentChange: (value: string) => void;
+  onRatingChange: (value: "approved" | "needs_work" | "rejected") => void;
+  onSubmit: () => void;
+}
+
+function FieldFeedbackSection({
+  items,
+  loading,
+  comment,
+  rating,
+  error,
+  submitting,
+  onCommentChange,
+  onRatingChange,
+  onSubmit,
+}: FieldFeedbackSectionProps) {
+  return (
+    <div className="flex flex-col gap-3 pt-2">
+      <div className="flex items-center justify-between">
+        <label className="text-fac-label text-text-secondary uppercase tracking-wider">
+          Feedback
+          <span className="ml-2 text-text-muted normal-case tracking-normal font-normal">
+            (field-specific guidance and review history)
+          </span>
+        </label>
+      </div>
+
+      <div className="flex flex-col gap-2 p-3 rounded-card border border-accent/20 bg-accent-dim/10">
+        <div className="flex flex-wrap gap-2">
+          {([
+            ["needs_work", "Needs work"],
+            ["approved", "Approved"],
+            ["rejected", "Rejected"],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onRatingChange(value)}
+              className={`px-3 py-1.5 rounded border text-fac-meta transition-colors ${
+                rating === value
+                  ? "border-accent bg-accent text-white"
+                  : "border-border bg-surface text-text-secondary hover:text-text-primary"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <textarea
+          value={comment}
+          onChange={(e) => onCommentChange(e.target.value)}
+          rows={4}
+          placeholder="Add field-specific feedback for regeneration or review…"
+          className="w-full p-3 rounded border border-border bg-surface text-fac-meta text-text-primary leading-relaxed resize-y focus:outline-none focus:border-accent placeholder:text-text-muted"
+        />
+        {error && <p className="text-fac-meta text-danger">{error}</p>}
+        <div className="flex justify-end">
+          <button
+            onClick={onSubmit}
+            disabled={submitting || !comment.trim()}
+            className="px-3 py-1.5 text-fac-meta bg-accent text-white rounded hover:bg-accent/90 transition-colors disabled:opacity-40"
+          >
+            {submitting ? "Saving…" : "Save feedback"}
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="text-fac-meta text-text-muted">Loading feedback…</p>
+      ) : items.length === 0 ? (
+        <p className="text-fac-meta text-text-muted italic">
+          No field feedback yet. Add feedback here to guide future regeneration and show review history.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {[...items].reverse().map((item) => (
+            <FeedbackEntry key={item.id} item={item} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FeedbackEntry({ item }: { item: DecisionFeedback }) {
+  const createdAt = new Date(item.createdAt).toLocaleString("en-GB");
+  const ratingLabel =
+    item.rating === "needs_work"
+      ? "Needs work"
+      : item.rating === "approved"
+        ? "Approved"
+        : "Rejected";
+
+  return (
+    <div className="flex flex-col gap-2 p-3 rounded-card border border-border bg-surface">
+      <div className="flex flex-wrap items-center gap-2 text-fac-meta">
+        <span className="font-medium text-text-primary">{item.authorId}</span>
+        <span className="px-2 py-0.5 rounded bg-overlay/50 text-text-secondary">{ratingLabel}</span>
+        <span className="px-2 py-0.5 rounded bg-overlay/50 text-text-muted">{item.source}</span>
+        <span className="ml-auto text-text-muted">{createdAt}</span>
+      </div>
+      <p className="text-fac-meta text-text-primary whitespace-pre-wrap leading-relaxed">
+        {item.comment}
+      </p>
     </div>
   );
 }
