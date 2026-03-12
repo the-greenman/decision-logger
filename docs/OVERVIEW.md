@@ -74,6 +74,8 @@ Use this document as the hub for the architecture set.
   - observability rollout plan
 - `docs/plans/transcription-service-plan.md`
   - upstream transcription-service planning
+- `docs/plans/sliding-window-live-transcription-plan.md`
+  - rollout plan for 30s window / 10s step live transcription and dedupe defaults
 
 ## Reference vs plan rules
 
@@ -113,6 +115,7 @@ Use this document as the hub for the architecture set.
 
 **Integration Assumptions:**
 - Transcript ingestion is transport-agnostic: the core system accepts text transcript events, not raw audio.
+- Live transcript events may be produced from upstream windowed audio processing (default 30s window with 10s step) before delivery to core streaming endpoints.
 - Local transcription can be added as a separate upstream component, but is not required for the product to function.
 - Local LLMs are supported as an optional inference path for detection/classification, not a hard dependency.
 

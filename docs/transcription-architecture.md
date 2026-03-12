@@ -2,7 +2,7 @@
 
 **Status**: authoritative
 **Owns**: transcription provider abstraction, live vs batch flow definitions, Docker local setup, transcription service boundary
-**Must sync with**: `docs/plans/transcription-service-plan.md`, `docs/transcript-preprocessing-architecture.md`, `docs/plans/whisper-transcription-implementation-plan.md`
+**Must sync with**: `docs/plans/transcription-service-plan.md`, `docs/transcript-preprocessing-architecture.md`, `docs/plans/whisper-transcription-implementation-plan.md`, `docs/plans/sliding-window-live-transcription-plan.md`
 
 ## Purpose
 
@@ -55,11 +55,12 @@ The core API is transport-agnostic: it accepts text events. The transcription se
 │  Microphone / capture layer                                      │
 │       ↓  (audio frames)                                          │
 │  Transcription Service                                           │
-│       → buffers ~30s of audio                                    │
-│       → ITranscriptionProvider.transcribe(chunk)                │
+│       → assembles rolling 30s audio window                      │
+│       → runs every 10s step (overlap enabled)                   │
+│       → transcribes + dedupes overlap repeats                   │
 │       → POST /api/meetings/:id/transcripts/stream               │
 │            (per finalized segment: text, speaker?, timestamp?)  │
-│  [repeat for each chunk]                                         │
+│  [repeat for each step]                                          │
 │       ↓  (on meeting end)                                        │
 │       → POST /api/meetings/:id/streaming/flush                  │
 │       ↓                                                          │
@@ -75,6 +76,10 @@ The core API is transport-agnostic: it accepts text events. The transcription se
 ## Core API Contract
 
 The transcription service calls these endpoints only. See `docs/plans/transcription-service-plan.md` for the authoritative contract.
+
+### Schema-first contract rule
+
+When changing any API request/response shape, define/update Zod schemas in `packages/schema` first, then implement route and handler behavior from those schemas.
 
 ### Live delivery
 
@@ -108,6 +113,32 @@ The `appliedContexts` field shows which context tags were stored on the event, i
 GET  /api/meetings/:id/streaming/status   → { status, eventCount }
 POST /api/meetings/:id/streaming/flush    → { chunks: TranscriptChunk[] }
 DELETE /api/meetings/:id/streaming/buffer → clears buffer (abandoned sessions)
+```
+
+### Transcription session control API (web path)
+
+The facilitator web UI controls recording through the transcription service session API:
+
+```
+POST /sessions
+GET  /sessions/:id/status
+POST /sessions/:id/chunks
+POST /sessions/:id/stop
+GET  /status
+```
+
+`GET /status` should report effective runtime defaults for `windowMs`, `stepMs`, `dedupeHorizonMs`, and `autoFlushMs`.
+
+Session create supports optional sliding-window controls:
+
+```json
+{
+  "meetingId": "<uuid>",
+  "language": "en",
+  "windowMs": 30000,
+  "stepMs": 10000,
+  "dedupeHorizonMs": 90000
+}
 ```
 
 ### Batch delivery
@@ -216,10 +247,14 @@ WHISPER_LOCAL_URL=http://localhost:9000
 DECISION_LOGGER_API_URL=http://localhost:3000
 DECISION_LOGGER_API_KEY=internal-service-token   # if auth is enabled
 
-# Live streaming behavior
-STREAM_CHUNK_MS=30000               # audio chunk window (ms)
-STREAM_OVERLAP_MS=2000              # overlap to avoid word boundary cuts
-MAX_RETRY_ATTEMPTS=5
+# Live streaming behavior defaults
+STREAM_WINDOW_MS=30000              # rolling transcription window (ms)
+STREAM_STEP_MS=10000                # window advance interval (ms)
+STREAM_DEDUPE_HORIZON_MS=90000      # duplicate suppression memory horizon (ms)
+STREAM_AUTO_FLUSH_MS=10000          # periodic flush cadence while live
+STREAM_MAX_RETRY_ATTEMPTS=5
+STREAM_RETRY_BASE_MS=250
+STREAM_MAX_OUTBOUND_QUEUE=200
 ```
 
 ### Core API (no transcription-specific vars needed)
@@ -275,6 +310,7 @@ Do not attempt to set active decision context before a batch upload to "pre-tag"
 ## Live Meeting Flow: Step by Step
 
 1. User starts a meeting in Decision Logger. Transcription service starts an audio capture session.
+   - In browser mode, the client uploads raw chunks and the transcription service assembles the sliding window server-side.
 2. The facilitator begins the meeting. All audio streams with only `meeting:{id}` context.
 3. When discussion focuses on a specific decision:
    - Facilitator (or UI) calls `POST /api/meetings/:id/context/decision`.
@@ -285,7 +321,7 @@ Do not attempt to set active decision context before a batch upload to "pre-tag"
 5. When topic shifts back to general meeting:
    - Facilitator calls `DELETE /api/meetings/:id/context/decision`.
    - Stream events revert to `meeting:{id}` only.
-6. Every 30s, the transcription service sends a 30s audio chunk to the provider, gets back segments, and POSTs each to `/stream`.
+6. Every 10s, the transcription service builds a rolling 30s window, transcribes it, dedupes overlap repeats, and POSTs segments to `/stream`.
 7. On meeting end:
    - Transcription service calls `POST /api/meetings/:id/streaming/flush`.
    - All buffered events become `TranscriptChunk` records with their stored context tags.

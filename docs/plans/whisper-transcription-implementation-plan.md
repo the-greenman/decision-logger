@@ -3,7 +3,8 @@
 **Status**: active
 **Goal**: Build a Whisper-based transcription service that delivers text events to the core Decision Logger API, supporting both batch (post-meeting recordings) and live (during-meeting) flows.
 
-See `docs/transcription-architecture.md` for the full architecture. See `docs/plans/transcription-service-plan.md` for the API contract this plan implements.
+See `docs/transcription-architecture.md` for the full architecture. See `docs/plans/transcription-service-plan.md` for the API contract this plan implements.  
+For the 30s/10s live default rollout details, see `docs/plans/sliding-window-live-transcription-plan.md`.
 
 ---
 
@@ -196,7 +197,7 @@ interface ITranscriptionProvider {
 
 **Live mode** (`transcription-service live --meeting-id <id>`):
 1. Start capturing audio from mic (via `ffmpeg` or `sox` subprocess)
-2. Every `STREAM_CHUNK_MS` (default 30s): read current buffer, transcribe, POST segments
+2. Every `STREAM_STEP_MS` (default 10s): assemble a rolling `STREAM_WINDOW_MS` window (default 30s), transcribe, dedupe overlap repeats, POST segments
 3. On SIGTERM/Ctrl-C: POST final chunk, then POST `/streaming/flush`
 
 **Browser-driven mode** (`web UI meeting page`):
@@ -208,10 +209,13 @@ interface ITranscriptionProvider {
 
 ### Browser Streaming API (new T1 scope)
 
+Schema-first rule for this phase:
+- Define/update session request/response schemas in `packages/schema` before route handler changes.
+
 Add lightweight HTTP session endpoints to `apps/transcription` so the web UI can control streaming:
 
 - `POST /sessions`
-  - body: `{ meetingId: string, language?: string }`
+  - body: `{ meetingId: string, language?: string, windowMs?: number, stepMs?: number, dedupeHorizonMs?: number }`
   - response: `{ sessionId: string, meetingId: string, startedAt: string }`
 - `POST /sessions/:sessionId/chunks`
   - multipart or binary body containing one audio blob chunk
@@ -219,12 +223,35 @@ Add lightweight HTTP session endpoints to `apps/transcription` so the web UI can
 - `POST /sessions/:sessionId/stop`
   - response: `{ flushed: true, chunksPersisted?: number }`
 - `GET /sessions/:sessionId/status`
-  - response: `{ status: 'active' | 'stopping' | 'stopped', bufferedEvents: number }`
+  - response: `{ status: 'active' | 'stopping' | 'stopped', bufferedEvents: number, windowMs: number, stepMs: number, dedupeHorizonMs: number, postedEvents: number, dedupedEvents: number }`
 
 Notes:
 - Browser mode is the production web path.
 - Existing `transcription-service live` remains a dev/ops utility for local microphone testing.
 - Browser mode must run behind authenticated app access and service-level API credentials.
+
+### T1 Sliding-Window alignment tasks (supersedes fixed-window defaults)
+
+- **T1.SW1** Replace fixed live default assumptions with sliding defaults:
+  - `STREAM_WINDOW_MS=30000`
+  - `STREAM_STEP_MS=10000`
+  - `STREAM_DEDUPE_HORIZON_MS=90000`
+  - `STREAM_AUTO_FLUSH_MS=10000`
+- **T1.SW2** Add server-side overlap dedupe before `/transcripts/stream` posting.
+- **T1.SW3** Ensure browser session flow uses server-side window assembly (client uploads raw chunks only).
+- **T1.SW4** Surface effective window/step/dedupe settings via `GET /sessions/:id/status` and `GET /status`.
+- **T1.SW5** Remove references to fixed non-overlapping chunks as the default live behavior in docs and help text.
+
+### T1.SW TDD Gate (must pass before merge)
+
+Reference: `docs/plans/sliding-window-live-transcription-plan.md` (TDD Test Plan section).
+
+- [ ] Schema tests fail first, then pass for session create/status/status-default contracts.
+- [ ] Sliding-window scheduler tests fail first, then pass for 30s window / 10s step behavior.
+- [ ] Dedupe tests fail first, then pass for overlap suppression and horizon expiry.
+- [ ] Session API integration tests fail first, then pass for effective config and counters.
+- [ ] End-to-end flow tests fail first, then pass for no duplicate delivered events and clean stop/flush.
+- [ ] Web/CLI alignment tests fail first, then pass for default settings and updated help/status surface.
 
 ### TDD Checkpoints
 
