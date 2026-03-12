@@ -28,7 +28,10 @@ Gap to close:
   - [x] SW3a: transcription CLI live options aligned to `windowMs`/`stepMs` semantics.
   - [x] SW3b: CLI command surface updated to `--window-ms`/`--step-ms` and validated with command tests.
   - [x] SW3c: web facilitator runtime status and session controls final verification pass.
-- [ ] SW4 observability completion and final validation checkpoint.
+- [x] SW4 observability completion and final validation checkpoint.
+  - [x] SW4a: CLI status surface upgraded to report transcription provider/defaults/session count from `/status`.
+  - [x] SW4b: removed stale fixed-chunk runtime label (`STREAM_CHUNK_MS`) from CLI status output.
+  - [x] SW4c: validation checkpoint passed (see command log below).
 
 ---
 
@@ -199,3 +202,11 @@ Done when:
 - Session/service status endpoints expose effective settings and dedupe counters.
 - No evergreen docs describe fixed non-overlapping chunks as the default live behavior.
 - Schema-first rule is explicit in plan docs before API route behavior details.
+
+## Validation Log
+
+- `pnpm --filter decision-logger test -- src/__tests__/client-and-commands.test.ts` ✅
+- `pnpm --filter decision-logger type-check` ✅
+- `pnpm --filter @repo/transcription test` ✅
+- `pnpm --filter @repo/transcription build` ✅
+- `pnpm --filter @repo/web type-check` ✅

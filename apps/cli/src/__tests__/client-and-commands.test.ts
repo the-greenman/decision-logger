@@ -505,6 +505,21 @@ describe("CLI command request shapes", () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        json: async () => ({
+          status: "ok",
+          provider: "openai",
+          sessionCount: 1,
+          defaults: {
+            windowMs: 30000,
+            stepMs: 10000,
+            dedupeHorizonMs: 90000,
+            autoFlushMs: 10000,
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: async () => ({ status: "ok" }),
       });
 
@@ -528,7 +543,10 @@ describe("CLI command request shapes", () => {
       method: "GET",
     });
     expect(fetchMock).toHaveBeenNthCalledWith(4, "http://localhost:8788/health", { method: "GET" });
-    expect(fetchMock).toHaveBeenNthCalledWith(5, "http://localhost:9000/openapi.json", {
+    expect(fetchMock).toHaveBeenNthCalledWith(5, "http://localhost:8788/status", {
+      method: "GET",
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(6, "http://localhost:9000/openapi.json", {
       method: "GET",
     });
 

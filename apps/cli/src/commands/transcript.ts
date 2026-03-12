@@ -34,6 +34,18 @@ interface TranscriptionServiceHealth {
   error?: string;
 }
 
+interface TranscriptionServiceStatusResponse {
+  status: "ok";
+  provider: string;
+  sessionCount: number;
+  defaults: {
+    windowMs: number;
+    stepMs: number;
+    dedupeHorizonMs: number;
+    autoFlushMs: number;
+  };
+}
+
 function resolveApiUrl(): string {
   return process.env.DECISION_LOGGER_API_URL ?? process.env.API_BASE_URL ?? "http://localhost:3001";
 }
@@ -119,6 +131,30 @@ async function getTranscriptionServiceHealth(): Promise<TranscriptionServiceHeal
       url,
       error: error instanceof Error ? error.message : String(error),
     };
+  }
+}
+
+async function getTranscriptionServiceStatus(): Promise<TranscriptionServiceStatusResponse | null> {
+  const baseUrl = resolveTranscriptionServiceUrl().replace(/\/$/, "");
+  const url = `${baseUrl}/status`;
+
+  try {
+    const response = await fetch(url, { method: "GET" });
+    if (!response.ok) {
+      return null;
+    }
+    const payload = (await response.json()) as Partial<TranscriptionServiceStatusResponse>;
+    if (
+      payload.status !== "ok" ||
+      typeof payload.provider !== "string" ||
+      typeof payload.sessionCount !== "number" ||
+      payload.defaults === undefined
+    ) {
+      return null;
+    }
+    return payload as TranscriptionServiceStatusResponse;
+  } catch {
+    return null;
   }
 }
 
@@ -306,6 +342,7 @@ function printTranscriptionStatus(
   persistedRows: number,
   chunks: TranscriptChunkSummary[],
   serviceHealth: TranscriptionServiceHealth,
+  serviceStatus: TranscriptionServiceStatusResponse | null,
   whisperHealth: TranscriptionServiceHealth,
 ): void {
   const lastChunk = chunks[chunks.length - 1];
@@ -321,6 +358,18 @@ function printTranscriptionStatus(
   console.log(chalk.white(`Service health:    ${serviceHealth.status}`));
   if (serviceHealth.error) {
     console.log(chalk.white(`Service detail:    ${serviceHealth.error}`));
+  }
+  if (serviceStatus) {
+    console.log(
+      chalk.white(
+        `Provider:          ${serviceStatus.provider} (${serviceStatus.sessionCount} sessions)`,
+      ),
+    );
+    console.log(
+      chalk.white(
+        `Service defaults:  window=${serviceStatus.defaults.windowMs}ms step=${serviceStatus.defaults.stepMs}ms dedupe=${serviceStatus.defaults.dedupeHorizonMs}ms flush=${serviceStatus.defaults.autoFlushMs}ms`,
+      ),
+    );
   }
   console.log(chalk.white(`Whisper URL:       ${whisperHealth.url}`));
   console.log(chalk.white(`Whisper health:    ${whisperHealth.status}`));
@@ -341,7 +390,8 @@ function printTranscriptionStatus(
   console.log(
     chalk.white(`Input device:      ${process.env.TRANSCRIPTION_LIVE_INPUT_DEVICE ?? "default"}`),
   );
-  console.log(chalk.white(`Chunk duration ms: ${process.env.STREAM_CHUNK_MS ?? "30000"}`));
+  console.log(chalk.white(`Window ms (env):   ${process.env.STREAM_WINDOW_MS ?? "30000"}`));
+  console.log(chalk.white(`Step ms (env):     ${process.env.STREAM_STEP_MS ?? "10000"}`));
 }
 
 transcriptCommand
@@ -482,7 +532,7 @@ transcriptCommand
   .option("-m, --meeting-id <id>", "Meeting ID (defaults to active meeting)")
   .action(async (opts: { meetingId?: string }) => {
     const meetingId = opts.meetingId ?? (await requireActiveMeeting());
-    const [streamStatus, rows, chunks, serviceHealth, whisperHealth] = await withSpinner(
+    const [streamStatus, rows, chunks, serviceHealth, serviceStatus, whisperHealth] = await withSpinner(
       "Loading transcription status…",
       () =>
         Promise.all([
@@ -490,6 +540,7 @@ transcriptCommand
           getTranscriptRows(meetingId),
           getTranscriptChunks(meetingId),
           getTranscriptionServiceHealth(),
+          getTranscriptionServiceStatus(),
           getWhisperLocalHealth(),
         ]),
     );
@@ -500,6 +551,7 @@ transcriptCommand
       rows.length,
       chunks,
       serviceHealth,
+      serviceStatus,
       whisperHealth,
     );
   });
