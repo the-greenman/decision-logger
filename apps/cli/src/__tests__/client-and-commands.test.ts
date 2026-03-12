@@ -620,7 +620,7 @@ describe("CLI command request shapes", () => {
     consoleLogSpy.mockRestore();
   });
 
-  it("transcript live --watch --flush launches transcription and flushes before polling transcript rows", async () => {
+  it("transcript live --follow --flush launches transcription and flushes before polling transcript rows", async () => {
     const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     spawnMock.mockReturnValue({
       on: (event: string, handler: (code?: number) => void) => {
@@ -658,7 +658,7 @@ describe("CLI command request shapes", () => {
         "live",
         "--meeting-id",
         "meeting-1",
-        "--watch",
+        "--follow",
         "--flush",
         "--interval-ms",
         "1",
@@ -697,6 +697,76 @@ describe("CLI command request shapes", () => {
       2,
       `${baseUrl}/api/meetings/meeting-1/transcript-reading`,
       { method: "GET" },
+    );
+
+    consoleLogSpy.mockRestore();
+  });
+
+  it("transcript live forwards --window-ms and --step-ms to transcription client", async () => {
+    const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    spawnMock.mockReturnValue({
+      on: (event: string, handler: (code?: number) => void) => {
+        if (event === "exit") {
+          setTimeout(() => handler(0), 0);
+        }
+      },
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ chunks: [] }),
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ rows: [] }),
+    });
+
+    const { transcriptCommand } = await import("../commands/transcript.js");
+    await transcriptCommand.parseAsync(
+      [
+        "node",
+        "transcript",
+        "live",
+        "--meeting-id",
+        "meeting-1",
+        "--follow",
+        "--flush",
+        "--interval-ms",
+        "1",
+        "--window-ms",
+        "30000",
+        "--step-ms",
+        "10000",
+      ],
+      { from: "node" },
+    );
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      "pnpm",
+      [
+        "--filter",
+        "@repo/transcription",
+        "exec",
+        "tsx",
+        "src/index.ts",
+        "live",
+        "--meeting-id",
+        "meeting-1",
+        "--api-url",
+        baseUrl,
+        "--window-ms",
+        "30000",
+        "--step-ms",
+        "10000",
+      ],
+      {
+        stdio: "inherit",
+        env: expect.objectContaining({
+          DECISION_LOGGER_API_URL: baseUrl,
+          API_BASE_URL: baseUrl,
+        }),
+      },
     );
 
     consoleLogSpy.mockRestore();

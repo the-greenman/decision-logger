@@ -25,6 +25,9 @@ Gap to close:
   - [x] SW2b: rolling 30s/10s window audio assembly implementation.
   - [x] SW2c: ffmpeg-backed normalization/concat path for browser chunk windows.
 - [ ] SW3 web/CLI alignment to rolling-window defaults.
+  - [x] SW3a: transcription CLI live options aligned to `windowMs`/`stepMs` semantics.
+  - [x] SW3b: CLI command surface updated to `--window-ms`/`--step-ms` and validated with command tests.
+  - [ ] SW3c: web facilitator runtime status and session controls final verification pass.
 - [ ] SW4 observability completion and final validation checkpoint.
 
 ---

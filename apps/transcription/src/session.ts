@@ -42,7 +42,8 @@ interface BatchTranscriptionDependencies {
 export interface LiveTranscriptionOptions {
   meetingId: string;
   language?: string;
-  chunkMs?: number;
+  windowMs?: number;
+  stepMs?: number;
 }
 
 interface LiveAudioChunk {
@@ -63,7 +64,7 @@ interface LiveTranscriptionDependencies {
     postStreamEvent: (meetingId: string, event: TranscriptEvent) => Promise<void>;
     flushStream: (meetingId: string) => Promise<void>;
   };
-  createChunkSource: (chunkMs: number) => Promise<LiveChunkSource>;
+  createChunkSource: (stepMs: number) => Promise<LiveChunkSource>;
   registerSignalHandlers: (onShutdown: CleanupFn) => CleanupFn;
   sleep: (ms: number) => Promise<void>;
   deliveryConfig: StreamDeliveryConfig;
@@ -293,8 +294,16 @@ export async function runLiveTranscription(
 ): Promise<void> {
   const { provider, apiClient, createChunkSource, registerSignalHandlers, sleep, deliveryConfig } =
     createDefaultLiveDependencies(deps);
-  const chunkMs = options.chunkMs ?? Number(process.env.STREAM_CHUNK_MS ?? "30000");
-  const chunkSource = await createChunkSource(chunkMs);
+  const windowMs = options.windowMs ?? Number(process.env.STREAM_WINDOW_MS ?? "30000");
+  const stepMs = options.stepMs ?? Number(process.env.STREAM_STEP_MS ?? "10000");
+  if (!Number.isFinite(windowMs) || !Number.isFinite(stepMs) || windowMs <= 0 || stepMs <= 0) {
+    throw new Error("windowMs and stepMs must be positive numbers");
+  }
+  if (stepMs > windowMs) {
+    throw new Error("stepMs must be less than or equal to windowMs");
+  }
+
+  const chunkSource = await createChunkSource(stepMs);
   let stopRequested = false;
   let flushCompleted = false;
   let chunkCount = 0;
@@ -328,7 +337,7 @@ export async function runLiveTranscription(
       }
 
       const transcription = await provider.transcribe(chunk.audio, transcribeOptions);
-      const timeAdjusted = offsetEvents(transcription.events, (chunkMs / 1000) * chunkCount);
+      const timeAdjusted = offsetEvents(transcription.events, (stepMs / 1000) * chunkCount);
       const adjusted = normalizeSequenceNumbers(timeAdjusted, nextSequenceNumber);
       await deliverStreamEvents(
         options.meetingId,

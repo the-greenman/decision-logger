@@ -540,16 +540,18 @@ transcriptCommand
   .description("Start live transcription for a meeting using the external transcription client")
   .option("-m, --meeting-id <id>", "Meeting ID (defaults to active meeting)")
   .option("-l, --language <code>", "Language code for transcription")
-  .option("--chunk-ms <milliseconds>", "Chunk duration in milliseconds")
-  .option("-w, --watch", "Watch the transcript as it is generated")
+  .option("--window-ms <milliseconds>", "Sliding window duration in milliseconds")
+  .option("--step-ms <milliseconds>", "Sliding window step interval in milliseconds")
+  .option("--follow", "Watch the transcript as it is generated")
   .option("--interval-ms <milliseconds>", "Interval between transcript checks", "2000")
   .option("--flush", "Flush buffered stream events before each transcript watch poll")
   .action(
     async (opts: {
       meetingId?: string;
       language?: string;
-      chunkMs?: string;
-      watch?: boolean;
+      windowMs?: string;
+      stepMs?: string;
+      follow?: boolean;
       intervalMs?: string;
       flush?: boolean;
     }) => {
@@ -572,8 +574,12 @@ transcriptCommand
         args.push("--language", opts.language);
       }
 
-      if (opts.chunkMs) {
-        args.push("--chunk-ms", opts.chunkMs);
+      if (opts.windowMs) {
+        args.push("--window-ms", opts.windowMs);
+      }
+
+      if (opts.stepMs) {
+        args.push("--step-ms", opts.stepMs);
       }
 
       console.log(chalk.gray(`Starting live transcription for meeting ${meetingId}`));
@@ -583,7 +589,7 @@ transcriptCommand
         meetingId,
         apiUrl,
         args,
-        opts.watch === true,
+        opts.follow === true,
         Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 2000,
         opts.flush === true,
       );

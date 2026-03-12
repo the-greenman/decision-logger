@@ -225,7 +225,8 @@ describe("runLiveTranscription", () => {
     await runLiveTranscription(
       {
         meetingId: "meeting-live-1",
-        chunkMs: 1000,
+        windowMs: 3000,
+        stepMs: 1000,
       },
       {
         provider,
@@ -290,7 +291,8 @@ describe("runLiveTranscription", () => {
     await runLiveTranscription(
       {
         meetingId: "meeting-live-2",
-        chunkMs: 1000,
+        windowMs: 3000,
+        stepMs: 1000,
       },
       {
         provider,
@@ -308,5 +310,24 @@ describe("runLiveTranscription", () => {
     expect(apiClient.flushStream).toHaveBeenCalledTimes(1);
     expect(stop).toHaveBeenCalledTimes(1);
     logSpy.mockRestore();
+  });
+
+  it("rejects live options when step exceeds window", async () => {
+    await expect(
+      runLiveTranscription(
+        {
+          meetingId: "meeting-live-invalid",
+          windowMs: 1000,
+          stepMs: 2000,
+        },
+        {
+          provider: { transcribe: vi.fn() },
+          apiClient: {
+            postStreamEvent: vi.fn(),
+            flushStream: vi.fn(),
+          },
+        },
+      ),
+    ).rejects.toThrow("stepMs must be less than or equal to windowMs");
   });
 });

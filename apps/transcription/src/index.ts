@@ -26,7 +26,8 @@ interface ParsedArgs {
   outputPath?: string;
   outputTextPath?: string;
   outputSrtPath?: string;
-  chunkMs?: number;
+  windowMs?: number;
+  stepMs?: number;
   port?: number;
   host?: string;
   mode: "upload" | "stream";
@@ -47,7 +48,7 @@ function printUsage(): void {
     "       transcription-service smoke-stream <audio-file> [--meeting-id <uuid>] [--api-url <url>] [--language <code>] [--chunk-strategy fixed|semantic|speaker|streaming]",
   );
   console.log(
-    "       transcription-service live --meeting-id <uuid> [--api-url <url>] [--language <code>] [--chunk-ms <milliseconds>]",
+    "       transcription-service live --meeting-id <uuid> [--api-url <url>] [--language <code>] [--window-ms <milliseconds>] [--step-ms <milliseconds>]",
   );
   console.log(
     "       transcription-service serve [--api-url <url>] [--host <host>] [--port <port>]",
@@ -157,10 +158,19 @@ function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
 
-    if (token === "--chunk-ms") {
+    if (token === "--window-ms") {
       const value = Number(rest[i + 1]);
       if (Number.isFinite(value) && value > 0) {
-        parsed.chunkMs = value;
+        parsed.windowMs = value;
+      }
+      i += 1;
+      continue;
+    }
+
+    if (token === "--step-ms") {
+      const value = Number(rest[i + 1]);
+      if (Number.isFinite(value) && value > 0) {
+        parsed.stepMs = value;
       }
       i += 1;
       continue;
@@ -256,7 +266,8 @@ async function main(): Promise<void> {
     await runLiveTranscription({
       meetingId: parsed.meetingId,
       ...(parsed.language === undefined ? {} : { language: parsed.language }),
-      ...(parsed.chunkMs === undefined ? {} : { chunkMs: parsed.chunkMs }),
+      ...(parsed.windowMs === undefined ? {} : { windowMs: parsed.windowMs }),
+      ...(parsed.stepMs === undefined ? {} : { stepMs: parsed.stepMs }),
     });
     return;
   }
