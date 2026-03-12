@@ -98,7 +98,24 @@ jobs:
 
       - name: Create test database
         run: |
-          psql "postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/postgres" -c 'CREATE DATABASE decision_logger_test;' || true
+          node --input-type=module - <<'EOF'
+          import postgres from "postgres";
+
+          const sql = postgres(
+            `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.PGHOST}:${process.env.PGPORT}/postgres`,
+            { prepare: false },
+          );
+
+          try {
+            await sql.unsafe("CREATE DATABASE decision_logger_test");
+          } catch (error) {
+            if (error && typeof error === "object" && "code" in error && error.code !== "42P04") {
+              throw error;
+            }
+          } finally {
+            await sql.end();
+          }
+          EOF
 
       - name: Run strict validation
         run: pnpm validate:strict
@@ -159,7 +176,24 @@ jobs:
 
       - name: Create test database
         run: |
-          psql "postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/postgres" -c 'CREATE DATABASE decision_logger_test;' || true
+          node --input-type=module - <<'EOF'
+          import postgres from "postgres";
+
+          const sql = postgres(
+            `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.PGHOST}:${process.env.PGPORT}/postgres`,
+            { prepare: false },
+          );
+
+          try {
+            await sql.unsafe("CREATE DATABASE decision_logger_test");
+          } catch (error) {
+            if (error && typeof error === "object" && "code" in error && error.code !== "42P04") {
+              throw error;
+            }
+          } finally {
+            await sql.end();
+          }
+          EOF
 
       - name: Run DB validation
         run: pnpm validate:db
