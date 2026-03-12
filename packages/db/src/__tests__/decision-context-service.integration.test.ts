@@ -10,7 +10,7 @@ import { DrizzleMeetingRepository } from "@repo/db";
 import { DrizzleFlaggedDecisionRepository } from "@repo/db";
 import { db } from "@repo/db";
 import { decisionContexts, decisionFields } from "@repo/db";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 // Use test database
@@ -73,7 +73,7 @@ describe("DecisionContextService Integration", () => {
     `);
     await db.delete(decisionContexts).where(eq(decisionContexts.templateId, testTemplateId));
     if (testFieldIds.length > 0) {
-      await db.delete(decisionFields).where(sql`${decisionFields.id} IN ${sql.join(testFieldIds)}`);
+      await db.delete(decisionFields).where(inArray(decisionFields.id, testFieldIds));
     }
     await db.execute(sql`
       DELETE FROM flagged_decisions
