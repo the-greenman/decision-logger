@@ -1,20 +1,12 @@
-import type { TranscriptChunk, DecisionField, SupplementaryContent } from "@repo/schema";
-import type { GuidanceSegment } from "./i-llm-service";
+import type {
+  TranscriptChunk,
+  DecisionField,
+  SupplementaryContent,
+  DecisionFeedback,
+  PromptSegmentData,
+} from "@repo/schema";
 
-export type PromptSegment =
-  | { type: "system"; content: string }
-  | { type: "transcript"; speaker?: string; text: string; tags: string[] }
-  | { type: "supplementary"; label?: string; content: string; tags: string[] }
-  | {
-      type: "guidance";
-      fieldId?: string;
-      content: string;
-      source: "user_text" | "tagged_transcript";
-    }
-  | {
-      type: "template_fields";
-      fields: Array<{ id: string; displayName: string; description: string; extractionPrompt: string }>;
-    };
+export type PromptSegment = PromptSegmentData;
 
 export type BuiltPrompt = {
   segments: PromptSegment[];
@@ -71,18 +63,44 @@ export class PromptBuilder {
     return this;
   }
 
-  addGuidance(segment: GuidanceSegment): this {
-    const promptSegment: PromptSegment = {
-      type: "guidance",
-      content: segment.content,
-      source: segment.source,
-    };
+  addTemplateGuidance(templateId: string, field: DecisionField): this {
+    this.segments.push({
+      type: "template_guidance",
+      scope: "field",
+      templateId,
+      fieldId: field.id,
+      label: field.name,
+      content: field.extractionPrompt,
+    });
 
-    if (segment.fieldId) {
-      promptSegment.fieldId = segment.fieldId;
+    return this;
+  }
+
+  addFeedbackChain(items: DecisionFeedback[]): this {
+    for (const item of items) {
+      if (item.excludeFromRegeneration) {
+        continue;
+      }
+
+      this.segments.push({
+        type: "feedback",
+        id: item.id,
+        decisionContextId: item.decisionContextId,
+        fieldId: item.fieldId,
+        draftVersionNumber: item.draftVersionNumber,
+        fieldVersionId: item.fieldVersionId,
+        rating: item.rating,
+        source: item.source,
+        authorId: item.authorId,
+        comment: item.comment,
+        textReference: item.textReference,
+        referenceId: item.referenceId,
+        referenceUrl: item.referenceUrl,
+        excludeFromRegeneration: item.excludeFromRegeneration,
+        createdAt: item.createdAt,
+      });
     }
 
-    this.segments.push(promptSegment);
     return this;
   }
 
@@ -108,7 +126,8 @@ export class PromptBuilder {
 
     const transcriptLines: string[] = [];
     const supplementaryLines: string[] = [];
-    const guidanceByField = new Map<string | undefined, string[]>();
+    const templateGuidanceByField = new Map<string | null, string[]>();
+    const feedbackByField = new Map<string | null, string[]>();
     const fieldLines: string[] = [];
 
     for (const seg of this.segments) {
@@ -120,11 +139,17 @@ export class PromptBuilder {
       } else if (seg.type === "supplementary") {
         const label = seg.label ? `[${seg.label}]\n` : "";
         supplementaryLines.push(`${label}${seg.content}`);
-      } else if (seg.type === "guidance") {
+      } else if (seg.type === "template_guidance") {
         const key = seg.fieldId;
-        const existing = guidanceByField.get(key) ?? [];
-        existing.push(seg.content);
-        guidanceByField.set(key, existing);
+        const existing = templateGuidanceByField.get(key) ?? [];
+        existing.push(`[${seg.label}] ${seg.content}`);
+        templateGuidanceByField.set(key, existing);
+      } else if (seg.type === "feedback") {
+        const key = seg.fieldId;
+        const existing = feedbackByField.get(key) ?? [];
+        const quote = seg.textReference ? `\n  > "${seg.textReference}"` : "";
+        existing.push(`[${seg.rating} | ${seg.source} | ${seg.authorId}] ${seg.comment}${quote}`);
+        feedbackByField.set(key, existing);
       } else if (seg.type === "template_fields") {
         seg.fields.forEach((f, i) => {
           fieldLines.push(
@@ -144,17 +169,22 @@ export class PromptBuilder {
       parts.push(supplementaryLines.join("\n\n"));
     }
 
-    // Whole-draft guidance first (fieldId = undefined)
-    const wholeDraftGuidance = guidanceByField.get(undefined);
-    if (wholeDraftGuidance && wholeDraftGuidance.length > 0) {
-      parts.push("=== GUIDANCE ===");
-      parts.push(wholeDraftGuidance.join("\n"));
+    for (const [fieldId, lines] of templateGuidanceByField.entries()) {
+      if (fieldId !== null) {
+        parts.push(`=== TEMPLATE GUIDANCE (applies to field: ${fieldId}) ===`);
+        parts.push(lines.join("\n"));
+      }
     }
 
-    // Field-specific guidance
-    for (const [fieldId, lines] of guidanceByField.entries()) {
-      if (fieldId !== undefined) {
-        parts.push(`=== GUIDANCE (applies to: ${fieldId} field) ===`);
+    const wholeDraftFeedback = feedbackByField.get(null);
+    if (wholeDraftFeedback && wholeDraftFeedback.length > 0) {
+      parts.push("=== FEEDBACK ON PREVIOUS DRAFT ===");
+      parts.push(wholeDraftFeedback.join("\n\n"));
+    }
+
+    for (const [fieldId, lines] of feedbackByField.entries()) {
+      if (fieldId !== null) {
+        parts.push(`=== FEEDBACK (applies to: ${fieldId}) ===`);
         parts.push(lines.join("\n"));
       }
     }
@@ -171,8 +201,9 @@ export class PromptBuilder {
 export function buildDraftPrompt(
   transcriptChunks: TranscriptChunk[],
   supplementaryItems: SupplementaryContent[],
+  templateId: string,
   templateFields: DecisionField[],
-  guidance: GuidanceSegment[] = [],
+  feedbackChain: DecisionFeedback[] = [],
   currentDraftText?: string,
   templatePrompt?: string | null,
 ): BuiltPrompt {
@@ -202,10 +233,10 @@ export function buildDraftPrompt(
     });
   }
 
-  for (const segment of guidance) {
-    if (!segment.fieldId) {
-      builder.addGuidance(segment);
-    }
+  builder.addFeedbackChain(feedbackChain);
+
+  for (const field of templateFields) {
+    builder.addTemplateGuidance(templateId, field);
   }
 
   builder.addTemplateFields(templateFields);
@@ -219,9 +250,9 @@ export function buildDraftPrompt(
 export function buildFieldRegenerationPrompt(
   transcriptChunks: TranscriptChunk[],
   supplementaryItems: SupplementaryContent[],
+  templateId: string,
   field: DecisionField,
-  fieldId: string,
-  guidance: GuidanceSegment[] = [],
+  feedbackChain: DecisionFeedback[] = [],
   currentDraftText?: string | null,
 ): BuiltPrompt {
   const builder = new PromptBuilder();
@@ -247,11 +278,8 @@ export function buildFieldRegenerationPrompt(
     });
   }
 
-  for (const segment of guidance) {
-    if (!segment.fieldId || segment.fieldId === fieldId) {
-      builder.addGuidance(segment);
-    }
-  }
+  builder.addFeedbackChain(feedbackChain);
+  builder.addTemplateGuidance(templateId, field);
 
   builder.addTemplateFields([field]);
 
@@ -263,8 +291,10 @@ export function buildFieldRegenerationPrompt(
 
 export async function buildDraftPromptFromTemplate(
   transcriptChunks: TranscriptChunk[],
+  supplementaryItems: SupplementaryContent[],
+  templateId: string,
   templateFields: DecisionField[],
-  guidance: GuidanceSegment[] = [],
+  feedbackChain: DecisionFeedback[] = [],
   meetingId?: string,
   decisionTitle?: string,
   contextSummary?: string,
@@ -284,15 +314,13 @@ export async function buildDraftPromptFromTemplate(
     })
     .join("\n\n");
 
-  // Build guidance section
-  const guidanceText =
-    guidance.length > 0
-      ? guidance.map((g) => `- ${g.content}`).join("\n")
-      : "No specific guidance provided.";
+  const templateGuidanceText = templateFields
+    .map((field) => `- ${field.name}: ${field.extractionPrompt}`)
+    .join("\n");
 
   // Replace placeholders
   promptTemplate = promptTemplate
-    .replace("{GUIDANCE_SECTION}", guidanceText)
+    .replace("{GUIDANCE_SECTION}", templateGuidanceText || "No template guidance provided.")
     .replace("{MEETING_ID}", meetingId || "Not specified")
     .replace("{DECISION_TITLE}", decisionTitle || "Not specified")
     .replace("{CONTEXT_SUMMARY}", contextSummary || "Not specified")
@@ -308,6 +336,10 @@ export async function buildDraftPromptFromTemplate(
     builder.addTranscriptChunk(chunk);
   }
 
+  for (const item of supplementaryItems) {
+    builder.addSupplementaryContent(item);
+  }
+
   if (currentDraftText && currentDraftText.trim().length > 0) {
     builder.addSupplementaryContent({
       id: "current-draft-context",
@@ -319,6 +351,14 @@ export async function buildDraftPromptFromTemplate(
       label: "Current draft text",
     });
   }
+
+  builder.addFeedbackChain(feedbackChain);
+
+  for (const field of templateFields) {
+    builder.addTemplateGuidance(templateId, field);
+  }
+
+  builder.addTemplateFields(templateFields);
 
   return {
     segments: builder.buildSegments(),

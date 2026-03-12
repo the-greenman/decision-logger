@@ -1,5 +1,5 @@
-import type { DecisionContext, DecisionField, SupplementaryContent } from "@repo/schema";
-import type { ILLMService, GuidanceSegment } from "../llm/i-llm-service.js";
+import type { DecisionContext, DecisionField, DecisionFeedback, SupplementaryContent } from "@repo/schema";
+import type { ILLMService } from "../llm/i-llm-service.js";
 import type { PromptSegmentData } from "@repo/schema";
 import {
   buildDraftPrompt,
@@ -13,6 +13,7 @@ import type { IDecisionFieldRepository } from "../interfaces/i-decision-field-re
 import type { ILLMInteractionRepository } from "../interfaces/i-llm-interaction-repository.js";
 import type { IFlaggedDecisionRepository } from "../interfaces/i-flagged-decision-repository.js";
 import type { ISupplementaryContentRepository } from "../interfaces/i-supplementary-content-repository.js";
+import type { IFeedbackRepository } from "../interfaces/i-feedback-repository.js";
 import type { FlaggedDecision } from "@repo/schema";
 
 const FIELD_META_KEY = "__fieldMeta";
@@ -39,12 +40,10 @@ export class DraftGenerationService {
     private flaggedDecisionRepo: IFlaggedDecisionRepository,
     private supplementaryContentRepo: ISupplementaryContentRepository,
     private templateRepo: IDecisionTemplateRepository,
+    private feedbackRepo: IFeedbackRepository,
   ) {}
 
-  async generateDraft(
-    decisionContextId: string,
-    guidance?: GuidanceSegment[],
-  ): Promise<DecisionContext> {
+  async generateDraft(decisionContextId: string): Promise<DecisionContext> {
     const context = await this.contextRepo.findById(decisionContextId);
     if (!context) {
       throw new Error(`Decision context not found: ${decisionContextId}`);
@@ -63,6 +62,7 @@ export class DraftGenerationService {
       context.meetingId,
       decisionContextId,
     );
+    const feedbackChain = await this.fetchContextFeedback(decisionContextId);
     const currentDraftText = this.buildCurrentDraftText(context.draftData ?? {}, fields);
 
     const template = await this.templateRepo.findById(context.templateId);
@@ -75,16 +75,15 @@ export class DraftGenerationService {
     if (useTemplatePrompt) {
       // Get additional context for the template
       const flaggedDecision = await this.findFlaggedDecision(context.flaggedDecisionId);
-      const decisionTitle =
-        flaggedDecision?.suggestedTitle ||
-        context.draftData?.decision_statement ||
-        "Untitled Decision";
+      const decisionTitle = flaggedDecision?.suggestedTitle || context.title || "Untitled Decision";
       const contextSummary = flaggedDecision?.contextSummary || "No summary available";
 
       prompt = await buildDraftPromptFromTemplate(
         chunks,
+        supplementaryItems,
+        context.templateId,
         unlockedFields,
-        guidance ?? [],
+        feedbackChain,
         context.meetingId,
         decisionTitle,
         contextSummary,
@@ -95,8 +94,9 @@ export class DraftGenerationService {
       prompt = buildDraftPrompt(
         chunks,
         supplementaryItems,
+        context.templateId,
         unlockedFields,
-        guidance ?? [],
+        feedbackChain,
         currentDraftText,
         templatePrompt,
       );
@@ -109,7 +109,6 @@ export class DraftGenerationService {
     const draftResult = await this.llm.generateDraft({
       transcriptChunks: chunks,
       templateFields: unlockedFields,
-      guidance: guidance ?? [],
       promptText: prompt.text,
     });
     const latencyMs = Date.now() - start;
@@ -161,11 +160,7 @@ export class DraftGenerationService {
     return updated;
   }
 
-  async regenerateField(
-    decisionContextId: string,
-    fieldId: string,
-    guidance?: GuidanceSegment[],
-  ): Promise<string> {
+  async regenerateField(decisionContextId: string, fieldId: string): Promise<string> {
     const context = await this.contextRepo.findById(decisionContextId);
     if (!context) {
       throw new Error(`Decision context not found: ${decisionContextId}`);
@@ -189,14 +184,17 @@ export class DraftGenerationService {
       fieldId,
     );
 
+    const fieldFeedback = await this.fetchFieldFeedback(decisionContextId, fieldId);
+    const contextFeedback = await this.fetchContextFeedback(decisionContextId);
+    const feedbackChain = this.mergeFeedbackChain(fieldFeedback, contextFeedback);
     const currentDraftText = this.buildCurrentDraftText(context.draftData ?? {}, fields);
 
     const prompt = buildFieldRegenerationPrompt(
       chunks,
       supplementaryItems,
+      context.templateId,
       field,
-      fieldId,
-      guidance ?? [],
+      feedbackChain,
       currentDraftText,
     );
 
@@ -207,7 +205,6 @@ export class DraftGenerationService {
     const value = await this.llm.regenerateField({
       transcriptChunks: chunks,
       templateFields: [field],
-      guidance: guidance ?? [],
       fieldId,
       promptText: prompt.text,
     });
@@ -267,6 +264,37 @@ export class DraftGenerationService {
       return null;
     }
     return await this.flaggedDecisionRepo.findById(flaggedDecisionId);
+  }
+
+  private async fetchContextFeedback(decisionContextId: string): Promise<DecisionFeedback[]> {
+    try {
+      return await this.feedbackRepo.findByContext(decisionContextId);
+    } catch (error) {
+      if (this.isMissingDecisionFeedbackTableError(error)) {
+        return [];
+      }
+
+      throw error;
+    }
+  }
+
+  private async fetchFieldFeedback(
+    decisionContextId: string,
+    fieldId: string,
+  ): Promise<DecisionFeedback[]> {
+    try {
+      return await this.feedbackRepo.findByField(decisionContextId, fieldId);
+    } catch (error) {
+      if (this.isMissingDecisionFeedbackTableError(error)) {
+        return [];
+      }
+
+      throw error;
+    }
+  }
+
+  private isMissingDecisionFeedbackTableError(error: unknown): boolean {
+    return error instanceof Error && error.message.includes('relation "decision_feedback" does not exist');
   }
 
   /**
@@ -367,6 +395,15 @@ export class DraftGenerationService {
     }
 
     return [...itemsById.values()];
+  }
+
+  private mergeFeedbackChain(
+    fieldFeedback: DecisionFeedback[],
+    contextFeedback: DecisionFeedback[],
+  ): DecisionFeedback[] {
+    const wholeDraftFeedback = contextFeedback.filter((item) => item.fieldId === null);
+
+    return [...fieldFeedback, ...wholeDraftFeedback];
   }
 
   private getChunkWeight(

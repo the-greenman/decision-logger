@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 process.env.DATABASE_URL =
   "postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_test";
+process.env.USE_MOCK_LLM = "true";
 
 const [{ app }, core] = await Promise.all([import("../index"), import("@repo/core")]);
 
@@ -588,31 +589,23 @@ describe("API E2E Tests", () => {
     expect(data.id).toBeDefined();
     expect(data.meetingId).toBe(createdMeetingId);
     expect(data.flaggedDecisionId).toBe(createdDecisionId);
-    expect(data.templateId).toBe(createdTemplateId);
-    expect(data.lockedFields).toEqual([]);
 
     createdContextId = data.id;
   });
 
-  it("POST /api/decision-contexts/:id/generate-draft - should return 400 for invalid guidance payloads", async () => {
+  it("POST /api/decision-contexts/:id/generate-draft - should accept an empty request body", async () => {
     const response = await app.request(
       `/api/decision-contexts/${createdContextId}/generate-draft`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          guidance: [
-            {
-              content: "Missing source should fail validation",
-            },
-          ],
-        }),
+        body: JSON.stringify({}),
       },
     );
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(200);
     const data = await response.json();
-    expect(data.error).toBeDefined();
+    expect(data.id).toBe(createdContextId);
   });
 
   it("POST /api/decision-contexts/:id/template-change - should update the template while preserving draft data", async () => {
@@ -1085,18 +1078,11 @@ describe("API E2E Tests", () => {
     expect(data.error).toBeDefined();
   });
 
-  it("POST /api/decision-contexts/:id/regenerate - should regenerate a draft using fresh guidance", async () => {
+  it("POST /api/decision-contexts/:id/regenerate - should regenerate a draft using persisted context", async () => {
     const response = await app.request(`/api/decision-contexts/${createdContextId}/regenerate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        guidance: [
-          {
-            content: "Incorporate the current decision text and emphasize migration urgency.",
-            source: "user_text",
-          },
-        ],
-      }),
+      body: JSON.stringify({}),
     });
 
     expect(response.status).toBe(200);
@@ -1137,7 +1123,7 @@ describe("API E2E Tests", () => {
     expect(data.draftData?.__fieldMeta?.[createdFieldId]?.manuallyEdited).toBe(true);
   });
 
-  it("PATCH /api/decision-contexts/:id/fields/:fieldId - should accept a stable field name reference", async () => {
+  it("PATCH /api/decision-contexts/:id/fields/:fieldId - should reject a stable field name reference", async () => {
     const response = await app.request(
       `/api/decision-contexts/${createdContextId}/fields/${createdFieldName}`,
       {
@@ -1147,11 +1133,9 @@ describe("API E2E Tests", () => {
       },
     );
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(400);
     const data = await response.json();
-    expect(data.id).toBe(createdContextId);
-    expect(data.draftData?.[createdFieldId]).toBe("Updated via field name");
-    expect(data.draftData?.__fieldMeta?.[createdFieldId]?.manuallyEdited).toBe(true);
+    expect(data.error).toBeDefined();
   });
 
   it("PATCH /api/decision-contexts/:id/fields/:fieldId - should reject fields not assigned to the template", async () => {
@@ -1204,14 +1188,14 @@ describe("API E2E Tests", () => {
     expect(data.chunks).toBeInstanceOf(Array);
   });
 
-  it("GET /api/decision-contexts/:id/fields/:fieldId/transcript - should accept a stable field name reference", async () => {
+  it("GET /api/decision-contexts/:id/fields/:fieldId/transcript - should reject a stable field name reference", async () => {
     const response = await app.request(
       `/api/decision-contexts/${createdContextId}/fields/${createdFieldName}/transcript`,
     );
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(400);
     const data = await response.json();
-    expect(data.chunks).toBeInstanceOf(Array);
+    expect(data.error).toBeDefined();
   });
 
   it("GET /api/decision-contexts/:id/fields/:fieldId/transcript - should return 404 for a missing field", async () => {
@@ -1293,15 +1277,7 @@ describe("API E2E Tests", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          guidance: [
-            {
-              fieldId: createdFieldId,
-              content: "Focus on the migration approval summary",
-              source: "user_text",
-            },
-          ],
-        }),
+        body: JSON.stringify({}),
       },
     );
 
@@ -1340,26 +1316,19 @@ describe("API E2E Tests", () => {
     expect(data.error).toBeDefined();
   });
 
-  it("POST /api/decision-contexts/:id/fields/:fieldId/regenerate - should accept a stable field name reference", async () => {
+  it("POST /api/decision-contexts/:id/fields/:fieldId/regenerate - should reject a stable field name reference", async () => {
     const response = await app.request(
       `/api/decision-contexts/${createdContextId}/fields/${createdFieldName}/regenerate`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          guidance: [
-            {
-              content: "Focus on the decision statement field",
-              source: "user_text",
-            },
-          ],
-        }),
+        body: JSON.stringify({}),
       },
     );
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(400);
     const data = await response.json();
-    expect(typeof data.value).toBe("string");
+    expect(data.error).toBeDefined();
   });
 
   it("POST /api/decision-contexts/:id/log - should finalize and log a decision", async () => {

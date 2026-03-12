@@ -1,12 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { MockLLMService } from "../llm/mock-llm-service";
 import { PromptBuilder } from "../llm/prompt-builder";
-import type { DecisionField, TranscriptChunk } from "@repo/schema";
+import type { DecisionField, DecisionFeedback, TranscriptChunk } from "@repo/schema";
 
 // Minimal fixture factories
 function makeField(overrides: Partial<DecisionField> = {}): DecisionField {
-  return {
+  const field: DecisionField = {
     id: "field-1",
+    namespace: "core",
     name: "decision_statement",
     description: "The core decision being made",
     category: "outcome",
@@ -15,8 +16,9 @@ function makeField(overrides: Partial<DecisionField> = {}): DecisionField {
     version: 1,
     isCustom: false,
     createdAt: "2026-01-01T00:00:00Z",
-    ...overrides,
   };
+
+  return { ...field, ...overrides };
 }
 
 function makeChunk(overrides: Partial<TranscriptChunk> = {}): TranscriptChunk {
@@ -42,7 +44,6 @@ describe("MockLLMService", () => {
     const result = await mock.generateDraft({
       transcriptChunks: [makeChunk()],
       templateFields: fields,
-      guidance: [],
     });
 
     expect(result).toBeDefined();
@@ -96,38 +97,54 @@ describe("PromptBuilder", () => {
     const builder = new PromptBuilder();
     builder.addSystem("You are an expert...");
     builder.addTranscriptChunk(makeChunk());
-    builder.addGuidance({ content: "Focus on cost", source: "user_text" });
+    builder.addTemplateGuidance("template-1", makeField());
     builder.addTemplateFields([makeField()]);
 
     const segments = builder.buildSegments();
     expect(segments).toHaveLength(4);
-    expect(segments[0].type).toBe("system");
-    expect(segments[1].type).toBe("transcript");
-    expect(segments[2].type).toBe("guidance");
-    expect(segments[3].type).toBe("template_fields");
+    expect(segments[0]?.type).toBe("system");
+    expect(segments[1]?.type).toBe("transcript");
+    expect(segments[2]?.type).toBe("template_guidance");
+    expect(segments[3]?.type).toBe("template_fields");
   });
 
-  it("buildString delimits transcript and guidance sections", () => {
+  it("buildString delimits transcript and template guidance sections", () => {
     const builder = new PromptBuilder();
     builder.addTranscriptChunk(makeChunk());
-    builder.addGuidance({ content: "Focus on cost", source: "user_text" });
+    builder.addTemplateGuidance("template-1", makeField());
     builder.addTemplateFields([makeField()]);
 
     const prompt = builder.buildString();
     expect(prompt).toContain("=== TRANSCRIPT ===");
     expect(prompt).toContain("[Alice]: We agreed to proceed");
-    expect(prompt).toContain("=== GUIDANCE ===");
-    expect(prompt).toContain("Focus on cost");
+    expect(prompt).toContain("=== TEMPLATE GUIDANCE (applies to field: field-1) ===");
+    expect(prompt).toContain("Extract the main decision statement");
     expect(prompt).toContain("=== FIELDS TO EXTRACT ===");
     expect(prompt).toContain("decision_statement");
   });
 
-  it("buildString labels field-specific guidance with field name", () => {
+  it("buildString renders feedback with field scope", () => {
     const builder = new PromptBuilder();
-    builder.addGuidance({ fieldId: "options", content: "List all options", source: "user_text" });
+    const feedback: DecisionFeedback = {
+      id: "feedback-1",
+      decisionContextId: "ctx-1",
+      fieldId: "field-1",
+      draftVersionNumber: 1,
+      fieldVersionId: null,
+      rating: "needs_work",
+      source: "expert_agent",
+      authorId: "reviewer",
+      comment: "List all options",
+      textReference: null,
+      referenceId: null,
+      referenceUrl: null,
+      excludeFromRegeneration: false,
+      createdAt: "2026-01-01T00:00:00Z",
+    };
+    builder.addFeedbackChain([feedback]);
 
     const prompt = builder.buildString();
-    expect(prompt).toContain("=== GUIDANCE (applies to: options field) ===");
+    expect(prompt).toContain("=== FEEDBACK (applies to: field-1) ===");
     expect(prompt).toContain("List all options");
   });
 

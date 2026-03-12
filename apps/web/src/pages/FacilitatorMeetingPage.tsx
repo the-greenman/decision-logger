@@ -749,11 +749,6 @@ export function FacilitatorMeetingPage() {
     }
   }
 
-  function handleGuidanceChange(id: string, guidance: string) {
-    if (isClosedContext) return;
-    updateField(id, { guidance });
-  }
-
   async function handleRegenerateSingleField(fieldId: string) {
     if (isClosedContext || !activeApiContextId) return;
     updateField(fieldId, { status: "generating" });
@@ -1726,7 +1721,6 @@ export function FacilitatorMeetingPage() {
         onRegenerate={handleRegenerateSingleField}
         onLock={handleLock}
         onUnlock={handleUnlock}
-        onGuidanceChange={handleGuidanceChange}
         onAddSupplementary={handleAddSupplementary}
         onRemoveSupplementary={handleRemoveSupplementary}
         onSelectTranscript={handleSelectFieldTranscript}
@@ -2572,11 +2566,11 @@ export function FacilitatorMeetingPage() {
               </div>
 
               {/* Hint */}
-              <div className="flex items-start gap-2 p-3 rounded-card border border-accent/20 bg-accent-dim/10 mb-5">
+              <div className="flex items-start gap-2.5 max-w-lg">
                 <Lightbulb size={14} className="text-accent shrink-0 mt-0.5" />
                 <p className="text-fac-meta text-text-secondary">
-                  Click the zoom icon on any field to edit content, regenerate the field, add
-                  guidance, or paste supplementary evidence.
+                  Click the zoom icon on any field to edit content, regenerate the field, or paste
+                  supplementary evidence.
                 </p>
               </div>
 

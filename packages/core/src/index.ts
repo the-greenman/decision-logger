@@ -1,7 +1,6 @@
 // LLM
 export type {
   ILLMService,
-  GuidanceSegment,
   GenerateDraftParams,
   RegenerateFieldParams,
   DraftResult,
@@ -27,6 +26,7 @@ export { MCPServerService } from "./services/mcp-server-service.js";
 export { ExpertAdviceService } from "./services/expert-advice-service.js";
 export { DraftGenerationService } from "./services/draft-generation-service.js";
 export { SupplementaryContentService } from "./services/supplementary-content-service.js";
+export { FeedbackService } from "./services/feedback-service.js";
 export { InProcessEventBus } from "./events/in-process-event-bus.js";
 
 // Service Factory
@@ -40,6 +40,7 @@ export {
   createDecisionFieldService,
   createDraftGenerationService,
   createSupplementaryContentService,
+  createFeedbackService,
   createContentCreator,
   createFlaggedDecisionService,
   createDecisionTemplateService,
@@ -106,6 +107,7 @@ export type {
 } from "./interfaces/i-decision-template-repository.js";
 export type { IDecisionTemplateService } from "./interfaces/i-decision-template-service.js";
 export type { ISupplementaryContentRepository } from "./interfaces/i-supplementary-content-repository.js";
+export type { IFeedbackRepository } from "./interfaces/i-feedback-repository.js";
 export type { IExpertTemplateRepository } from "./interfaces/i-expert-template-repository.js";
 export type { IExpertTemplateService } from "./services/expert-template-service.js";
 export type { IMCPServerService } from "./services/mcp-server-service.js";
@@ -129,6 +131,13 @@ export type { TemplateFieldAssignment, CreateTemplateFieldAssignment } from "@re
 export type { ExpertTemplate, CreateExpertTemplate, UpdateExpertTemplate } from "@repo/schema";
 export type { MCPServer, CreateMCPServer, UpdateMCPServer } from "@repo/schema";
 export type { ExpertAdvice, CreateExpertAdvice } from "@repo/schema";
+export type {
+  DecisionFeedback,
+  CreateDecisionFeedback,
+  UpdateDecisionFeedback,
+  FeedbackRating,
+  FeedbackSource,
+} from "@repo/schema";
 export type { LLMInteraction, CreateLLMInteraction, PromptSegmentData } from "@repo/schema";
 export type { SupplementaryContent, CreateSupplementaryContent } from "@repo/schema";
 export type { ReadableTranscriptRow } from "@repo/schema";

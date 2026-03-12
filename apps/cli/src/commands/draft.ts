@@ -85,15 +85,10 @@ draftCommand
   .command("generate")
   .description("Generate or regenerate draft (respects locked fields)")
   .option("-c, --context-id <id>", "Decision context ID (defaults to active context)")
-  .option("-g, --guidance <text>", "Guidance text for the LLM")
-  .action(async (opts: { contextId?: string; guidance?: string }) => {
+  .action(async (opts: { contextId?: string }) => {
     const { contextId } = await resolveContextId(opts.contextId);
-    const body: Record<string, unknown> = {};
-    if (opts.guidance) {
-      body.guidance = [{ content: opts.guidance, source: "user_text" }];
-    }
     const ctx = await withSpinner("Generating draft…", () =>
-      api.post<DecisionContext>(`/api/decision-contexts/${contextId}/generate-draft`, body),
+      api.post<DecisionContext>(`/api/decision-contexts/${contextId}/generate-draft`, {}),
     );
     console.log(chalk.green("✓ Draft generated"));
     printDraft(ctx);

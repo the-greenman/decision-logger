@@ -1,15 +1,8 @@
 import type { TranscriptChunk, DecisionField } from "@repo/schema";
 
-export type GuidanceSegment = {
-  fieldId?: string; // undefined = applies to whole draft
-  content: string;
-  source: "user_text" | "tagged_transcript";
-};
-
 export type GenerateDraftParams = {
   transcriptChunks: TranscriptChunk[];
   templateFields: DecisionField[];
-  guidance?: GuidanceSegment[];
   promptText?: string;
 };
 

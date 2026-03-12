@@ -4,6 +4,9 @@ import {
   DecisionContextSchema,
   DecisionTemplateSchema,
   DecisionFieldSchema,
+  DecisionFeedbackSchema,
+  DecisionFeedbackListSchema,
+  CreateDecisionFeedbackSchema,
   DecisionContextWindowSchema,
   AssignTranscriptChunksRequestSchema,
   AssignTranscriptChunksResponseSchema,
@@ -28,23 +31,21 @@ const ErrorResponseSchema = z.object({
   error: z.string(),
 });
 
-const GuidanceSegmentSchema = z.object({
-  fieldId: z.string().optional(),
-  content: z.string(),
-  source: z.enum(["user_text", "tagged_transcript"]),
-});
-
 const UuidParamSchema = z.object({
   id: z.string().uuid(),
 });
 
 const DecisionFieldParamSchema = z.object({
   id: z.string().uuid(),
-  fieldId: z.string().min(1),
+  fieldId: z.string().uuid(),
 });
 
 const MeetingIdParamSchema = z.object({
   id: z.string().uuid(),
+});
+
+const FeedbackIdParamSchema = z.object({
+  feedbackId: z.string().uuid(),
 });
 
 const TranscriptUploadRequestSchema = z
@@ -88,11 +89,7 @@ const CreateDecisionContextRequestSchema = DecisionContextSchema.omit({
   updatedAt: true,
 }).openapi("CreateDecisionContextRequest");
 
-const GenerateDraftRequestSchema = z
-  .object({
-    guidance: z.array(GuidanceSegmentSchema).optional(),
-  })
-  .openapi("GenerateDraftRequest");
+const GenerateDraftRequestSchema = z.object({}).openapi("GenerateDraftRequest");
 
 const MarkdownExportQuerySchema = z.object({
   includeMetadata: z.coerce.boolean().optional(),
@@ -110,7 +107,7 @@ const MarkdownExportResponseSchema = z
 
 const LockFieldRequestSchema = z
   .object({
-    fieldId: z.string(),
+    fieldId: z.string().uuid(),
   })
   .openapi("LockFieldRequest");
 
@@ -134,17 +131,19 @@ const RollbackDraftRequestSchema = z
   })
   .openapi("RollbackDraftRequest");
 
-const RegenerateFieldRequestSchema = z
-  .object({
-    guidance: z.array(GuidanceSegmentSchema).optional(),
-  })
-  .openapi("RegenerateFieldRequest");
+const RegenerateFieldRequestSchema = z.object({}).openapi("RegenerateFieldRequest");
 
 const RegenerateFieldResponseSchema = z
   .object({
     value: z.string(),
   })
   .openapi("RegenerateFieldResponse");
+
+const ToggleFeedbackExcludeRequestSchema = z
+  .object({
+    excludeFromRegeneration: z.boolean(),
+  })
+  .openapi("ToggleFeedbackExcludeRequest");
 
 const UpdateFieldValueRequestSchema = z
   .object({
@@ -304,6 +303,198 @@ export const getApiStatusRoute = createRoute({
         },
       },
       description: "API runtime status returned successfully",
+    },
+  },
+});
+
+export const listDecisionFeedbackRoute = createRoute({
+  method: "get",
+  path: "/api/decision-contexts/:id/feedback",
+  tags: ["decision-feedback"],
+  request: {
+    params: UuidParamSchema,
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: DecisionFeedbackListSchema,
+        },
+      },
+      description: "Feedback list returned successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Decision context not found",
+    },
+    503: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Database-backed endpoint unavailable",
+    },
+  },
+});
+
+export const listFieldDecisionFeedbackRoute = createRoute({
+  method: "get",
+  path: "/api/decision-contexts/:id/feedback/field/:fieldId",
+  tags: ["decision-feedback"],
+  request: {
+    params: DecisionFieldParamSchema,
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: DecisionFeedbackListSchema,
+        },
+      },
+      description: "Field feedback list returned successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Decision context or field not found",
+    },
+    503: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Database-backed endpoint unavailable",
+    },
+  },
+});
+
+export const createDecisionFeedbackRoute = createRoute({
+  method: "post",
+  path: "/api/decision-contexts/:id/feedback",
+  tags: ["decision-feedback"],
+  request: {
+    params: UuidParamSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: CreateDecisionFeedbackSchema.omit({ decisionContextId: true }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      content: {
+        "application/json": {
+          schema: DecisionFeedbackSchema,
+        },
+      },
+      description: "Feedback item created successfully",
+    },
+    400: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Invalid request data",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Decision context not found",
+    },
+    503: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Database-backed endpoint unavailable",
+    },
+  },
+});
+
+export const toggleDecisionFeedbackExcludeRoute = createRoute({
+  method: "patch",
+  path: "/api/decision-feedback/:feedbackId/exclude",
+  tags: ["decision-feedback"],
+  request: {
+    params: FeedbackIdParamSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: ToggleFeedbackExcludeRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: DecisionFeedbackSchema,
+        },
+      },
+      description: "Feedback exclusion updated successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Feedback item not found",
+    },
+    503: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Database-backed endpoint unavailable",
+    },
+  },
+});
+
+export const deleteDecisionFeedbackRoute = createRoute({
+  method: "delete",
+  path: "/api/decision-feedback/:feedbackId",
+  tags: ["decision-feedback"],
+  request: {
+    params: FeedbackIdParamSchema,
+  },
+  responses: {
+    204: {
+      description: "Feedback item deleted successfully",
+    },
+    404: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Feedback item not found",
+    },
+    503: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Database-backed endpoint unavailable",
     },
   },
 });
@@ -1293,11 +1484,7 @@ export const regenerateDraftRoute = createRoute({
     body: {
       content: {
         "application/json": {
-          schema: z
-            .object({
-              guidance: z.array(GuidanceSegmentSchema).optional(),
-            })
-            .openapi("RegenerateDraftRequest"),
+          schema: z.object({}).openapi("RegenerateDraftRequest"),
         },
       },
     },

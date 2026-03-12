@@ -26,5 +26,6 @@ export {
   DrizzleMCPServerRepository,
   DrizzleExpertAdviceHistoryRepository,
 } from "./repositories/expert-mcp-repository.js";
+export { DrizzleFeedbackRepository } from "./repositories/feedback-repository.js";
 export { DrizzleLLMInteractionRepository } from "./repositories/llm-interaction-repository.js";
 export { DrizzleSupplementaryContentRepository } from "./repositories/supplementary-content-repository.js";

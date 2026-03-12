@@ -604,7 +604,7 @@ export const DecisionContextSchema = z
     title: z.string(),
     templateId: z.string().uuid(),
     activeField: z.string().uuid().optional(),
-    lockedFields: z.array(z.string()).default([]),
+    lockedFields: z.array(z.string().uuid()).default([]),
     draftData: z.record(z.any()).optional(),
     draftVersions: z.array(DraftVersionSchema).default([]),
     suggestedTags: z.array(z.string()).optional(),
@@ -621,12 +621,12 @@ export const DecisionContextSchema = z
       title: "Architecture Decision",
       templateId: "550e8400-e29b-41d4-a716-446655440008",
       activeField: "550e8400-e29b-41d4-a716-446655440005",
-      lockedFields: ["decision_statement"],
-      draftData: { decision_statement: "We will use microservices" },
+      lockedFields: ["550e8400-e29b-41d4-a716-446655440005"],
+      draftData: { "550e8400-e29b-41d4-a716-446655440005": "We will use microservices" },
       draftVersions: [
         {
           version: 1,
-          draftData: { decision_statement: "We will use a modular monolith" },
+          draftData: { "550e8400-e29b-41d4-a716-446655440005": "We will use a modular monolith" },
           savedAt: "2026-02-27T09:45:00Z",
         },
       ],
@@ -849,7 +849,7 @@ export const GlobalContextSchema = z
     activeMeetingId: z.string().uuid().optional(),
     activeDecisionId: z.string().uuid().optional(),
     activeDecisionContextId: z.string().uuid().optional(),
-    activeField: z.string().optional(),
+    activeField: z.string().uuid().optional(),
     activeMeeting: MeetingSchema.optional(),
     activeDecision: FlaggedDecisionSchema.optional(),
     activeDecisionContext: DecisionContextSchema.optional(),
@@ -1126,6 +1126,81 @@ export type CreateExpertAdvice = z.infer<typeof CreateExpertAdviceSchema>;
 // LLM INTERACTION SCHEMAS
 // ============================================================================
 
+export const FeedbackRatingSchema = z.enum(["approved", "needs_work", "rejected"]);
+
+export type FeedbackRating = z.infer<typeof FeedbackRatingSchema>;
+
+export const FeedbackSourceSchema = z.enum(["user", "expert_agent", "peer_user"]);
+
+export type FeedbackSource = z.infer<typeof FeedbackSourceSchema>;
+
+export const DecisionFeedbackSchema = z
+  .object({
+    id: z.string().uuid(),
+    decisionContextId: z.string().uuid(),
+    fieldId: z.string().uuid().nullable(),
+    draftVersionNumber: z.number().int().positive().nullable(),
+    fieldVersionId: z.string().uuid().nullable(),
+    rating: FeedbackRatingSchema,
+    source: FeedbackSourceSchema,
+    authorId: z.string().min(1),
+    comment: z.string(),
+    textReference: z.string().nullable(),
+    referenceId: z.string().nullable(),
+    referenceUrl: z.string().url().nullable(),
+    excludeFromRegeneration: z.boolean().default(false),
+    createdAt: z.string().datetime({ offset: true }),
+  })
+  .openapi("DecisionFeedback", {
+    description: "Structured feedback linked to a decision context and optionally a specific field",
+    example: {
+      id: "550e8400-e29b-41d4-a716-446655440111",
+      decisionContextId: "550e8400-e29b-41d4-a716-446655440004",
+      fieldId: "550e8400-e29b-41d4-a716-446655440005",
+      draftVersionNumber: 2,
+      fieldVersionId: null,
+      rating: "needs_work",
+      source: "expert_agent",
+      authorId: "TechReviewer",
+      comment: "The options field is missing the managed service alternative.",
+      textReference: "We can either self-host or use a managed offering.",
+      referenceId: null,
+      referenceUrl: null,
+      excludeFromRegeneration: false,
+      createdAt: "2026-03-12T11:00:00Z",
+    },
+  });
+
+export type DecisionFeedback = z.infer<typeof DecisionFeedbackSchema>;
+
+export const CreateDecisionFeedbackSchema = DecisionFeedbackSchema.omit({
+  id: true,
+  createdAt: true,
+}).openapi("CreateDecisionFeedback", {
+  description: "Schema for creating a feedback item",
+});
+
+export type CreateDecisionFeedback = z.infer<typeof CreateDecisionFeedbackSchema>;
+
+export const UpdateDecisionFeedbackSchema = CreateDecisionFeedbackSchema.partial().openapi(
+  "UpdateDecisionFeedback",
+  {
+    description: "Schema for updating a feedback item",
+  },
+);
+
+export type UpdateDecisionFeedback = z.infer<typeof UpdateDecisionFeedbackSchema>;
+
+export const DecisionFeedbackListSchema = z
+  .object({
+    items: z.array(DecisionFeedbackSchema),
+  })
+  .openapi("DecisionFeedbackList", {
+    description: "A list of decision feedback items",
+  });
+
+export type DecisionFeedbackList = z.infer<typeof DecisionFeedbackListSchema>;
+
 export const PromptSegmentSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("system"), content: z.string() }),
   z.object({
@@ -1141,14 +1216,40 @@ export const PromptSegmentSchema = z.discriminatedUnion("type", [
     tags: z.array(z.string()),
   }),
   z.object({
-    type: z.literal("guidance"),
-    fieldId: z.string().optional(),
+    type: z.literal("template_guidance"),
+    scope: z.enum(["template", "field"]),
+    templateId: z.string().uuid(),
+    fieldId: z.string().uuid().nullable(),
+    label: z.string(),
     content: z.string(),
-    source: z.enum(["user_text", "tagged_transcript"]),
+  }),
+  z.object({
+    type: z.literal("feedback"),
+    id: z.string().uuid(),
+    decisionContextId: z.string().uuid(),
+    fieldId: z.string().uuid().nullable(),
+    draftVersionNumber: z.number().int().positive().nullable(),
+    fieldVersionId: z.string().uuid().nullable(),
+    rating: FeedbackRatingSchema,
+    source: FeedbackSourceSchema,
+    authorId: z.string().min(1),
+    comment: z.string(),
+    textReference: z.string().nullable(),
+    referenceId: z.string().nullable(),
+    referenceUrl: z.string().url().nullable(),
+    excludeFromRegeneration: z.boolean(),
+    createdAt: z.string().datetime({ offset: true }),
   }),
   z.object({
     type: z.literal("template_fields"),
-    fields: z.array(z.object({ id: z.string(), displayName: z.string(), description: z.string() })),
+    fields: z.array(
+      z.object({
+        id: z.string().uuid(),
+        displayName: z.string(),
+        description: z.string(),
+        extractionPrompt: z.string(),
+      }),
+    ),
   }),
 ]);
 

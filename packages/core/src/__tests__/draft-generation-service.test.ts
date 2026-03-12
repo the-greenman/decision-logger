@@ -15,6 +15,7 @@ import type { IDecisionFieldRepository } from "../interfaces/i-decision-field-re
 import type { ILLMInteractionRepository } from "../interfaces/i-llm-interaction-repository";
 import type { IFlaggedDecisionRepository } from "../interfaces/i-flagged-decision-repository";
 import type { ISupplementaryContentRepository } from "../interfaces/i-supplementary-content-repository";
+import type { IFeedbackRepository } from "../interfaces/i-feedback-repository";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -142,6 +143,7 @@ function makeRepos(
     findById: vi.fn(),
     search: vi.fn(),
     findByDecisionContext: vi.fn(),
+    addContexts: vi.fn(),
   };
 
   const fieldAssignmentRepo: ITemplateFieldAssignmentRepository = {
@@ -194,6 +196,7 @@ function makeRepos(
     update: vi.fn(),
     updatePriority: vi.fn(),
     updateStatus: vi.fn(),
+    delete: vi.fn(),
   };
 
   const supplementaryContentRepo: ISupplementaryContentRepository = {
@@ -206,6 +209,14 @@ function makeRepos(
     delete: vi.fn(),
   };
 
+  const feedbackRepo: IFeedbackRepository = {
+    create: vi.fn(),
+    findByContext: vi.fn().mockResolvedValue([]),
+    findByField: vi.fn().mockResolvedValue([]),
+    update: vi.fn(),
+    delete: vi.fn(),
+  };
+
   return {
     contextRepo,
     transcriptRepo,
@@ -214,6 +225,7 @@ function makeRepos(
     llmInteractionRepo,
     flaggedDecisionRepo,
     supplementaryContentRepo,
+    feedbackRepo,
     templateRepo: templateRepo ?? makeTemplateRepo(),
   };
 }
@@ -258,6 +270,7 @@ describe("DraftGenerationService", () => {
       repos.flaggedDecisionRepo,
       repos.supplementaryContentRepo,
       repos.templateRepo,
+      repos.feedbackRepo,
     );
   });
 
@@ -306,6 +319,7 @@ describe("DraftGenerationService", () => {
       repos.flaggedDecisionRepo,
       repos.supplementaryContentRepo,
       repos.templateRepo,
+      repos.feedbackRepo,
     );
 
     await service.generateDraft("ctx-1");
@@ -337,6 +351,7 @@ describe("DraftGenerationService", () => {
       repos.flaggedDecisionRepo,
       repos.supplementaryContentRepo,
       repos.templateRepo,
+      repos.feedbackRepo,
     );
 
     await service.generateDraft("ctx-1");
@@ -364,6 +379,7 @@ describe("DraftGenerationService", () => {
       repos.flaggedDecisionRepo,
       repos.supplementaryContentRepo,
       repos.templateRepo,
+      repos.feedbackRepo,
     );
 
     const result = await service.generateDraft("ctx-1");
@@ -412,6 +428,7 @@ describe("DraftGenerationService", () => {
       repos.flaggedDecisionRepo,
       repos.supplementaryContentRepo,
       repos.templateRepo,
+      repos.feedbackRepo,
     );
 
     const llmSpy = vi.spyOn(llm, "regenerateField");
@@ -448,6 +465,7 @@ describe("DraftGenerationService", () => {
       repos.flaggedDecisionRepo,
       repos.supplementaryContentRepo,
       repos.templateRepo,
+      repos.feedbackRepo,
     );
 
     await expect(service.regenerateField("ctx-1", "field-options")).rejects.toThrow(
@@ -455,26 +473,41 @@ describe("DraftGenerationService", () => {
     );
   });
 
-  it("passes guidance segments to LLM", async () => {
+  it("fetches feedback chain before generating a draft", async () => {
     const llmSpy = vi.spyOn(llm, "generateDraft");
-    const guidance = [{ content: "Focus on cost", source: "user_text" as const }];
 
-    await service.generateDraft("ctx-1", guidance);
+    await service.generateDraft("ctx-1");
 
+    expect(repos.feedbackRepo.findByContext).toHaveBeenCalledWith("ctx-1");
     expect(llmSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        guidance: expect.arrayContaining([expect.objectContaining({ content: "Focus on cost" })]),
+        transcriptChunks: expect.any(Array),
+        templateFields: expect.any(Array),
       }),
     );
   });
 
-  it("stores the same full-draft prompt shape sent to the llm", async () => {
-    const guidance = [
-      { content: "Focus on cost", source: "user_text" as const },
-      { fieldId: "field-options", content: "Only for options", source: "user_text" as const },
-    ];
+  it("stores template guidance and feedback in the full-draft prompt", async () => {
+    vi.mocked(repos.feedbackRepo.findByContext).mockResolvedValue([
+      {
+        id: "feedback-1",
+        decisionContextId: "ctx-1",
+        fieldId: null,
+        draftVersionNumber: 1,
+        fieldVersionId: null,
+        rating: "needs_work",
+        source: "user",
+        authorId: "alice",
+        comment: "Focus on cost trade-offs.",
+        textReference: null,
+        referenceId: null,
+        referenceUrl: null,
+        excludeFromRegeneration: false,
+        createdAt: "2026-01-01T00:00:00Z",
+      },
+    ]);
 
-    await service.generateDraft("ctx-1", guidance);
+    await service.generateDraft("ctx-1");
 
     const createCall = vi.mocked(repos.llmInteractionRepo.create).mock.calls[0];
     expect(createCall).toBeDefined();
@@ -484,19 +517,50 @@ describe("DraftGenerationService", () => {
     expect(record.promptText).toContain("=== SUPPLEMENTARY EVIDENCE ===");
     expect(record.promptText).toContain("Supplementary supp-meeting");
     expect(record.promptText).toContain("Supplementary supp-decision");
-    expect(record.promptText).toContain("=== GUIDANCE ===");
-    expect(record.promptText).toContain("Focus on cost");
-    expect(record.promptText).not.toContain("Only for options");
+    expect(record.promptText).toContain("=== FEEDBACK ON PREVIOUS DRAFT ===");
+    expect(record.promptText).toContain("Focus on cost trade-offs.");
+    expect(record.promptText).toContain("=== TEMPLATE GUIDANCE (applies to field: field-statement) ===");
   });
 
-  it("stores the same field-regeneration prompt shape sent to the llm", async () => {
-    const guidance = [
-      { content: "General context", source: "user_text" as const },
-      { fieldId: "field-options", content: "Only for options", source: "user_text" as const },
-      { fieldId: "field-statement", content: "Wrong field", source: "user_text" as const },
-    ];
+  it("stores field feedback ahead of whole-draft feedback for field regeneration", async () => {
+    vi.mocked(repos.feedbackRepo.findByField).mockResolvedValue([
+      {
+        id: "feedback-field",
+        decisionContextId: "ctx-1",
+        fieldId: "field-options",
+        draftVersionNumber: 1,
+        fieldVersionId: null,
+        rating: "needs_work",
+        source: "expert_agent",
+        authorId: "reviewer",
+        comment: "Only for options",
+        textReference: null,
+        referenceId: null,
+        referenceUrl: null,
+        excludeFromRegeneration: false,
+        createdAt: "2026-01-01T00:00:00Z",
+      },
+    ]);
+    vi.mocked(repos.feedbackRepo.findByContext).mockResolvedValue([
+      {
+        id: "feedback-general",
+        decisionContextId: "ctx-1",
+        fieldId: null,
+        draftVersionNumber: 1,
+        fieldVersionId: null,
+        rating: "approved",
+        source: "user",
+        authorId: "alice",
+        comment: "General context",
+        textReference: null,
+        referenceId: null,
+        referenceUrl: null,
+        excludeFromRegeneration: false,
+        createdAt: "2026-01-01T00:00:01Z",
+      },
+    ]);
 
-    await service.regenerateField("ctx-1", "field-options", guidance);
+    await service.regenerateField("ctx-1", "field-options");
 
     const createCall = vi.mocked(repos.llmInteractionRepo.create).mock.calls[0];
     expect(createCall).toBeDefined();
@@ -509,7 +573,7 @@ describe("DraftGenerationService", () => {
     expect(record.promptText).toContain("Supplementary supp-meeting");
     expect(record.promptText).toContain("General context");
     expect(record.promptText).toContain("Only for options");
-    expect(record.promptText).not.toContain("Wrong field");
+    expect(record.promptText).toContain("=== TEMPLATE GUIDANCE (applies to field: field-options) ===");
   });
 
   it("saves suggestedTags returned by LLM to context", async () => {
@@ -545,6 +609,7 @@ describe("DraftGenerationService", () => {
       repos.flaggedDecisionRepo,
       repos.supplementaryContentRepo,
       repos.templateRepo,
+      repos.feedbackRepo,
     );
 
     await service.generateDraft("ctx-1");
@@ -571,6 +636,7 @@ describe("DraftGenerationService", () => {
       repos.flaggedDecisionRepo,
       repos.supplementaryContentRepo,
       repos.templateRepo,
+      repos.feedbackRepo,
     );
 
     await service.regenerateField("ctx-1", "field-options");

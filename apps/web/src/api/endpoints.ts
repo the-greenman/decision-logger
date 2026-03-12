@@ -175,35 +175,25 @@ export function changeDecisionContextTemplate(id: string, templateId: string) {
   });
 }
 
-export function generateDraft(
-  id: string,
-  guidance?: Array<{ content: string; source: string; fieldId?: string }>,
-) {
+export function generateDraft(id: string) {
   return apiFetch<DecisionContext>(`/api/decision-contexts/${id}/generate-draft`, {
     method: "POST",
-    ...jsonBody({ guidance }),
+    ...jsonBody({}),
   });
 }
 
 /** POST /api/decision-contexts/:id/regenerate */
-export function regenerateDraft(
-  id: string,
-  guidance?: Array<{ content: string; source: string; fieldId?: string }>,
-) {
+export function regenerateDraft(id: string) {
   return apiFetch<DecisionContext>(`/api/decision-contexts/${id}/regenerate`, {
     method: "POST",
-    ...jsonBody({ guidance }),
+    ...jsonBody({}),
   });
 }
 
-export function regenerateField(
-  contextId: string,
-  fieldId: string,
-  guidance?: Array<{ content: string; source: string; fieldId?: string }>,
-) {
+export function regenerateField(contextId: string, fieldId: string) {
   return apiFetch<{ value: string }>(
     `/api/decision-contexts/${contextId}/fields/${fieldId}/regenerate`,
-    { method: "POST", ...jsonBody({ guidance }) },
+    { method: "POST", ...jsonBody({}) },
   );
 }
 

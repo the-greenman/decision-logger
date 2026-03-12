@@ -99,6 +99,12 @@ export const expertTypeEnum = pgEnum("expert_type", [
 export const mcpServerTypeEnum = pgEnum("mcp_server_type", ["stdio", "http", "sse"]);
 export const mcpServerStatusEnum = pgEnum("mcp_server_status", ["active", "inactive", "error"]);
 export const taggedByEnum = pgEnum("tagged_by", ["llm", "rule", "manual"]);
+export const feedbackRatingEnum = pgEnum("feedback_rating", [
+  "approved",
+  "needs_work",
+  "rejected",
+]);
+export const feedbackSourceEnum = pgEnum("feedback_source", ["user", "expert_agent", "peer_user"]);
 
 export const meetings = pgTable(
   "meetings",
@@ -409,7 +415,7 @@ export const decisionContexts = pgTable(
       .notNull()
       .references(() => decisionTemplates.id),
     activeField: uuid("active_field").references(() => decisionFields.id),
-    lockedFields: text("locked_fields").array().notNull(),
+    lockedFields: uuid("locked_fields").array().notNull().default(sql`'{}'::uuid[]`),
     draftData: jsonb("draft_data"),
     draftVersions: jsonb("draft_versions")
       .notNull()
@@ -429,6 +435,43 @@ export const decisionContexts = pgTable(
 
 export type DecisionContextSelect = typeof decisionContexts.$inferSelect;
 export type DecisionContextInsert = typeof decisionContexts.$inferInsert;
+
+// ============================================================================
+// DECISION FEEDBACK
+// ============================================================================
+
+export const decisionFeedback = pgTable(
+  "decision_feedback",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    decisionContextId: uuid("decision_context_id")
+      .notNull()
+      .references(() => decisionContexts.id, { onDelete: "cascade" }),
+    fieldId: uuid("field_id").references(() => decisionFields.id),
+    draftVersionNumber: integer("draft_version_number"),
+    fieldVersionId: uuid("field_version_id"),
+    rating: feedbackRatingEnum("rating").notNull(),
+    source: feedbackSourceEnum("source").notNull(),
+    authorId: text("author_id").notNull(),
+    comment: text("comment").notNull(),
+    textReference: text("text_reference"),
+    referenceId: text("reference_id"),
+    referenceUrl: text("reference_url"),
+    excludeFromRegeneration: boolean("exclude_from_regeneration").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    decisionContextIdx: index("idx_decision_feedback_context").on(table.decisionContextId),
+    fieldIdx: index("idx_decision_feedback_field").on(table.fieldId),
+    contextFieldIdx: index("idx_decision_feedback_context_field").on(
+      table.decisionContextId,
+      table.fieldId,
+    ),
+  }),
+);
+
+export type DecisionFeedbackSelect = typeof decisionFeedback.$inferSelect;
+export type DecisionFeedbackInsert = typeof decisionFeedback.$inferInsert;
 
 // ============================================================================
 // DECISION LOGS
@@ -598,6 +641,7 @@ export const schema = {
   templateFieldAssignments,
   flaggedDecisions,
   decisionContexts,
+  decisionFeedback,
   decisionLogs,
   expertTemplates,
   mcpServers,

@@ -19,6 +19,7 @@ import { LLMInteractionService } from "./services/llm-interaction-service.js";
 import { MarkdownExportService } from "./services/markdown-export-service.js";
 import { MCPServerService } from "./services/mcp-server-service.js";
 import { SupplementaryContentService } from "./services/supplementary-content-service.js";
+import { FeedbackService } from "./services/feedback-service.js";
 import { MockLLMService } from "./llm/mock-llm-service.js";
 import { VercelAILLMService } from "./llm/vercel-ai-llm-service.js";
 import type { ITranscriptManager } from "./transcript-manager/index.js";
@@ -44,6 +45,7 @@ import {
   DrizzleDecisionTemplateRepository,
   DrizzleExpertTemplateRepository,
   DrizzleMCPServerRepository,
+  DrizzleFeedbackRepository,
   DrizzleSupplementaryContentRepository,
 } from "@repo/db";
 
@@ -150,11 +152,16 @@ export function createDraftGenerationService(): DraftGenerationService {
     new DrizzleFlaggedDecisionRepository(),
     new DrizzleSupplementaryContentRepository(),
     new DrizzleDecisionTemplateRepository(),
+    new DrizzleFeedbackRepository(),
   );
 }
 
 export function createSupplementaryContentService(): SupplementaryContentService {
   return new SupplementaryContentService(new DrizzleSupplementaryContentRepository());
+}
+
+export function createFeedbackService(): FeedbackService {
+  return new FeedbackService(new DrizzleFeedbackRepository());
 }
 
 export function createContentCreator(): IContentCreator {
@@ -282,6 +289,7 @@ export interface ServiceContainer {
   decisionFieldService: DecisionFieldService;
   draftGenerationService: DraftGenerationService;
   supplementaryContentService: SupplementaryContentService;
+  feedbackService: FeedbackService;
   contentCreator: IContentCreator;
   flaggedDecisionService: FlaggedDecisionService;
   decisionTemplateService: DecisionTemplateService;
@@ -303,6 +311,7 @@ export function createServices(): ServiceContainer {
     decisionFieldService: createDecisionFieldService(),
     draftGenerationService: createDraftGenerationService(),
     supplementaryContentService: createSupplementaryContentService(),
+    feedbackService: createFeedbackService(),
     contentCreator: createContentCreator(),
     flaggedDecisionService: createFlaggedDecisionService(),
     decisionTemplateService: createDecisionTemplateService(),

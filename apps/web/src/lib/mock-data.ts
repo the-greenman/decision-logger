@@ -32,7 +32,6 @@ export interface Field {
   status: FieldStatus;
   required: boolean;
   instructions?: string; // human-readable guidance on what belongs in this field
-  guidance?: string; // ephemeral per-field regen instruction
   versions?: FieldVersion[];
 }
 
@@ -213,7 +212,6 @@ export const OUTSTANDING_ISSUES_FIELD: Field = {
   value: "",
   status: "idle",
   required: false,
-  guidance: "",
 };
 
 export const DECISION_METHODS: { value: DecisionMethod; label: string }[] = [
@@ -304,7 +302,6 @@ export const ACTIVE_CONTEXT: DecisionContext = {
       value: "Kong, Traefik, AWS API Gateway, custom nginx-operator",
       status: "idle",
       required: true,
-      guidance: "",
     },
     {
       id: "f4",
@@ -447,7 +444,6 @@ export function getMockFieldsForTemplate(templateName: string): Field[] {
         required: field.required,
         status: "idle" as const,
         value: "",
-        guidance: "",
       };
     }
 
@@ -457,7 +453,6 @@ export function getMockFieldsForTemplate(templateName: string): Field[] {
       value: "",
       status: "idle" as const,
       required: field.required,
-      guidance: "",
     };
   });
 }

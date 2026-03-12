@@ -187,7 +187,7 @@ export function PrototypeGallery() {
               supplementaryCount={SUPPLEMENTARY_ITEMS.filter((s) => s.fieldId === "f3").length}
             />
             <FacilitatorFieldCard
-              field={{ ...ACTIVE_CONTEXT.fields[4]!, guidance: "emphasise HA complexity" }}
+              field={ACTIVE_CONTEXT.fields[4]!}
               supplementaryCount={0}
             />
           </div>

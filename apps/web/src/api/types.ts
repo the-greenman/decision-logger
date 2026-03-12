@@ -115,14 +115,39 @@ export interface LLMInteraction {
     | { type: "transcript"; speaker?: string; text: string; tags: string[] }
     | { type: "supplementary"; label?: string; content: string; tags: string[] }
     | {
-        type: "guidance";
-        fieldId?: string;
+        type: "template_guidance";
+        scope: "template" | "field";
+        templateId: string;
+        fieldId: string | null;
+        label: string;
         content: string;
-        source: "user_text" | "tagged_transcript";
+      }
+    | {
+        type: "feedback";
+        id: string;
+        decisionContextId: string;
+        fieldId: string | null;
+        draftVersionNumber: number | null;
+        fieldVersionId: string | null;
+        rating: "approved" | "needs_work" | "rejected";
+        source: "user" | "expert_agent" | "peer_user";
+        authorId: string;
+        content: string;
+        comment: string;
+        textReference: string | null;
+        referenceId: string | null;
+        referenceUrl: string | null;
+        excludeFromRegeneration: boolean;
+        createdAt: string;
       }
     | {
         type: "template_fields";
-        fields: Array<{ id: string; displayName: string; description: string }>;
+        fields: Array<{
+          id: string;
+          displayName: string;
+          description: string;
+          extractionPrompt: string;
+        }>;
       }
   >;
   promptText: string;

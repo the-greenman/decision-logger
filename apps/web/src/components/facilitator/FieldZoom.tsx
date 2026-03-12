@@ -20,7 +20,6 @@ interface FieldZoomProps {
   onRegenerate: (fieldId: string) => void;
   onLock: (fieldId: string) => void;
   onUnlock: (fieldId: string) => void;
-  onGuidanceChange: (fieldId: string, guidance: string) => void;
   onAddSupplementary: (item: Omit<SupplementaryItem, "id" | "createdAt">) => void;
   onRemoveSupplementary: (id: string) => void;
   onSelectTranscript?: (fieldId: string) => void;
@@ -36,13 +35,11 @@ export function FieldZoom({
   onRegenerate,
   onLock,
   onUnlock,
-  onGuidanceChange,
   onAddSupplementary,
   onRemoveSupplementary,
   onSelectTranscript,
 }: FieldZoomProps) {
   const [editValue, setEditValue] = useState(field.value);
-  const [guidance, setGuidance] = useState(field.guidance ?? "");
   const [showHistory, setShowHistory] = useState(false);
   const [showAddEvidence, setShowAddEvidence] = useState(false);
   const [newLabel, setNewLabel] = useState("");
@@ -57,10 +54,6 @@ export function FieldZoom({
 
   function handleSave() {
     onSave(field.id, editValue);
-  }
-
-  function handleGuidanceBlur() {
-    onGuidanceChange(field.id, guidance);
   }
 
   function handleAddEvidence() {
@@ -177,26 +170,6 @@ export function FieldZoom({
               />
             )}
           </div>
-
-          {/* Guidance for next regen */}
-          {!isLocked && (
-            <div className="flex flex-col gap-2">
-              <label className="text-fac-label text-text-secondary uppercase tracking-wider">
-                Guidance for next regeneration
-                <span className="ml-2 text-text-muted normal-case tracking-normal font-normal">
-                  (optional — an instruction to the LLM, not content)
-                </span>
-              </label>
-              <textarea
-                value={guidance}
-                onChange={(e) => setGuidance(e.target.value)}
-                onBlur={handleGuidanceBlur}
-                rows={2}
-                className="w-full p-3 rounded border border-border bg-surface text-fac-meta text-text-primary leading-relaxed resize-none focus:outline-none focus:border-accent/60 placeholder:text-text-muted"
-                placeholder='e.g. "focus on operational complexity" or "include cost comparison"'
-              />
-            </div>
-          )}
 
           {/* Supplementary evidence */}
           <SupplementarySection

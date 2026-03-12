@@ -20,6 +20,7 @@ import {
   createDecisionTemplateService,
   createExpertTemplateService,
   createDraftGenerationService,
+  createFeedbackService,
   createFlaggedDecisionService,
   createGlobalContextService,
   createLLMInteractionService,
@@ -29,7 +30,6 @@ import {
   createSupplementaryContentService,
   createTemplateFieldAssignmentRepository,
   createTranscriptService,
-  type GuidanceSegment,
   type IMeetingRepository,
   MeetingService,
 } from "@repo/core";
@@ -49,11 +49,13 @@ import {
   clearStreamingBufferRoute,
   changeDecisionContextTemplateRoute,
   createDecisionContextRoute,
+  createDecisionFeedbackRoute,
   createDecisionContextWindowRoute,
   assignDecisionTranscriptContextRoute,
   assignFieldTranscriptContextRoute,
   createSupplementaryContentRoute,
   createFlaggedDecisionRoute,
+  deleteDecisionFeedbackRoute,
   deleteFlaggedDecisionRoute,
   deleteSupplementaryContentRoute,
   exportDecisionLogRoute,
@@ -66,7 +68,9 @@ import {
   getFieldTranscriptRoute,
   getStreamingStatusRoute,
   generateDraftRoute,
+  listDecisionFeedbackRoute,
   listExpertsRoute,
+  listFieldDecisionFeedbackRoute,
   listMeetingChunksRoute,
   listRawTranscriptsRoute,
   listDraftVersionsRoute,
@@ -85,6 +89,7 @@ import {
   rollbackDraftRoute,
   searchChunksRoute,
   streamTranscriptRoute,
+  toggleDecisionFeedbackExcludeRoute,
   unlockFieldRoute,
   updateDecisionContextRoute,
   updateFlaggedDecisionRoute,
@@ -109,6 +114,7 @@ const decisionContextService = useDatabase ? createDecisionContextService() : nu
 const decisionLogService = useDatabase ? createDecisionLogService() : null;
 const decisionLogGenerator = useDatabase ? createDecisionLogGenerator() : null;
 const draftGenerationService = useDatabase ? createDraftGenerationService() : null;
+const feedbackService = useDatabase ? createFeedbackService() : null;
 const globalContextService = useDatabase ? createGlobalContextService() : null;
 const supplementaryContentService = useDatabase ? createSupplementaryContentService() : null;
 const markdownExportService = useDatabase ? createMarkdownExportService() : null;
@@ -132,6 +138,7 @@ function getWorkflowServices() {
     !decisionLogService ||
     !decisionLogGenerator ||
     !draftGenerationService ||
+    !feedbackService ||
     !supplementaryContentService ||
     !markdownExportService ||
     !llmInteractionService ||
@@ -149,6 +156,7 @@ function getWorkflowServices() {
     decisionLogService,
     decisionLogGenerator,
     draftGenerationService,
+    feedbackService,
     supplementaryContentService,
     markdownExportService,
     llmInteractionService,
@@ -281,6 +289,114 @@ app.openapi(setMeetingContextRoute, async (c) => {
     const { meetingId } = c.req.valid("json");
     await globalContextService.setActiveMeeting(meetingId);
     return c.json(await globalContextService.getContext());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    if (isNotFoundErrorMessage(message)) {
+      return c.json({ error: message }, 404);
+    }
+
+    return c.json({ error: message }, 400);
+  }
+});
+
+app.openapi(listDecisionFeedbackRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
+  }
+
+  try {
+    const { id } = c.req.valid("param");
+    const items = await services.feedbackService.getFeedbackChain(id);
+    return c.json({ items });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    if (isNotFoundErrorMessage(message)) {
+      return c.json({ error: message }, 404);
+    }
+
+    return c.json({ error: message }, 400);
+  }
+});
+
+app.openapi(listFieldDecisionFeedbackRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
+  }
+
+  try {
+    const { id, fieldId } = c.req.valid("param");
+    const items = await services.feedbackService.getFeedbackChain(id, fieldId);
+    return c.json({ items });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    if (isNotFoundErrorMessage(message)) {
+      return c.json({ error: message }, 404);
+    }
+
+    return c.json({ error: message }, 400);
+  }
+});
+
+app.openapi(createDecisionFeedbackRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
+  }
+
+  try {
+    const { id } = c.req.valid("param");
+    const data = c.req.valid("json");
+    const item = await services.feedbackService.addFeedback({
+      ...data,
+      decisionContextId: id,
+    });
+    return c.json(item, 201);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    if (isNotFoundErrorMessage(message)) {
+      return c.json({ error: message }, 404);
+    }
+
+    return c.json({ error: message }, 400);
+  }
+});
+
+app.openapi(toggleDecisionFeedbackExcludeRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
+  }
+
+  try {
+    const { feedbackId } = c.req.valid("param");
+    const { excludeFromRegeneration } = c.req.valid("json");
+    const item = await services.feedbackService.toggleExclude(
+      feedbackId,
+      excludeFromRegeneration,
+    );
+    return c.json(item);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    if (isNotFoundErrorMessage(message)) {
+      return c.json({ error: message }, 404);
+    }
+
+    return c.json({ error: message }, 400);
+  }
+});
+
+app.openapi(deleteDecisionFeedbackRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
+  }
+
+  try {
+    const { feedbackId } = c.req.valid("param");
+    await services.feedbackService.deleteFeedback(feedbackId);
+    return c.body(null, 204);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (isNotFoundErrorMessage(message)) {
@@ -1135,22 +1251,7 @@ app.openapi(generateDraftRoute, async (c) => {
 
   try {
     const { id } = c.req.valid("param");
-    const data = c.req.valid("json");
-    const guidance: GuidanceSegment[] | undefined = data.guidance?.map((segment) => {
-      if (segment.fieldId !== undefined) {
-        return {
-          fieldId: segment.fieldId,
-          content: segment.content,
-          source: segment.source,
-        };
-      }
-
-      return {
-        content: segment.content,
-        source: segment.source,
-      };
-    });
-    const context = await services.draftGenerationService.generateDraft(id, guidance);
+    const context = await services.draftGenerationService.generateDraft(id);
     return c.json(context);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -1170,23 +1271,7 @@ app.openapi(regenerateDraftRoute, async (c) => {
 
   try {
     const { id } = c.req.valid("param");
-    const data = c.req.valid("json");
-    const guidance: GuidanceSegment[] | undefined = data.guidance?.map((segment) => {
-      if (segment.fieldId !== undefined) {
-        return {
-          fieldId: segment.fieldId,
-          content: segment.content,
-          source: segment.source,
-        };
-      }
-
-      return {
-        content: segment.content,
-        source: segment.source,
-      };
-    });
-
-    const context = await services.draftGenerationService.generateDraft(id, guidance);
+    const context = await services.draftGenerationService.generateDraft(id);
     return c.json(context);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -1326,26 +1411,7 @@ app.openapi(regenerateFieldRoute, async (c) => {
   try {
     const { id, fieldId } = c.req.valid("param");
     const resolvedFieldId = await resolveContextFieldId(services, id, fieldId);
-    const { guidance } = c.req.valid("json");
-    const normalizedGuidance: GuidanceSegment[] | undefined = guidance?.map((segment) => {
-      if (segment.fieldId === undefined) {
-        return {
-          content: segment.content,
-          source: segment.source,
-        };
-      }
-
-      return {
-        fieldId: segment.fieldId,
-        content: segment.content,
-        source: segment.source,
-      };
-    });
-    const value = await services.draftGenerationService.regenerateField(
-      id,
-      resolvedFieldId,
-      normalizedGuidance,
-    );
+    const value = await services.draftGenerationService.regenerateField(id, resolvedFieldId);
     return c.json({ value });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

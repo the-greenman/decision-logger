@@ -1,6 +1,5 @@
 export type {
   ILLMService,
-  GuidanceSegment,
   GenerateDraftParams,
   RegenerateFieldParams,
   DraftResult,

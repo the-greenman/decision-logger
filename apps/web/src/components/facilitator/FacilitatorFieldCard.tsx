@@ -66,16 +66,6 @@ export function FacilitatorFieldCard({
             {supplementaryCount}
           </span>
         )}
-
-        {/* Guidance preview */}
-        {field.guidance && (
-          <span
-            className="ml-auto text-fac-meta text-text-muted italic truncate max-w-[200px]"
-            title={field.guidance}
-          >
-            "{field.guidance}"
-          </span>
-        )}
       </div>
     </div>
   );
