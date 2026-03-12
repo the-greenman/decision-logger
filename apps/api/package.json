@@ -11,6 +11,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "test": "vitest run",
+    "test:api": "vitest run --config vitest.e2e.config.ts",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "type-check": "tsc --project tsconfig.typecheck.json --noEmit"
   },

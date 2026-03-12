@@ -105,6 +105,23 @@ export interface DecisionLog {
   loggedBy: string;
 }
 
+export interface DecisionFeedback {
+  id: string;
+  decisionContextId: string;
+  fieldId: string | null;
+  draftVersionNumber: number | null;
+  fieldVersionId: string | null;
+  rating: "approved" | "needs_work" | "rejected";
+  source: "user" | "expert_agent" | "peer_user";
+  authorId: string;
+  comment: string;
+  textReference: string | null;
+  referenceId: string | null;
+  referenceUrl: string | null;
+  excludeFromRegeneration: boolean;
+  createdAt: string;
+}
+
 export interface LLMInteraction {
   id: string;
   decisionContextId: string;

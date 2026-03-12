@@ -32,6 +32,7 @@ import {
   unlockField,
   updateFieldValue,
   changeDecisionContextTemplate,
+  createDecisionFeedback,
   regenerateField,
   regenerateDraft,
   logDecision,
@@ -1458,16 +1459,34 @@ export function FacilitatorMeetingPage() {
 
   // ── Regenerate ───────────────────────────────────────────────────
 
-  async function handleRegenerate(_focus: string) {
+  async function handleRegenerate(focus: string) {
     if (isClosedContext || !activeApiContextId) return;
     setModal(null);
     setNewRowsSinceGeneration(0);
+
+    const trimmedFocus = focus.trim();
 
     setFields((prev) =>
       prev.map((f) => (f.status === "locked" ? f : { ...f, status: "generating" })),
     );
 
     try {
+      if (trimmedFocus.length > 0) {
+        await createDecisionFeedback(activeApiContextId, {
+          fieldId: null,
+          draftVersionNumber: null,
+          fieldVersionId: null,
+          rating: "needs_work",
+          source: "user",
+          authorId: "facilitator",
+          comment: trimmedFocus,
+          textReference: null,
+          referenceId: null,
+          referenceUrl: null,
+          excludeFromRegeneration: false,
+        });
+      }
+
       const updated = await regenerateDraft(activeApiContextId);
       setFields(
         templateFields.map((f) => ({
@@ -1876,6 +1895,11 @@ export function FacilitatorMeetingPage() {
                 <>
                   <p className="text-fac-meta text-text-secondary mt-1">
                     provider: {transcriptionStatus.provider} · sessions: {transcriptionStatus.sessionCount}
+                  </p>
+                  <p className="text-fac-meta text-text-secondary mt-1">
+                    defaults: {Math.round(transcriptionStatus.defaults.windowMs / 1000)}s window ·{" "}
+                    {Math.round(transcriptionStatus.defaults.stepMs / 1000)}s step ·{" "}
+                    {Math.round(transcriptionStatus.defaults.dedupeHorizonMs / 1000)}s dedupe horizon
                   </p>
                   <p className="text-fac-meta text-text-secondary mt-1">
                     api bridge: {transcriptionStatus.api.ok ? "ok" : "error"}

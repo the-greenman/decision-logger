@@ -48,8 +48,8 @@ export function RegenerateDialog({ unlockedCount, onConfirm, onCancel }: Regener
               autoFocus
             />
             <p className="text-fac-meta text-text-muted">
-              This instruction applies across all unlocked fields for this regeneration only — it is
-              not saved.
+              If provided, this note will be saved as whole-draft feedback and used for this
+              regeneration.
             </p>
           </div>
         </div>

@@ -235,11 +235,11 @@ pnpm --filter @repo/schema build
 pnpm --filter @repo/db exec vitest run src/__tests__/streaming-buffer-repository.test.ts
 
 # Targeted API contract checks (adjust -t terms as specific fixes land)
-pnpm --filter @repo/api exec vitest run --config vitest.e2e.config.ts src/__tests__/api.e2e.test.ts -t "Whisper verbose_json fixture"
-pnpm --filter @repo/api test:e2e -- -t "streaming"
+pnpm --filter @repo/api test:api -- src/__tests__/api.e2e.test.ts -t "Whisper verbose_json fixture"
+pnpm --filter @repo/api test:api -- -t "streaming"
 
 # Full API e2e pass gate
-pnpm --filter @repo/api test:e2e
+pnpm --filter @repo/api test:api
 ```
 
 ## Exit Criteria

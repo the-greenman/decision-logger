@@ -8,18 +8,19 @@ import type {
   ActiveMeetingsContextSummary,
   DecisionContext,
   DecisionField,
-  DecisionLog,
   DecisionTemplate,
   FlaggedDecision,
   FlaggedDecisionListItem,
-  GlobalContext,
-  ApiStatus,
+  DecisionLog,
+  DecisionFeedback,
   LLMInteraction,
   Meeting,
   MeetingSummary,
+  ApiStatus,
   ReadableTranscriptRow,
   SupplementaryContent,
   TranscriptChunk,
+  GlobalContext,
 } from "./types.js";
 
 // ── Meetings ──────────────────────────────────────────────────────
@@ -197,6 +198,28 @@ export function regenerateField(contextId: string, fieldId: string) {
   );
 }
 
+export function createDecisionFeedback(
+  contextId: string,
+  body: {
+    fieldId?: string | null;
+    draftVersionNumber?: number | null;
+    fieldVersionId?: string | null;
+    rating: "approved" | "needs_work" | "rejected";
+    source: "user" | "expert_agent" | "peer_user";
+    authorId: string;
+    comment: string;
+    textReference?: string | null;
+    referenceId?: string | null;
+    referenceUrl?: string | null;
+    excludeFromRegeneration?: boolean;
+  },
+) {
+  return apiFetch<DecisionFeedback>(`/api/decision-contexts/${contextId}/feedback`, {
+    method: "POST",
+    ...jsonBody(body),
+  });
+}
+
 export function getFieldTranscriptChunks(contextId: string, fieldId: string) {
   return apiFetch<{ chunks: TranscriptChunk[] }>(
     `/api/decision-contexts/${contextId}/fields/${fieldId}/transcript`,
@@ -372,11 +395,13 @@ export function setActiveField(meetingId: string, fieldId: string) {
 export function clearActiveField(meetingId: string) {
   return apiFetch<GlobalContext>(`/api/meetings/${meetingId}/context/field`, {
     method: "DELETE",
+    ...jsonBody({}),
   });
 }
 
 export function clearActiveDecision(meetingId: string) {
   return apiFetch<GlobalContext>(`/api/meetings/${meetingId}/context/decision`, {
     method: "DELETE",
+    ...jsonBody({}),
   });
 }

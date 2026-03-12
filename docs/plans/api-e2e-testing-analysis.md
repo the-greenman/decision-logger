@@ -151,6 +151,12 @@ Use the dedicated API E2E command:
 pnpm --filter @repo/api test:e2e -- src/__tests__/api.e2e.test.ts
 ```
 
+Recommended shorthand:
+
+```bash
+pnpm --filter @repo/api test:api -- src/__tests__/api.e2e.test.ts
+```
+
 Or, equivalently:
 
 ```bash
@@ -179,6 +185,12 @@ That command uses the default config and can bypass the source aliasing that the
 
 Any documentation or plan that references API E2E execution should use `test:e2e` or an explicit `--config vitest.e2e.config.ts` form.
 
+For day-to-day endpoint-contract testing, prefer the clearer package script alias:
+
+```bash
+pnpm --filter @repo/api test:api -- src/__tests__/api.e2e.test.ts
+```
+
 ### 2. Avoid mixing default Vitest runs with E2E analysis
 
 If the goal is endpoint-contract debugging, use the E2E config every time.
@@ -205,6 +217,12 @@ Once the API E2E suite was run with the correct config, the patched source behav
 
 ```bash
 pnpm --filter @repo/api test:e2e -- src/__tests__/api.e2e.test.ts
+```
+
+Equivalent clearer alias:
+
+```bash
+pnpm --filter @repo/api test:api -- src/__tests__/api.e2e.test.ts
 ```
 
 Result:
