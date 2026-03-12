@@ -10,6 +10,14 @@ type SessionCreateResponse = {
   dedupeHorizonMs: number;
 };
 
+type SessionCreateRequest = {
+  meetingId: string;
+  language?: string;
+  windowMs?: number;
+  stepMs?: number;
+  dedupeHorizonMs?: number;
+};
+
 type SessionStopResponse = {
   flushed: boolean;
   chunksPersisted?: number;
@@ -38,6 +46,16 @@ export type TranscriptionServiceStatus = {
   };
 };
 
+export type TranscriptionSessionStatus = {
+  status: "active" | "stopping" | "stopped";
+  bufferedEvents: number;
+  postedEvents: number;
+  dedupedEvents: number;
+  windowMs: number;
+  stepMs: number;
+  dedupeHorizonMs: number;
+};
+
 async function transcriptionFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${TRANSCRIPTION_BASE_URL}${path}`, init);
   if (!response.ok) {
@@ -54,11 +72,24 @@ async function transcriptionFetch<T>(path: string, init?: RequestInit): Promise<
   return (await response.json()) as T;
 }
 
-export function createTranscriptionSession(meetingId: string, language?: string) {
+export function createTranscriptionSession(
+  meetingId: string,
+  language?: string,
+  options?: { windowMs?: number; stepMs?: number; dedupeHorizonMs?: number },
+) {
+  const payload: SessionCreateRequest = {
+    meetingId,
+    ...(language ? { language } : {}),
+    ...(options?.windowMs === undefined ? {} : { windowMs: options.windowMs }),
+    ...(options?.stepMs === undefined ? {} : { stepMs: options.stepMs }),
+    ...(options?.dedupeHorizonMs === undefined
+      ? {}
+      : { dedupeHorizonMs: options.dedupeHorizonMs }),
+  };
   return transcriptionFetch<SessionCreateResponse>("/sessions", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ meetingId, ...(language ? { language } : {}) }),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -88,15 +119,7 @@ export function stopTranscriptionSession(sessionId: string) {
 }
 
 export function getTranscriptionSessionStatus(sessionId: string) {
-  return transcriptionFetch<{
-    status: "active" | "stopping" | "stopped";
-    bufferedEvents: number;
-    postedEvents: number;
-    dedupedEvents: number;
-    windowMs: number;
-    stepMs: number;
-    dedupeHorizonMs: number;
-  }>(`/sessions/${sessionId}/status`);
+  return transcriptionFetch<TranscriptionSessionStatus>(`/sessions/${sessionId}/status`);
 }
 
 export function getTranscriptionServiceStatus() {

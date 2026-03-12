@@ -56,7 +56,9 @@ import {
   uploadTranscriptionSessionChunk,
   stopTranscriptionSession,
   getTranscriptionServiceStatus,
+  getTranscriptionSessionStatus,
   type TranscriptionServiceStatus,
+  type TranscriptionSessionStatus,
 } from "@/api/transcription-client";
 import type { ApiStatus, DecisionFeedback, LLMInteraction } from "@/api/types";
 import { buildCandidates, buildAgendaItems } from "@/api/adapters";
@@ -263,6 +265,10 @@ export function FacilitatorMeetingPage() {
   const [transcriptionStatus, setTranscriptionStatus] = useState<TranscriptionServiceStatus | null>(
     null,
   );
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeSessionStatus, setActiveSessionStatus] = useState<TranscriptionSessionStatus | null>(
+    null,
+  );
   const [statusError, setStatusError] = useState<string | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -271,6 +277,7 @@ export function FacilitatorMeetingPage() {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const pendingChunkUploadsRef = useRef<Promise<void>[]>([]);
+  const streamStepMsRef = useRef<number>(10_000);
 
   const [flagLaterTitle, setFlagLaterTitle] = useState("");
   const [showLLMLog, setShowLLMLog] = useState(false);
@@ -605,6 +612,41 @@ export function FacilitatorMeetingPage() {
       if (timer) clearTimeout(timer);
     };
   }, [activeApiContextId, meetingId, streamState, zoomedFieldId]);
+
+  useEffect(() => {
+    if (!activeSessionId) {
+      setActiveSessionStatus(null);
+      return;
+    }
+    const sessionId = activeSessionId;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    async function pollSessionStatus() {
+      try {
+        const status = await getTranscriptionSessionStatus(sessionId);
+        if (cancelled) return;
+        setActiveSessionStatus(status);
+      } catch {
+        if (cancelled) return;
+        setActiveSessionStatus(null);
+      } finally {
+        if (!cancelled && streamState === "live") {
+          timer = setTimeout(() => {
+            void pollSessionStatus();
+          }, 2000);
+        }
+      }
+    }
+
+    void pollSessionStatus();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeSessionId, streamState]);
 
   // ── Broadcast focused field for shared-display sync ──────────────
   useEffect(() => {
@@ -1388,6 +1430,8 @@ export function FacilitatorMeetingPage() {
         setStreamError(error instanceof Error ? error.message : "Failed to stop session");
       }
       sessionIdRef.current = null;
+      setActiveSessionId(null);
+      setActiveSessionStatus(null);
     }
 
     if (mediaStreamRef.current) {
@@ -1409,8 +1453,26 @@ export function FacilitatorMeetingPage() {
       });
       mediaStreamRef.current = stream;
 
-      const session = await createTranscriptionSession(meetingId);
+      const sessionOptions = transcriptionStatus
+        ? {
+            windowMs: transcriptionStatus.defaults.windowMs,
+            stepMs: transcriptionStatus.defaults.stepMs,
+            dedupeHorizonMs: transcriptionStatus.defaults.dedupeHorizonMs,
+          }
+        : undefined;
+      const session = await createTranscriptionSession(meetingId, undefined, sessionOptions);
       sessionIdRef.current = session.sessionId;
+      setActiveSessionId(session.sessionId);
+      setActiveSessionStatus({
+        status: "active",
+        bufferedEvents: 0,
+        postedEvents: 0,
+        dedupedEvents: 0,
+        windowMs: session.windowMs,
+        stepMs: session.stepMs,
+        dedupeHorizonMs: session.dedupeHorizonMs,
+      });
+      streamStepMsRef.current = Math.max(1000, session.stepMs);
       streamShouldContinueRef.current = true;
 
       const mimeType = getRecorderMimeType();
@@ -1464,6 +1526,8 @@ export function FacilitatorMeetingPage() {
                 }
               }
               sessionIdRef.current = null;
+              setActiveSessionId(null);
+              setActiveSessionStatus(null);
               recorderRef.current = null;
               if (mediaStreamRef.current) {
                 mediaStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -1487,7 +1551,7 @@ export function FacilitatorMeetingPage() {
           if (recorder.state === "recording") {
             recorder.stop();
           }
-        }, 10_000);
+        }, streamStepMsRef.current);
       };
 
       startSegment();
@@ -1502,6 +1566,8 @@ export function FacilitatorMeetingPage() {
         mediaStreamRef.current = null;
       }
       streamShouldContinueRef.current = false;
+      setActiveSessionId(null);
+      setActiveSessionStatus(null);
       clearRecorderSegmentTimer();
     }
   }
@@ -1974,6 +2040,14 @@ export function FacilitatorMeetingPage() {
                         ? "ok"
                         : `error${transcriptionStatus.whisper.error ? ` (${transcriptionStatus.whisper.error})` : ""}`}
                   </p>
+                  {activeSessionId && activeSessionStatus && (
+                    <p className="text-fac-meta text-text-secondary mt-1">
+                      active session: {activeSessionStatus.status} ·{" "}
+                      {Math.round(activeSessionStatus.windowMs / 1000)}s window ·{" "}
+                      {Math.round(activeSessionStatus.stepMs / 1000)}s step · posted{" "}
+                      {activeSessionStatus.postedEvents} · deduped {activeSessionStatus.dedupedEvents}
+                    </p>
+                  )}
                 </>
               )}
             </div>
@@ -2057,6 +2131,13 @@ export function FacilitatorMeetingPage() {
             <span className="hidden xl:inline text-[11px] px-1.5 py-0.5 rounded-badge bg-overlay border border-border text-text-muted">
               {transcriptRowCount} rows · {contextTaggedChunkCount} tagged
             </span>
+
+            {activeSessionStatus && (
+              <span className="hidden xl:inline text-[11px] px-1.5 py-0.5 rounded-badge bg-overlay border border-border text-text-muted">
+                {Math.round(activeSessionStatus.stepMs / 1000)}s step · posted{" "}
+                {activeSessionStatus.postedEvents} · deduped {activeSessionStatus.dedupedEvents}
+              </span>
+            )}
 
             <Link
               to={meetingTranscriptPath}
