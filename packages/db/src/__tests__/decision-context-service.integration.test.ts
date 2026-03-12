@@ -73,9 +73,7 @@ describe("DecisionContextService Integration", () => {
     `);
     await db.delete(decisionContexts).where(eq(decisionContexts.templateId, testTemplateId));
     if (testFieldIds.length > 0) {
-      await db.execute(sql`
-        DELETE FROM decision_fields WHERE id = ANY(${testFieldIds}::uuid[])
-      `);
+      await db.delete(decisionFields).where(sql`${decisionFields.id} IN ${sql.join(testFieldIds)}`);
     }
     await db.execute(sql`
       DELETE FROM flagged_decisions
