@@ -53,6 +53,7 @@ interface SessionState {
   windowMs: number;
   stepMs: number;
   dedupeHorizonMs: number;
+  dedupeSeenAtMs: Map<string, number>;
 }
 
 interface RunningWebServer {
@@ -204,6 +205,29 @@ function resolveChunkFilename(req: IncomingMessage, fallback: string): string {
   return `${candidate}.webm`;
 }
 
+function normalizeEventText(text: string): string {
+  return text.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function buildEventFingerprint(event: TranscriptEvent): string {
+  const speaker = (event.speaker ?? "").trim().toLowerCase();
+  const text = normalizeEventText(event.text);
+  return `${speaker}|${text}`;
+}
+
+function purgeDedupeHistory(
+  seenAtMs: Map<string, number>,
+  nowMs: number,
+  horizonMs: number,
+): void {
+  const cutoff = nowMs - horizonMs;
+  for (const [key, seenAt] of seenAtMs.entries()) {
+    if (seenAt < cutoff) {
+      seenAtMs.delete(key);
+    }
+  }
+}
+
 export async function startWebServer(options?: StartWebServerOptions): Promise<RunningWebServer> {
   const apiUrl = resolveDecisionLoggerApiUrl();
   const apiKey = process.env.DECISION_LOGGER_API_KEY;
@@ -324,6 +348,7 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
           windowMs: parsed.data.windowMs,
           stepMs: parsed.data.stepMs,
           dedupeHorizonMs: parsed.data.dedupeHorizonMs,
+          dedupeSeenAtMs: new Map<string, number>(),
         };
         sessions.set(session.id, session);
 
@@ -376,10 +401,22 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
           ...(session.language === undefined ? {} : { language: session.language }),
         });
 
-        const normalizedEvents = normalizeSequenceNumbers(
-          transcription.events,
-          session.nextSequenceNumber,
-        );
+        const nowMs = Date.now();
+        purgeDedupeHistory(session.dedupeSeenAtMs, nowMs, session.dedupeHorizonMs);
+        const dedupedEvents = transcription.events.filter((event) => {
+          const fingerprint = buildEventFingerprint(event);
+          if (fingerprint.length === 1) {
+            return true;
+          }
+          if (session.dedupeSeenAtMs.has(fingerprint)) {
+            session.dedupedEvents += 1;
+            return false;
+          }
+          session.dedupeSeenAtMs.set(fingerprint, nowMs);
+          return true;
+        });
+
+        const normalizedEvents = normalizeSequenceNumbers(dedupedEvents, session.nextSequenceNumber);
         await deliverStreamEvents(
           session.meetingId,
           normalizedEvents,
@@ -392,11 +429,10 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
         session.eventsAccepted += normalizedEvents.length;
         session.postedEvents += normalizedEvents.length;
 
-        const now = Date.now();
         let autoFlushed = false;
-        if (now - session.lastFlushedAtMs >= autoFlushMs) {
+        if (nowMs - session.lastFlushedAtMs >= autoFlushMs) {
           await apiClient.flushStream(session.meetingId);
-          session.lastFlushedAtMs = now;
+          session.lastFlushedAtMs = nowMs;
           autoFlushed = true;
         }
 

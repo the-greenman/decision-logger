@@ -196,4 +196,77 @@ describe("web transcription server", () => {
     const payload = (await response.json()) as { error: string };
     expect(payload.error).toContain("stepMs");
   });
+
+  it("dedupes repeated transcript events across chunks within dedupe horizon", async () => {
+    const provider: ITranscriptionProvider = {
+      transcribe: vi
+        .fn()
+        .mockResolvedValueOnce({
+          events: [{ text: "same line", startTimeSeconds: 0.2 }],
+          rawResponse: {},
+        })
+        .mockResolvedValueOnce({
+          events: [{ text: "same line", startTimeSeconds: 0.3 }],
+          rawResponse: {},
+        }),
+    };
+
+    const apiClient = {
+      postStreamEvent: vi.fn().mockResolvedValue(undefined),
+      flushStream: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const server = await startWebServer({
+      port: 0,
+      host: "127.0.0.1",
+      provider,
+      apiClient,
+      autoFlushMs: 100_000,
+    });
+    runningServers.push(server);
+
+    const baseUrl = `http://127.0.0.1:${server.port}`;
+    const createResponse = await fetch(`${baseUrl}/sessions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ meetingId: "meeting-browser-dedupe" }),
+    });
+    const createPayload = (await createResponse.json()) as { sessionId: string };
+
+    const firstChunkResponse = await fetch(
+      `${baseUrl}/sessions/${createPayload.sessionId}/chunks?filename=first.webm`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/octet-stream" },
+        body: Buffer.from("audio-1"),
+      },
+    );
+    expect(firstChunkResponse.status).toBe(200);
+    const firstPayload = (await firstChunkResponse.json()) as { eventCount: number };
+    expect(firstPayload.eventCount).toBe(1);
+
+    const secondChunkResponse = await fetch(
+      `${baseUrl}/sessions/${createPayload.sessionId}/chunks?filename=second.webm`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/octet-stream" },
+        body: Buffer.from("audio-2"),
+      },
+    );
+    expect(secondChunkResponse.status).toBe(200);
+    const secondPayload = (await secondChunkResponse.json()) as { eventCount: number };
+    expect(secondPayload.eventCount).toBe(0);
+
+    const statusResponse = await fetch(`${baseUrl}/sessions/${createPayload.sessionId}/status`);
+    const statusPayload = (await statusResponse.json()) as {
+      postedEvents: number;
+      dedupedEvents: number;
+      bufferedEvents: number;
+    };
+    expect(statusPayload.postedEvents).toBe(1);
+    expect(statusPayload.dedupedEvents).toBe(1);
+    expect(statusPayload.bufferedEvents).toBe(1);
+
+    expect(apiClient.postStreamEvent).toHaveBeenCalledTimes(1);
+  });
 });

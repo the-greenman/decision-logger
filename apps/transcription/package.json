@@ -15,7 +15,6 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@repo/schema": "workspace:*",
     "tsx": "^4.7.0"
   },
   "devDependencies": {
