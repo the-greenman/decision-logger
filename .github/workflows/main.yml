@@ -98,7 +98,7 @@ jobs:
 
       - name: Create test database
         run: |
-          node --input-type=module - <<'EOF'
+          pnpm --filter @repo/db exec node --input-type=module - <<'EOF'
           import postgres from "postgres";
 
           const sql = postgres(
@@ -176,7 +176,7 @@ jobs:
 
       - name: Create test database
         run: |
-          node --input-type=module - <<'EOF'
+          pnpm --filter @repo/db exec node --input-type=module - <<'EOF'
           import postgres from "postgres";
 
           const sql = postgres(
