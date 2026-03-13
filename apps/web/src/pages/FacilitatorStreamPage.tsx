@@ -43,6 +43,7 @@ export function FacilitatorStreamPage() {
   const meetingId = id ?? "";
   const streamStorageKey = streamStatusStorageKey(meetingId);
   const transcriptTargetKey = transcriptTargetStorageKey(meetingId);
+  const diagnosticsPath = `/meetings/${meetingId}/facilitator/stream/diagnostics`;
   const transcriptPath = `/meetings/${meetingId}/facilitator/transcript`;
   const sharedPath = `/meetings/${meetingId}`;
 
@@ -419,7 +420,6 @@ export function FacilitatorStreamPage() {
 
   useEffect(() => {
     return () => {
-      if (streamState !== "live" && streamState !== "connecting") return;
       streamShouldContinueRef.current = false;
       clearRecorderSegmentTimer();
       if (recorderRef.current && recorderRef.current.state !== "inactive") {
@@ -433,7 +433,7 @@ export function FacilitatorStreamPage() {
       sessionIdRef.current = null;
       pendingChunkUploadsRef.current = [];
     };
-  }, [streamState]);
+  }, []);
 
   return (
     <div className="density-facilitator min-h-screen bg-base flex flex-col">
@@ -510,6 +510,15 @@ export function FacilitatorStreamPage() {
                 <RefreshCw size={14} />
                 {statusLoading ? "Refreshing…" : "Refresh status"}
               </button>
+              <Link
+                to={diagnosticsPath}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-fac-meta border border-border rounded text-text-secondary hover:text-text-primary transition-colors"
+              >
+                <ExternalLink size={14} />
+                Diagnostics
+              </Link>
               <Link
                 to={transcriptPath}
                 target="_blank"

@@ -4,6 +4,7 @@ import { SharedMeetingPage } from "./pages/SharedMeetingPage";
 import { FacilitatorMeetingPage } from "./pages/FacilitatorMeetingPage";
 import { FacilitatorMeetingHomePage } from "./pages/FacilitatorMeetingHomePage";
 import { FacilitatorStreamPage } from "./pages/FacilitatorStreamPage";
+import { FacilitatorStreamDiagnosticsPage } from "./pages/FacilitatorStreamDiagnosticsPage";
 import { TranscriptPage } from "./pages/TranscriptPage";
 import { LoggedDecisionPage } from "./pages/LoggedDecisionPage";
 
@@ -18,6 +19,7 @@ export const router = createBrowserRouter([
   { path: "/meetings/:id/facilitator/home", element: <FacilitatorMeetingHomePage /> },
   { path: "/meetings/:id/facilitator", element: <FacilitatorMeetingPage /> },
   { path: "/meetings/:id/facilitator/stream", element: <FacilitatorStreamPage /> },
+  { path: "/meetings/:id/facilitator/stream/diagnostics", element: <FacilitatorStreamDiagnosticsPage /> },
 
   // ── Route 4: Segment selection ───────────────────────────────────
   { path: "/meetings/:id/facilitator/transcript", element: <TranscriptPage /> },
