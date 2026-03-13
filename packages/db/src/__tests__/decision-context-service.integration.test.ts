@@ -131,18 +131,19 @@ describe("DecisionContextService Integration", () => {
 
   describe("updateDraftData", () => {
     it("should update draft data in the database", async () => {
+      const fieldId = randomUUID();
       const context = await service.createContext({
         meetingId: testMeetingId,
         flaggedDecisionId: testFlaggedDecisionId,
         title: "Test Context",
         templateId: testTemplateId,
-        draftData: { field1: "original" },
+        draftData: { [fieldId]: "original" },
       });
 
-      const result = await service.updateDraftData(context.id, { field1: "updated" });
+      const result = await service.updateDraftData(context.id, { [fieldId]: "updated" });
 
       expect(result).toBeDefined();
-      expect(result!.draftData).toEqual({ field1: "updated" });
+      expect(result!.draftData).toEqual({ [fieldId]: "updated" });
 
       // Verify in database
       const found = await db
@@ -150,34 +151,37 @@ describe("DecisionContextService Integration", () => {
         .from(decisionContexts)
         .where(eq(decisionContexts.id, context.id))
         .limit(1);
-      expect(found[0]!.draftData).toEqual({ field1: "updated" });
+      expect(found[0]!.draftData).toEqual({ [fieldId]: "updated" });
     });
 
     it("should not update locked fields", async () => {
+      const lockedFieldId = randomUUID();
+      const editableFieldId = randomUUID();
       const context = await service.createContext({
         meetingId: testMeetingId,
         flaggedDecisionId: testFlaggedDecisionId,
         title: "Test Context",
         templateId: testTemplateId,
-        draftData: { field1: "original", field2: "value2" },
+        draftData: { [lockedFieldId]: "original", [editableFieldId]: "value2" },
       });
 
-      await service.lockField(context.id, "field1");
+      await service.lockField(context.id, lockedFieldId);
       const result = await service.updateDraftData(context.id, {
-        field1: "updated",
-        field2: "new value",
+        [lockedFieldId]: "updated",
+        [editableFieldId]: "new value",
       });
 
       expect(result).toBeDefined();
       expect(result!.draftData).toEqual({
-        field1: "original", // Should not change
-        field2: "new value", // Should change
+        [lockedFieldId]: "original",
+        [editableFieldId]: "new value",
       });
     });
   });
 
   describe("field locking", () => {
     it("should lock and unlock fields", async () => {
+      const fieldId = randomUUID();
       const context = await service.createContext({
         meetingId: testMeetingId,
         flaggedDecisionId: testFlaggedDecisionId,
@@ -186,12 +190,12 @@ describe("DecisionContextService Integration", () => {
       });
 
       // Lock field
-      const locked = await service.lockField(context.id, "field1");
-      expect(locked!.lockedFields).toContain("field1");
+      const locked = await service.lockField(context.id, fieldId);
+      expect(locked!.lockedFields).toContain(fieldId);
 
       // Unlock field
-      const unlocked = await service.unlockField(context.id, "field1");
-      expect(unlocked!.lockedFields).not.toContain("field1");
+      const unlocked = await service.unlockField(context.id, fieldId);
+      expect(unlocked!.lockedFields).not.toContain(fieldId);
     });
 
     it("should set active field", async () => {
@@ -221,12 +225,14 @@ describe("DecisionContextService Integration", () => {
 
   describe("status transitions", () => {
     it("should transition through statuses", async () => {
+      const fieldIdOne = randomUUID();
+      const fieldIdTwo = randomUUID();
       const context = await service.createContext({
         meetingId: testMeetingId,
         flaggedDecisionId: testFlaggedDecisionId,
         title: "Test Context",
         templateId: testTemplateId,
-        draftData: { field1: "value1", field2: "value2" },
+        draftData: { [fieldIdOne]: "value1", [fieldIdTwo]: "value2" },
       });
 
       // Initial status
@@ -239,8 +245,8 @@ describe("DecisionContextService Integration", () => {
       // Approve and lock
       const locked = await service.approveAndLock(context.id);
       expect(locked!.status).toBe("locked");
-      expect(locked!.lockedFields).toContain("field1");
-      expect(locked!.lockedFields).toContain("field2");
+      expect(locked!.lockedFields).toContain(fieldIdOne);
+      expect(locked!.lockedFields).toContain(fieldIdTwo);
     });
 
     it("should throw error for invalid transitions", async () => {
