@@ -10,7 +10,7 @@ import { DrizzleMeetingRepository } from "@repo/db";
 import { DrizzleFlaggedDecisionRepository } from "@repo/db";
 import { db } from "@repo/db";
 import { decisionContexts, decisionFields } from "@repo/db";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 // Use test database
@@ -26,7 +26,7 @@ describe("DecisionContextService Integration", () => {
   let testMeetingId: string;
   let testFlaggedDecisionId: string;
   let testTemplateId: string;
-  let testFieldId: string | null;
+  let testFieldIds: string[];
 
   beforeEach(async () => {
     const repository = new DrizzleDecisionContextRepository();
@@ -55,7 +55,7 @@ describe("DecisionContextService Integration", () => {
 
     // Create test template
     testTemplateId = randomUUID();
-    testFieldId = null;
+    testFieldIds = [];
     const templateName = `${testTemplateNamePrefix}${testTemplateId}`;
     await db.execute(sql`
       INSERT INTO decision_templates (id, name, category, description)
@@ -72,8 +72,8 @@ describe("DecisionContextService Integration", () => {
       )
     `);
     await db.delete(decisionContexts).where(eq(decisionContexts.templateId, testTemplateId));
-    if (testFieldId) {
-      await db.delete(decisionFields).where(eq(decisionFields.id, testFieldId));
+    if (testFieldIds.length > 0) {
+      await db.delete(decisionFields).where(inArray(decisionFields.id, testFieldIds));
     }
     await db.execute(sql`
       DELETE FROM flagged_decisions
@@ -156,25 +156,32 @@ describe("DecisionContextService Integration", () => {
 
     it("should not update locked fields", async () => {
       const lockedFieldId = randomUUID();
-      const editableFieldId = randomUUID();
+      const unlockedFieldId = randomUUID();
+      testFieldIds.push(lockedFieldId, unlockedFieldId);
+      await db.execute(sql`
+        INSERT INTO decision_fields (id, namespace, name, category, description, extraction_prompt, field_type)
+        VALUES
+          (${lockedFieldId}, 'test', ${`Locked Field ${lockedFieldId}`}, 'context', 'A locked test field', 'Extract this field', 'text'),
+          (${unlockedFieldId}, 'test', ${`Unlocked Field ${unlockedFieldId}`}, 'context', 'An unlocked test field', 'Extract this field', 'text')
+      `);
       const context = await service.createContext({
         meetingId: testMeetingId,
         flaggedDecisionId: testFlaggedDecisionId,
         title: "Test Context",
         templateId: testTemplateId,
-        draftData: { [lockedFieldId]: "original", [editableFieldId]: "value2" },
+        draftData: { [lockedFieldId]: "original", [unlockedFieldId]: "value2" },
       });
 
       await service.lockField(context.id, lockedFieldId);
       const result = await service.updateDraftData(context.id, {
         [lockedFieldId]: "updated",
-        [editableFieldId]: "new value",
+        [unlockedFieldId]: "new value",
       });
 
       expect(result).toBeDefined();
       expect(result!.draftData).toEqual({
         [lockedFieldId]: "original",
-        [editableFieldId]: "new value",
+        [unlockedFieldId]: "new value",
       });
     });
   });
@@ -182,6 +189,11 @@ describe("DecisionContextService Integration", () => {
   describe("field locking", () => {
     it("should lock and unlock fields", async () => {
       const fieldId = randomUUID();
+      testFieldIds.push(fieldId);
+      await db.execute(sql`
+        INSERT INTO decision_fields (id, namespace, name, category, description, extraction_prompt, field_type)
+        VALUES (${fieldId}, 'test', ${`Test Field ${fieldId}`}, 'context', 'A test field', 'Extract this field', 'text')
+      `);
       const context = await service.createContext({
         meetingId: testMeetingId,
         flaggedDecisionId: testFlaggedDecisionId,
@@ -208,7 +220,7 @@ describe("DecisionContextService Integration", () => {
 
       // Create a decision field
       const fieldId = randomUUID();
-      testFieldId = fieldId;
+      testFieldIds.push(fieldId);
       const fieldName = `Test Field ${fieldId}`;
       await db.execute(sql`
         INSERT INTO decision_fields (id, namespace, name, category, description, extraction_prompt, field_type)
@@ -225,14 +237,21 @@ describe("DecisionContextService Integration", () => {
 
   describe("status transitions", () => {
     it("should transition through statuses", async () => {
-      const fieldIdOne = randomUUID();
-      const fieldIdTwo = randomUUID();
+      const field1Id = randomUUID();
+      const field2Id = randomUUID();
+      testFieldIds.push(field1Id, field2Id);
+      await db.execute(sql`
+        INSERT INTO decision_fields (id, namespace, name, category, description, extraction_prompt, field_type)
+        VALUES
+          (${field1Id}, 'test', ${`Status Field ${field1Id}`}, 'context', 'A status test field', 'Extract this field', 'text'),
+          (${field2Id}, 'test', ${`Status Field ${field2Id}`}, 'context', 'Another status test field', 'Extract this field', 'text')
+      `);
       const context = await service.createContext({
         meetingId: testMeetingId,
         flaggedDecisionId: testFlaggedDecisionId,
         title: "Test Context",
         templateId: testTemplateId,
-        draftData: { [fieldIdOne]: "value1", [fieldIdTwo]: "value2" },
+        draftData: { [field1Id]: "value1", [field2Id]: "value2" },
       });
 
       // Initial status
@@ -245,8 +264,8 @@ describe("DecisionContextService Integration", () => {
       // Approve and lock
       const locked = await service.approveAndLock(context.id);
       expect(locked!.status).toBe("locked");
-      expect(locked!.lockedFields).toContain(fieldIdOne);
-      expect(locked!.lockedFields).toContain(fieldIdTwo);
+      expect(locked!.lockedFields).toContain(field1Id);
+      expect(locked!.lockedFields).toContain(field2Id);
     });
 
     it("should throw error for invalid transitions", async () => {

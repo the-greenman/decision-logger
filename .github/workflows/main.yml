@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   changes:
@@ -14,7 +16,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+      - name: Configure database environment
+        run: |
+          echo "DATABASE_URL=postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_dev" >> "$GITHUB_ENV"
+          echo "TEST_DATABASE_URL=postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_test" >> "$GITHUB_ENV"
+          echo "PGHOST=localhost" >> "$GITHUB_ENV"
+          echo "PGPORT=5433" >> "$GITHUB_ENV"
+          echo "PGUSER=decision_logger" >> "$GITHUB_ENV"
+          echo "PGPASSWORD=decision_logger" >> "$GITHUB_ENV"
       - name: Detect path changes
         id: filter
         uses: dorny/paths-filter@v3
@@ -43,13 +52,17 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
-    env:
-      DATABASE_URL: postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_dev
-      TEST_DATABASE_URL: postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+      - name: Configure database environment
+        run: |
+          echo "DATABASE_URL=postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_dev" >> "$GITHUB_ENV"
+          echo "TEST_DATABASE_URL=postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_test" >> "$GITHUB_ENV"
+          echo "PGHOST=localhost" >> "$GITHUB_ENV"
+          echo "PGPORT=5433" >> "$GITHUB_ENV"
+          echo "PGUSER=decision_logger" >> "$GITHUB_ENV"
+          echo "PGPASSWORD=decision_logger" >> "$GITHUB_ENV"
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -66,7 +79,24 @@ jobs:
 
       - name: Create test database
         run: |
-          psql postgresql://decision_logger:decision_logger@localhost:5433/postgres -c 'CREATE DATABASE decision_logger_test;' || true
+          pnpm --filter @repo/db exec node --input-type=module - <<'EOF'
+          import postgres from "postgres";
+
+          const sql = postgres(
+            `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.PGHOST}:${process.env.PGPORT}/postgres`,
+            { prepare: false },
+          );
+
+          try {
+            await sql.unsafe("CREATE DATABASE decision_logger_test");
+          } catch (error) {
+            if (error && typeof error === "object" && "code" in error && error.code !== "42P04") {
+              throw error;
+            }
+          } finally {
+            await sql.end();
+          }
+          EOF
 
       - name: Run strict validation
         run: pnpm validate:strict
@@ -91,13 +121,17 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
-    env:
-      DATABASE_URL: postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_dev
-      TEST_DATABASE_URL: postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+      - name: Configure database environment
+        run: |
+          echo "DATABASE_URL=postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_dev" >> "$GITHUB_ENV"
+          echo "TEST_DATABASE_URL=postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_test" >> "$GITHUB_ENV"
+          echo "PGHOST=localhost" >> "$GITHUB_ENV"
+          echo "PGPORT=5433" >> "$GITHUB_ENV"
+          echo "PGUSER=decision_logger" >> "$GITHUB_ENV"
+          echo "PGPASSWORD=decision_logger" >> "$GITHUB_ENV"
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -114,7 +148,24 @@ jobs:
 
       - name: Create test database
         run: |
-          psql postgresql://decision_logger:decision_logger@localhost:5433/postgres -c 'CREATE DATABASE decision_logger_test;' || true
+          pnpm --filter @repo/db exec node --input-type=module - <<'EOF'
+          import postgres from "postgres";
+
+          const sql = postgres(
+            `postgresql://${process.env.PGUSER}:${process.env.PGPASSWORD}@${process.env.PGHOST}:${process.env.PGPORT}/postgres`,
+            { prepare: false },
+          );
+
+          try {
+            await sql.unsafe("CREATE DATABASE decision_logger_test");
+          } catch (error) {
+            if (error && typeof error === "object" && "code" in error && error.code !== "42P04") {
+              throw error;
+            }
+          } finally {
+            await sql.end();
+          }
+          EOF
 
       - name: Run DB validation
         run: pnpm validate:db
@@ -127,7 +178,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+      - name: Configure database environment
+        run: |
+          echo "DATABASE_URL=postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_dev" >> "$GITHUB_ENV"
+          echo "TEST_DATABASE_URL=postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_test" >> "$GITHUB_ENV"
+          echo "PGHOST=localhost" >> "$GITHUB_ENV"
+          echo "PGPORT=5433" >> "$GITHUB_ENV"
+          echo "PGUSER=decision_logger" >> "$GITHUB_ENV"
+          echo "PGPASSWORD=decision_logger" >> "$GITHUB_ENV"
       - name: Build API image
         run: docker build -f apps/api/Dockerfile -t decision-logger-api:ci .
 
