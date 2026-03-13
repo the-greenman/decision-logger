@@ -11,7 +11,7 @@ jobs:
     name: Detect DB-related changes
     runs-on: ubuntu-latest
     outputs:
-      db: ${{ steps.filter.outputs.db }}
+      db: ${{ steps.local-filter.outputs.db || steps.filter.outputs.db }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,8 +23,13 @@ jobs:
           echo "PGPORT=5433" >> "$GITHUB_ENV"
           echo "PGUSER=decision_logger" >> "$GITHUB_ENV"
           echo "PGPASSWORD=decision_logger" >> "$GITHUB_ENV"
+      - name: Detect path changes locally for act
+        id: local-filter
+        if: ${{ env.ACT == 'true' }}
+        run: echo "db=true" >> "$GITHUB_OUTPUT"
       - name: Detect path changes
         id: filter
+        if: ${{ env.ACT != 'true' }}
         uses: dorny/paths-filter@v3
         with:
           filters: |
