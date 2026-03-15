@@ -47,7 +47,6 @@ export class MarkdownExportService {
       includeTimestamps = true,
       includeParticipants = true,
       fieldOrder = "template",
-      lockedFieldIndicator = "prefix",
     } = options;
 
     // Fetch all necessary data
@@ -112,7 +111,6 @@ export class MarkdownExportService {
 
     // Fields section
     const draftData = context.draftData || {};
-    const lockedFields = context.lockedFields || [];
     const fieldMeta = this.getFieldMeta(draftData);
 
     // Build markdown
