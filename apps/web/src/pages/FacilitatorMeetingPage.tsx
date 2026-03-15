@@ -1861,18 +1861,17 @@ export function FacilitatorMeetingPage() {
               <span className="hidden xl:inline">Defer</span>
             </button>
 
-            {isClosedContext ? (
-              <button
-                onClick={() => void handleExportDecision()}
-                disabled={!hasSelectedContext || exporting}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-fac-meta bg-settled text-base rounded font-medium hover:bg-settled/90 transition-colors disabled:opacity-30"
-                title="Export"
-                aria-label="Export"
-              >
-                <Download size={13} />
-                <span className="hidden xl:inline">{exporting ? "Exporting…" : "Export"}</span>
-              </button>
-            ) : (
+            <button
+              onClick={() => void handleExportDecision()}
+              disabled={!hasSelectedContext || exporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-fac-meta bg-settled text-base rounded font-medium hover:bg-settled/90 transition-colors disabled:opacity-30"
+              title="Export"
+              aria-label="Export"
+            >
+              <Download size={13} />
+              <span className="hidden xl:inline">{exporting ? "Exporting…" : "Export"}</span>
+            </button>
+            {!isClosedContext && (
               <button
                 onClick={() => setModal({ type: "finalise" })}
                 disabled={isMeetingCompleted || !hasSelectedContext}

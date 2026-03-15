@@ -89,6 +89,7 @@ export const templateCategoryEnum = pgEnum("template_category", [
   "budget",
   "policy",
   "proposal",
+  "deliberation",
 ]);
 export const expertTypeEnum = pgEnum("expert_type", [
   "technical",
