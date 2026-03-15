@@ -10,7 +10,7 @@
  * - Templates do not override field meaning — if different meaning is needed, use a different field
  */
 
-import type { CreateDecisionTemplate } from "@repo/schema";
+import type { CreateDecisionTemplate, CreateExportTemplate } from "@repo/schema";
 import { CORE_FIELD_IDS } from "./decision-fields.js";
 
 const assignment = (fieldId: string, order: number, required = true) => ({
@@ -184,5 +184,18 @@ export function prepareTemplatesForSeeding(): CreateDecisionTemplate[] {
     ...template,
     // Set the first template (Standard) as the default
     isDefault: index === 0,
+  }));
+}
+
+export function prepareDefaultExportTemplatesForSeeding(): CreateExportTemplate[] {
+  return CORE_TEMPLATES.map((template) => ({
+    deliberationTemplateId: "00000000-0000-0000-0000-000000000000",
+    namespace: template.namespace,
+    name: `${template.name} Default Export`,
+    description: `Derived default export template for ${template.name}`,
+    fields: template.fields.map((field) => ({
+      fieldId: field.fieldId,
+      order: field.order,
+    })),
   }));
 }
