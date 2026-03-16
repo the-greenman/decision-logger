@@ -389,6 +389,11 @@ export class TranscriptService {
 
     if (segment.speaker !== undefined) {
       row.speaker = segment.speaker;
+    } else {
+      const matchingChunk = transcriptChunks.find((c) => row.chunkIds.includes(c.id));
+      if (matchingChunk?.speaker) {
+        row.speaker = matchingChunk.speaker;
+      }
     }
 
     const startTime = this.formatTimestamp(segment.startTimeMs);
