@@ -46,6 +46,7 @@ import {
   setFieldContextRoute,
   setMeetingContextRoute,
 } from "./routes/context.js";
+import { registerConnectionEventsRoute } from "./routes/connections.js";
 import {
   clearStreamingBufferRoute,
   changeDecisionContextTemplateRoute,
@@ -1707,6 +1708,11 @@ app.openapi(listLLMInteractionsRoute, async (c) => {
 app.get("/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
+// Register SSE route for connection events
+if (globalContextService) {
+  registerConnectionEventsRoute(app, globalContextService);
+}
 
 // OpenAPI documentation
 app.doc("/openapi.json", {

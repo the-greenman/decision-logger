@@ -11,8 +11,10 @@ import type {
   GlobalContextState,
   IGlobalContextService,
   IGlobalContextStore,
+  ConnectionSSEEvent,
 } from "../interfaces/i-global-context-service";
-import type { DecisionContext, DecisionTemplate } from "@repo/schema";
+import type { DecisionContext, DecisionTemplate, TranscriptChunk, FlaggedDecision } from "@repo/schema";
+import { ContextEventBus } from "../events/context-event-bus.js";
 
 // ---------------------------------------------------------------------------
 // Legacy stores — kept for unit tests only
@@ -63,6 +65,8 @@ export class FileGlobalContextStore implements IGlobalContextStore {
 type TemplateLookup = Pick<IDecisionTemplateService, "getDefaultTemplate" | "getTemplate">;
 
 export class GlobalContextService implements IGlobalContextService {
+  private readonly eventBus = new ContextEventBus();
+
   constructor(
     private readonly connectionRepository: IConnectionRepository,
     private readonly meetingRepository: IMeetingRepository,
@@ -88,6 +92,10 @@ export class GlobalContextService implements IGlobalContextService {
         activeField: null,
       });
     }
+
+    // Emit context event
+    const context = await this.getContext(connectionId);
+    this.eventBus.emit(connectionId, "context", context);
   }
 
   async clearMeeting(connectionId: string): Promise<void> {
@@ -97,6 +105,10 @@ export class GlobalContextService implements IGlobalContextService {
       activeDecisionContextId: null,
       activeField: null,
     });
+
+    // Emit context event
+    const context = await this.getContext(connectionId);
+    this.eventBus.emit(connectionId, "context", context);
   }
 
   async setActiveDecision(
@@ -127,6 +139,10 @@ export class GlobalContextService implements IGlobalContextService {
       activeDecisionContextId: context.id,
     });
 
+    // Emit context event
+    const globalContext = await this.getContext(connectionId);
+    this.eventBus.emit(connectionId, "context", globalContext);
+
     return context;
   }
 
@@ -138,6 +154,10 @@ export class GlobalContextService implements IGlobalContextService {
       activeDecisionContextId: null,
       activeField: null,
     });
+
+    // Emit context event
+    const context = await this.getContext(connectionId);
+    this.eventBus.emit(connectionId, "context", context);
   }
 
   async setActiveField(connectionId: string, fieldId: string): Promise<void> {
@@ -151,6 +171,10 @@ export class GlobalContextService implements IGlobalContextService {
     if (!updated) throw new Error("Decision context not found");
 
     await this.connectionRepository.upsert(connectionId, { activeField: fieldId });
+
+    // Emit context event
+    const context = await this.getContext(connectionId);
+    this.eventBus.emit(connectionId, "context", context);
   }
 
   async clearField(connectionId: string): Promise<void> {
@@ -163,6 +187,10 @@ export class GlobalContextService implements IGlobalContextService {
       if (!updated) throw new Error("Decision context not found");
     }
     await this.connectionRepository.upsert(connectionId, { activeField: null });
+
+    // Emit context event
+    const context = await this.getContext(connectionId);
+    this.eventBus.emit(connectionId, "context", context);
   }
 
   async getContext(connectionId: string): Promise<GlobalContext> {
@@ -238,5 +266,22 @@ export class GlobalContextService implements IGlobalContextService {
 
   private async getTemplateById(templateId: string): Promise<DecisionTemplate | undefined> {
     return (await this.decisionTemplateService.getTemplate(templateId)) ?? undefined;
+  }
+
+  // Phase 2: SSE event subscription
+  subscribe(connectionId: string, listener: (event: ConnectionSSEEvent) => void): () => void {
+    return this.eventBus.subscribe(connectionId, listener);
+  }
+
+  emitChunk(connectionId: string, chunk: TranscriptChunk): void {
+    this.eventBus.emit(connectionId, "chunk", chunk);
+  }
+
+  emitFlagged(connectionId: string, decision: FlaggedDecision): void {
+    this.eventBus.emit(connectionId, "flagged", decision);
+  }
+
+  replayEvents(connectionId: string, afterId: number): ConnectionSSEEvent[] | "resync" | undefined {
+    return this.eventBus.replay(connectionId, afterId);
   }
 }

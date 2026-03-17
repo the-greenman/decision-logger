@@ -4,8 +4,8 @@ import type {
   IFlaggedDecisionService,
   IMeetingRepository,
 } from "@repo/core";
-import type { DecisionContext, DecisionTemplate, FlaggedDecision, Meeting } from "@repo/schema";
-import type { IGlobalContextService } from "../interfaces/i-global-context-service";
+import type { DecisionContext, DecisionTemplate, FlaggedDecision, Meeting, TranscriptChunk } from "@repo/schema";
+import type { IGlobalContextService, BusEvent } from "../interfaces/i-global-context-service";
 import type { IConnectionRepository } from "../interfaces/i-connection-repository";
 import type { Connection, UpdateConnection } from "@repo/schema";
 import { GlobalContextService } from "../services/global-context-service";
@@ -414,5 +414,199 @@ describe("GlobalContextService", () => {
     expect(loaded.activeDecisionId).toBe(decision.id);
     expect(loaded.activeDecisionContextId).toBe(createdContext.id);
     expect(loaded.activeField).toBe("decision_statement");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 2: SSE event subscription
+// ---------------------------------------------------------------------------
+
+describe("GlobalContextService — event subscription", () => {
+  let connectionRepo: MockConnectionRepository;
+  let meetingRepository: IMeetingRepository;
+  let flaggedDecisionService: IFlaggedDecisionService;
+  let decisionContextService: MockDecisionContextService;
+  let templateService: MockDecisionTemplateLookup;
+  let service: GlobalContextService;
+  let meeting: Meeting;
+  let decision: FlaggedDecision;
+  let defaultTemplateId: string;
+  const CONN_A = crypto.randomUUID();
+  const CONN_B = crypto.randomUUID();
+
+  beforeEach(() => {
+    connectionRepo = new MockConnectionRepository();
+    defaultTemplateId = crypto.randomUUID();
+
+    meeting = {
+      id: crypto.randomUUID(),
+      title: "Planning Meeting",
+      date: new Date().toISOString(),
+      participants: [],
+      status: "active",
+      createdAt: new Date().toISOString(),
+    };
+
+    decision = {
+      id: crypto.randomUUID(),
+      meetingId: meeting.id,
+      suggestedTitle: "Use Postgres",
+      confidence: 1,
+      priority: 0,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    meetingRepository = new MockMeetingRepository(
+      new Map([[meeting.id, meeting]]),
+    );
+    flaggedDecisionService = new MockFlaggedDecisionService(
+      new Map([[decision.id, decision]]),
+    );
+    decisionContextService = new MockDecisionContextService();
+    templateService = new MockDecisionTemplateLookup(defaultTemplateId);
+    service = new GlobalContextService(
+      connectionRepo,
+      meetingRepository,
+      flaggedDecisionService,
+      decisionContextService,
+      templateService,
+    );
+  });
+
+  it("emits a context event to subscribers when setActiveMeeting is called", async () => {
+    const events: BusEvent[] = [];
+    const unsubscribe = service.subscribe(CONN_A, (e) => events.push(e));
+
+    await service.setActiveMeeting(CONN_A, meeting.id);
+    unsubscribe();
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe("context");
+    expect((events[0] as Extract<BusEvent, { type: "context" }>).data.activeMeetingId).toBe(meeting.id);
+  });
+
+  it("emits a context event when clearMeeting is called", async () => {
+    await service.setActiveMeeting(CONN_A, meeting.id);
+    const events: BusEvent[] = [];
+    const unsubscribe = service.subscribe(CONN_A, (e) => events.push(e));
+
+    await service.clearMeeting(CONN_A);
+    unsubscribe();
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe("context");
+    expect((events[0] as Extract<BusEvent, { type: "context" }>).data.activeMeetingId).toBeUndefined();
+  });
+
+  it("emits a context event when setActiveDecision is called", async () => {
+    const events: BusEvent[] = [];
+    const unsubscribe = service.subscribe(CONN_A, (e) => events.push(e));
+
+    await service.setActiveDecision(CONN_A, decision.id);
+    unsubscribe();
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe("context");
+    expect((events[0] as Extract<BusEvent, { type: "context" }>).data.activeDecisionId).toBe(decision.id);
+  });
+
+  it("emits a context event when clearDecision is called", async () => {
+    await service.setActiveDecision(CONN_A, decision.id);
+    const events: BusEvent[] = [];
+    const unsubscribe = service.subscribe(CONN_A, (e) => events.push(e));
+
+    await service.clearDecision(CONN_A);
+    unsubscribe();
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe("context");
+    expect((events[0] as Extract<BusEvent, { type: "context" }>).data.activeDecisionId).toBeUndefined();
+  });
+
+  it("emits a context event when setActiveField is called", async () => {
+    await service.setActiveDecision(CONN_A, decision.id);
+    const events: BusEvent[] = [];
+    const unsubscribe = service.subscribe(CONN_A, (e) => events.push(e));
+
+    await service.setActiveField(CONN_A, "options");
+    unsubscribe();
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe("context");
+    expect((events[0] as Extract<BusEvent, { type: "context" }>).data.activeField).toBe("options");
+  });
+
+  it("emits a context event when clearField is called", async () => {
+    await service.setActiveDecision(CONN_A, decision.id);
+    await service.setActiveField(CONN_A, "options");
+    const events: BusEvent[] = [];
+    const unsubscribe = service.subscribe(CONN_A, (e) => events.push(e));
+
+    await service.clearField(CONN_A);
+    unsubscribe();
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe("context");
+    expect((events[0] as Extract<BusEvent, { type: "context" }>).data.activeField).toBeUndefined();
+  });
+
+  it("only delivers events to subscribers on the matching connection ID", async () => {
+    const eventsA: BusEvent[] = [];
+    const eventsB: BusEvent[] = [];
+    const unsubA = service.subscribe(CONN_A, (e) => eventsA.push(e));
+    const unsubB = service.subscribe(CONN_B, (e) => eventsB.push(e));
+
+    await service.setActiveMeeting(CONN_A, meeting.id);
+
+    unsubA();
+    unsubB();
+
+    expect(eventsA).toHaveLength(1);
+    expect(eventsB).toHaveLength(0);
+  });
+
+  it("stops delivering events after unsubscribing", async () => {
+    const events: BusEvent[] = [];
+    const unsubscribe = service.subscribe(CONN_A, (e) => events.push(e));
+
+    await service.setActiveMeeting(CONN_A, meeting.id);
+    unsubscribe();
+    await service.clearMeeting(CONN_A);
+
+    expect(events).toHaveLength(1);
+  });
+
+  it("emits a chunk event via emitChunk", () => {
+    const events: BusEvent[] = [];
+    const unsubscribe = service.subscribe(CONN_A, (e) => events.push(e));
+
+    const chunk: TranscriptChunk = {
+      id: crypto.randomUUID(),
+      meetingId: meeting.id,
+      text: "We agreed to use Postgres.",
+      wordCount: 6,
+      speaker: "Alice",
+      createdAt: new Date().toISOString(),
+    };
+    service.emitChunk(CONN_A, chunk);
+    unsubscribe();
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe("chunk");
+    expect((events[0] as Extract<BusEvent, { type: "chunk" }>).data.id).toBe(chunk.id);
+  });
+
+  it("emits a flagged event via emitFlagged", () => {
+    const events: BusEvent[] = [];
+    const unsubscribe = service.subscribe(CONN_A, (e) => events.push(e));
+
+    service.emitFlagged(CONN_A, decision);
+    unsubscribe();
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe("flagged");
+    expect((events[0] as Extract<BusEvent, { type: "flagged" }>).data.id).toBe(decision.id);
   });
 });
