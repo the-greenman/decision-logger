@@ -35,8 +35,17 @@ export class DecisionLoggerApiClient {
           event.startTimeSeconds === undefined
             ? undefined
             : formatSecondsAsTimestamp(event.startTimeSeconds),
+        startTimeMs:
+          event.startTimeSeconds === undefined
+            ? undefined
+            : Math.round(event.startTimeSeconds * 1000),
+        endTimeMs:
+          event.endTimeSeconds === undefined
+            ? undefined
+            : Math.round(event.endTimeSeconds * 1000),
+        contentType: event.contentType ?? "speech",
+        streamSource: event.streamSource,
         sequenceNumber: event.sequenceNumber,
-        streamSource: "transcription", // Phase 3: Add streamSource label
       },
     });
   }

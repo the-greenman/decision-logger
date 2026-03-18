@@ -77,6 +77,8 @@ interface SessionDeliveredEventDiagnostic {
 interface SessionState {
   id: string;
   meetingId: string;
+  streamSource: string;
+  streamEpochMs: number;
   language?: string;
   status: "active" | "stopping" | "stopped";
   startedAt: string;
@@ -451,10 +453,13 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
           return;
         }
         const meetingId = parsed.data.meetingId.trim();
+        const streamEpochMs = Date.now();
 
         const session: SessionState = {
           id: randomUUID(),
           meetingId,
+          streamSource: parsed.data.streamSource,
+          streamEpochMs,
           ...(parsed.data.language === undefined ? {} : { language: parsed.data.language }),
           status: "active",
           startedAt: new Date().toISOString(),
@@ -462,7 +467,7 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
           postedEvents: 0,
           dedupedEvents: 0,
           nextSequenceNumber: 1,
-          lastFlushedAtMs: Date.now(),
+          lastFlushedAtMs: streamEpochMs,
           windowMs: parsed.data.windowMs,
           stepMs: parsed.data.stepMs,
           dedupeHorizonMs: parsed.data.dedupeHorizonMs,
@@ -478,6 +483,8 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
         const payload = TranscriptionSessionCreateResponseSchema.parse({
           sessionId: session.id,
           meetingId: session.meetingId,
+          streamSource: session.streamSource,
+          streamEpochMs: session.streamEpochMs,
           startedAt: session.startedAt,
           windowMs: session.windowMs,
           stepMs: session.stepMs,
@@ -595,7 +602,21 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
           return true;
         });
 
-        const normalizedEvents = normalizeSequenceNumbers(dedupedEvents, session.nextSequenceNumber);
+        const normalizedEvents = normalizeSequenceNumbers(dedupedEvents, session.nextSequenceNumber).map(
+          (event) => ({
+            ...event,
+            contentType: event.contentType ?? ("speech" as const),
+            streamSource: session.streamSource,
+            startTimeMs:
+              event.startTimeSeconds !== undefined
+                ? Math.round(event.startTimeSeconds * 1000)
+                : undefined,
+            endTimeMs:
+              event.endTimeSeconds !== undefined
+                ? Math.round(event.endTimeSeconds * 1000)
+                : undefined,
+          }),
+        );
         normalizedEvents.forEach((event) => {
           pushDiagnosticEntry(session.deliveredEvents, {
             createdAt: new Date().toISOString(),

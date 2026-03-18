@@ -26,15 +26,9 @@ function makeRawTranscript(overrides: Partial<RawTranscript>): RawTranscript {
     source: "upload",
     format: "txt",
     content: "",
-    metadata: null,
-    streamRelationship: undefined,
-    streamEpochMs: undefined,
-    audioUri: undefined,
-    language: undefined,
-    derivationType: undefined,
-    derivedFromChunkIds: undefined,
-    derivingAgentId: undefined,
-    createdAt: new Date().toISOString(),
+    metadata: undefined,
+    streamRelationship: "equivalent",
+    uploadedAt: new Date().toISOString(),
     ...overrides,
   };
 }
@@ -244,15 +238,18 @@ describe("chat-txt preprocessor", () => {
 Bob: Let's get started.
 Alice: I want to discuss the proposal.`;
 
-  it("produces one segment per non-empty line", async () => {
+  it("produces one segment per non-empty line with speaker prefix split into speaker field", async () => {
     const transcript = makeRawTranscript({ format: "chat-txt", content: chatTxt });
 
     const result = await registry.preprocess(transcript);
 
     expect(result.segments).toHaveLength(3);
-    expect(result.segments[0]!.text).toBe("Alice: Good morning everyone.");
-    expect(result.segments[1]!.text).toBe("Bob: Let's get started.");
-    expect(result.segments[2]!.text).toBe("Alice: I want to discuss the proposal.");
+    expect(result.segments[0]!.speaker).toBe("Alice");
+    expect(result.segments[0]!.text).toBe("Good morning everyone.");
+    expect(result.segments[1]!.speaker).toBe("Bob");
+    expect(result.segments[1]!.text).toBe("Let's get started.");
+    expect(result.segments[2]!.speaker).toBe("Alice");
+    expect(result.segments[2]!.text).toBe("I want to discuss the proposal.");
   });
 
   it("sets contentType: message on all segments", async () => {
@@ -261,6 +258,18 @@ Alice: I want to discuss the proposal.`;
     const result = await registry.preprocess(transcript);
 
     expect(result.segments.every((s) => s.contentType === "message")).toBe(true);
+  });
+
+  it("preserves line as text with no speaker when no colon prefix is present", async () => {
+    const transcript = makeRawTranscript({
+      format: "chat-txt",
+      content: "No prefix here.",
+    });
+
+    const result = await registry.preprocess(transcript);
+
+    expect(result.segments[0]!.speaker).toBeUndefined();
+    expect(result.segments[0]!.text).toBe("No prefix here.");
   });
 
   it("skips blank lines", async () => {
@@ -323,7 +332,7 @@ describe("chat-json preprocessor", () => {
     expect(result.segments[1]!.speaker).toBe("Bob");
   });
 
-  it("converts ISO 8601 timestamp to messageId for ordering, and streamEpochMs to startTimeMs when provided", async () => {
+  it("derives startTimeMs from ISO 8601 timestamp relative to streamEpochMs when provided", async () => {
     const epochMs = new Date("2024-01-01T10:00:00Z").getTime();
     const transcript = makeRawTranscript({
       format: "chat-json",

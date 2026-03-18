@@ -320,6 +320,59 @@ describe("TranscriptService", () => {
       expect(rows[1]?.displayText).toBe("General Kenobi.");
       expect(rows[1]?.rawTranscriptId).toBe(transcript.id);
     });
+
+    it("should produce readable rows with speaker and contentType from chat-json transcript", async () => {
+      const meetingId = randomUUID();
+      const epochMs = new Date("2024-01-01T10:00:00Z").getTime();
+      const transcript = await service.uploadTranscript({
+        meetingId,
+        source: "upload",
+        format: "chat-json",
+        content: JSON.stringify([
+          { sender: "Alice", text: "I want alignment.", timestamp: "2024-01-01T10:00:00Z" },
+          { sender: "Bob",   text: "Let's decide now.", timestamp: "2024-01-01T10:00:05Z" },
+        ]),
+        streamEpochMs: epochMs,
+      });
+
+      await service.processTranscript(transcript.id, {
+        strategy: "fixed",
+        maxTokens: 50,
+        overlap: 0,
+      });
+
+      const rows = await service.getReadableTranscriptRows(meetingId);
+
+      expect(rows).toHaveLength(2);
+      expect(rows[0]?.displayText).toBe("I want alignment.");
+      expect(rows[0]?.speaker).toBe("Alice");
+      expect(rows[1]?.displayText).toBe("Let's decide now.");
+      expect(rows[1]?.speaker).toBe("Bob");
+    });
+
+    it("should produce readable rows with speaker split from chat-txt transcript", async () => {
+      const meetingId = randomUUID();
+      const transcript = await service.uploadTranscript({
+        meetingId,
+        source: "upload",
+        format: "chat-txt",
+        content: "Alice: Good morning.\nBob: Ready to start.",
+      });
+
+      await service.processTranscript(transcript.id, {
+        strategy: "fixed",
+        maxTokens: 50,
+        overlap: 0,
+      });
+
+      const rows = await service.getReadableTranscriptRows(meetingId);
+
+      expect(rows).toHaveLength(2);
+      expect(rows[0]?.displayText).toBe("Good morning.");
+      expect(rows[0]?.speaker).toBe("Alice");
+      expect(rows[1]?.displayText).toBe("Ready to start.");
+      expect(rows[1]?.speaker).toBe("Bob");
+    });
   });
 
   describe("processTranscript", () => {

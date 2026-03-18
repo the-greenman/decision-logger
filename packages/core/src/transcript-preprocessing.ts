@@ -537,11 +537,31 @@ class ChatTxtTranscriptPreprocessor implements TranscriptPreprocessor {
       throw new Error("chat-txt transcript contains no messages");
     }
 
-    const segments: CanonicalTranscriptSegment[] = lines.map((line, index) => ({
-      sequenceNumber: index + 1,
-      text: line,
-      contentType: "message",
-    }));
+    const segments: CanonicalTranscriptSegment[] = lines.map((line, index) => {
+      // Split "Speaker: message text" into structured fields.
+      // Colons in the message body are preserved; only the first colon is used as separator.
+      const colonIdx = line.indexOf(":");
+      if (colonIdx > 0) {
+        const candidateSpeaker = line.slice(0, colonIdx).trim();
+        const messageText = line.slice(colonIdx + 1).trim();
+        // Only treat as speaker prefix if the candidate has no spaces (e.g. "Alice", "Bob Smith" excluded)
+        // and the message body is non-empty.
+        if (candidateSpeaker.length > 0 && !/\s/.test(candidateSpeaker) && messageText.length > 0) {
+          return {
+            sequenceNumber: index + 1,
+            text: messageText,
+            speaker: candidateSpeaker,
+            contentType: "message",
+            sourceMetadata: { originalLine: line },
+          };
+        }
+      }
+      return {
+        sequenceNumber: index + 1,
+        text: line,
+        contentType: "message",
+      };
+    });
 
     return {
       processorId: this.id,

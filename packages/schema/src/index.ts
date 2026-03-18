@@ -288,7 +288,9 @@ const TranscriptionPositiveMsSchema = z.number().int().positive();
 export const TranscriptionSessionCreateRequestSchema = z
   .object({
     meetingId: z.string().min(1, "meetingId is required"),
+    streamSource: z.string().min(1, "streamSource is required"),
     language: z.string().min(1).optional(),
+    streamRelationship: z.enum(["primary", "equivalent", "derived"]).default("equivalent"),
     windowMs: TranscriptionPositiveMsSchema.default(30_000),
     stepMs: TranscriptionPositiveMsSchema.default(10_000),
     dedupeHorizonMs: TranscriptionPositiveMsSchema.default(90_000),
@@ -306,6 +308,7 @@ export const TranscriptionSessionCreateRequestSchema = z
     description: "Start a browser-controlled transcription session",
     example: {
       meetingId: "550e8400-e29b-41d4-a716-446655440000",
+      streamSource: "mic:front",
       language: "en",
       windowMs: 30_000,
       stepMs: 10_000,
@@ -321,6 +324,8 @@ export const TranscriptionSessionCreateResponseSchema = z
   .object({
     sessionId: z.string().uuid(),
     meetingId: z.string().min(1),
+    streamSource: z.string().min(1),
+    streamEpochMs: z.number().int().nonnegative(),
     startedAt: z.string().datetime({ offset: true }),
     windowMs: TranscriptionPositiveMsSchema,
     stepMs: TranscriptionPositiveMsSchema,

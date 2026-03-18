@@ -28,10 +28,11 @@ import {
 export interface TranscriptUploadData {
   meetingId: string;
   source: "upload" | "stream" | "import";
-  format: "json" | "txt" | "vtt" | "srt";
+  format: "json" | "txt" | "vtt" | "srt" | "chat-json" | "chat-txt";
   content: string;
   metadata?: Record<string, any>;
   uploadedBy?: string;
+  streamEpochMs?: number;
 }
 
 export interface StreamEventData {
@@ -97,6 +98,7 @@ export class TranscriptService {
       content: data.content,
       metadata: data.metadata,
       uploadedBy: data.uploadedBy,
+      ...(data.streamEpochMs !== undefined ? { streamEpochMs: data.streamEpochMs } : {}),
     };
 
     const transcript = await this.rawTranscriptRepo.create(createData);
