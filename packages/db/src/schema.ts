@@ -22,6 +22,7 @@ import {
   boolean,
   real,
   uniqueIndex,
+  bigint,
 } from "drizzle-orm/pg-core";
 
 // ============================================================================
@@ -34,7 +35,26 @@ import {
 
 export const meetingStatusEnum = pgEnum("meeting_status", ["proposed", "in_session", "ended"]);
 export const transcriptSourceEnum = pgEnum("transcript_source", ["upload", "stream", "import"]);
-export const transcriptFormatEnum = pgEnum("transcript_format", ["json", "txt", "vtt", "srt"]);
+export const transcriptFormatEnum = pgEnum("transcript_format", [
+  "json",
+  "txt",
+  "vtt",
+  "srt",
+  "chat-json",
+  "chat-txt",
+]);
+export const streamRelationshipEnum = pgEnum("stream_relationship", [
+  "equivalent",
+  "parallel",
+  "derived",
+]);
+export const derivationTypeEnum = pgEnum("derivation_type", [
+  "synthesis",
+  "translation",
+  "cleanup",
+  "interpretation",
+]);
+export const contentTypeEnum = pgEnum("content_type", ["speech", "message"]);
 export const chunkStrategyEnum = pgEnum("chunk_strategy", [
   "fixed",
   "semantic",
@@ -147,6 +167,13 @@ export const rawTranscripts = pgTable(
     metadata: jsonb("metadata"),
     uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
     uploadedBy: text("uploaded_by"),
+    streamRelationship: streamRelationshipEnum("stream_relationship").notNull().default("equivalent"),
+    streamEpochMs: bigint("stream_epoch_ms", { mode: "number" }),
+    audioUri: text("audio_uri"),
+    language: text("language"),
+    derivationType: derivationTypeEnum("derivation_type"),
+    derivedFromChunkIds: uuid("derived_from_chunk_ids").array(),
+    derivingAgentId: text("deriving_agent_id"),
   },
   (table) => ({
     meetingIdx: index("idx_raw_transcripts_meeting").on(table.meetingId),
@@ -181,6 +208,11 @@ export const transcriptChunks = pgTable(
     contexts: text("contexts").array().notNull(),
     topics: text("topics").array(),
     streamSource: text("stream_source"), // Phase 3: Track source of streaming chunks
+    contentType: contentTypeEnum("content_type").notNull().default("speech"),
+    startTimeMs: integer("start_time_ms"),
+    endTimeMs: integer("end_time_ms"),
+    messageId: text("message_id"),
+    threadId: text("thread_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

@@ -22,6 +22,12 @@ export class DrizzleTranscriptChunkRepository {
       wordCount: data.wordCount || null,
       contexts: data.contexts || [],
       topics: data.topics || null,
+      streamSource: data.streamSource || null,
+      contentType: data.contentType ?? "speech",
+      startTimeMs: data.startTimeMs ?? null,
+      endTimeMs: data.endTimeMs ?? null,
+      messageId: data.messageId ?? null,
+      threadId: data.threadId ?? null,
     };
 
     const [result] = await db.insert(transcriptChunks).values(insertData).returning();
@@ -171,6 +177,12 @@ export class DrizzleTranscriptChunkRepository {
       wordCount: row.wordCount || undefined,
       contexts: row.contexts,
       topics: row.topics || undefined,
+      streamSource: row.streamSource || undefined,
+      contentType: row.contentType,
+      startTimeMs: row.startTimeMs ?? undefined,
+      endTimeMs: row.endTimeMs ?? undefined,
+      messageId: row.messageId ?? undefined,
+      threadId: row.threadId ?? undefined,
       createdAt: row.createdAt.toISOString(),
     };
   }

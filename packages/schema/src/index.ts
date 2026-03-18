@@ -56,11 +56,18 @@ export const RawTranscriptSchema = z
     id: z.string().uuid(),
     meetingId: z.string().uuid(),
     source: z.enum(["upload", "stream", "import"]),
-    format: z.enum(["json", "txt", "vtt", "srt"]),
+    format: z.enum(["json", "txt", "vtt", "srt", "chat-json", "chat-txt"]),
     content: z.string(),
     metadata: z.record(z.any()).optional(),
     uploadedAt: z.string().datetime({ offset: true }),
     uploadedBy: z.string().optional(),
+    streamRelationship: z.enum(["equivalent", "parallel", "derived"]).default("equivalent"),
+    streamEpochMs: z.number().int().optional(),
+    audioUri: z.string().url().optional(),
+    language: z.string().optional(),
+    derivationType: z.enum(["synthesis", "translation", "cleanup", "interpretation"]).optional(),
+    derivedFromChunkIds: z.array(z.string().uuid()).optional(),
+    derivingAgentId: z.string().optional(),
   })
   .openapi("RawTranscript", {
     description: "Raw transcript uploaded to a meeting",
@@ -95,7 +102,7 @@ export const ReadableTranscriptRowSchema = z
     meetingId: z.string().uuid(),
     rawTranscriptId: z.string().uuid(),
     rawTranscriptUploadedAt: z.string().datetime({ offset: true }),
-    rawTranscriptFormat: z.enum(["json", "txt", "vtt", "srt"]),
+    rawTranscriptFormat: z.enum(["json", "txt", "vtt", "srt", "chat-json", "chat-txt"]),
     sequenceNumber: z.number().int().positive(),
     displayText: z.string(),
     chunkIds: z.array(z.string().uuid()).default([]),
@@ -141,6 +148,11 @@ export const TranscriptChunkSchema = z
     contexts: z.array(z.string()).default([]),
     topics: z.array(z.string()).optional(),
     streamSource: z.string().optional(), // Phase 3: Track source of streaming chunks
+    contentType: z.enum(["speech", "message"]).default("speech"),
+    startTimeMs: z.number().int().optional(),
+    endTimeMs: z.number().int().optional(),
+    messageId: z.string().optional(),
+    threadId: z.string().optional(),
     createdAt: z.string().datetime({ offset: true }),
   })
   .openapi("TranscriptChunk", {
@@ -180,6 +192,11 @@ export const CreateTranscriptChunkSchema = TranscriptChunkSchema.pick({
   contexts: true,
   topics: true,
   streamSource: true,
+  contentType: true,
+  startTimeMs: true,
+  endTimeMs: true,
+  messageId: true,
+  threadId: true,
 });
 
 export type CreateTranscriptChunk = z.infer<typeof CreateTranscriptChunkSchema>;
@@ -192,6 +209,9 @@ export const StreamTranscriptEventSchema = z
     sequenceNumber: z.number().int().positive().optional(),
     contexts: z.array(z.string().min(1)).optional(),
     streamSource: z.string().optional(),
+    contentType: z.enum(["speech", "message"]).optional(),
+    messageId: z.string().optional(),
+    threadId: z.string().optional(),
   })
   .openapi("StreamTranscriptEvent", {
     description: "A streaming transcript text event submitted during an active meeting",
@@ -203,6 +223,27 @@ export const StreamTranscriptEventSchema = z
       contexts: ["custom:note"],
     },
   });
+
+/**
+ * CanonicalTranscriptSegment — the shared shape produced by all preprocessors
+ * and consumed by the ingest layer. All computation fields (ms timestamps) are
+ * preferred; string timestamps are display-only.
+ */
+export const CanonicalTranscriptSegmentSchema = z.object({
+  text: z.string().min(1),
+  speaker: z.string().optional(),
+  startTimeMs: z.number().int().optional(),
+  endTimeMs: z.number().int().optional(),
+  startTime: z.string().optional(),   // display-only, HH:MM:SS
+  endTime: z.string().optional(),     // display-only, HH:MM:SS
+  sequenceNumber: z.number().int().nonnegative().optional(),
+  contentType: z.enum(["speech", "message"]).default("speech"),
+  streamSource: z.string().optional(),
+  messageId: z.string().optional(),
+  threadId: z.string().optional(),
+});
+
+export type CanonicalTranscriptSegment = z.infer<typeof CanonicalTranscriptSegmentSchema>;
 
 export const StreamTranscriptResponseSchema = z
   .object({

@@ -65,6 +65,11 @@ export interface AddTranscriptTextData {
   contexts?: string[];
   topics?: string[];
   uploadedBy?: string;
+  contentType?: "speech" | "message";
+  startTimeMs?: number;
+  endTimeMs?: number;
+  messageId?: string;
+  threadId?: string;
 }
 
 export interface AssignChunkContextsData {
@@ -136,6 +141,11 @@ export class TranscriptService {
       wordCount: data.text.split(/\s+/).filter(Boolean).length,
       contexts,
       topics: data.topics,
+      contentType: data.contentType ?? "speech",
+      startTimeMs: data.startTimeMs,
+      endTimeMs: data.endTimeMs,
+      messageId: data.messageId,
+      threadId: data.threadId,
     });
   }
 
@@ -267,6 +277,7 @@ export class TranscriptService {
             tokenCount: this.estimateTokens(chunkText),
             wordCount: chunkText.split(/\s+/).filter(Boolean).length,
             contexts: [`meeting:${rawTranscript.meetingId}`],
+            contentType: "speech",
           });
           chunks.push(chunk);
 
@@ -291,6 +302,7 @@ export class TranscriptService {
           tokenCount: this.estimateTokens(chunkText),
           wordCount: chunkText.split(/\s+/).filter(Boolean).length,
           contexts: [`meeting:${rawTranscript.meetingId}`],
+          contentType: "speech",
         });
         chunks.push(chunk);
       }
@@ -315,6 +327,7 @@ export class TranscriptService {
             tokenCount: this.estimateTokens(chunkText),
             wordCount: currentChunk.length,
             contexts: [`meeting:${rawTranscript.meetingId}`],
+            contentType: "speech",
           });
           chunks.push(chunk);
 
@@ -334,6 +347,7 @@ export class TranscriptService {
           tokenCount: this.estimateTokens(chunkText),
           wordCount: currentChunk.length,
           contexts: [`meeting:${rawTranscript.meetingId}`],
+          contentType: "speech",
         });
         chunks.push(chunk);
       }

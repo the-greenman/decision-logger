@@ -116,6 +116,11 @@ export class DrizzleStreamingBufferRepository {
             wordCount: this.countWords(event.text),
             contexts: eventData.contexts || [`meeting:${meetingId}`],
             topics: eventData.topics,
+            contentType: eventData.contentType ?? "speech",
+            startTimeMs: eventData.startTimeMs,
+            endTimeMs: eventData.endTimeMs,
+            messageId: eventData.messageId,
+            threadId: eventData.threadId,
           };
 
           const [result] = await tx.insert(transcriptChunks).values({
@@ -131,7 +136,12 @@ export class DrizzleStreamingBufferRepository {
             wordCount: chunkData.wordCount || null,
             contexts: chunkData.contexts,
             topics: chunkData.topics || null,
-            streamSource: event.streamSource, // Preserve streamSource
+            streamSource: event.streamSource,
+            contentType: eventData.contentType ?? "speech",
+            startTimeMs: eventData.startTimeMs ?? null,
+            endTimeMs: eventData.endTimeMs ?? null,
+            messageId: eventData.messageId ?? null,
+            threadId: eventData.threadId ?? null,
           }).returning();
 
           chunks.push(this.mapToSchema(result));
@@ -214,6 +224,11 @@ export class DrizzleStreamingBufferRepository {
       contexts: row.contexts,
       topics: row.topics || undefined,
       streamSource: row.streamSource || undefined,
+      contentType: row.contentType ?? "speech",
+      startTimeMs: row.startTimeMs ?? undefined,
+      endTimeMs: row.endTimeMs ?? undefined,
+      messageId: row.messageId ?? undefined,
+      threadId: row.threadId ?? undefined,
       createdAt: row.createdAt.toISOString(),
     };
   }
