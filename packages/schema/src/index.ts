@@ -241,6 +241,7 @@ export const CanonicalTranscriptSegmentSchema = z.object({
   streamSource: z.string().optional(),
   messageId: z.string().optional(),
   threadId: z.string().optional(),
+  sourceMetadata: z.record(z.unknown()).optional(),
 });
 
 export type CanonicalTranscriptSegment = z.infer<typeof CanonicalTranscriptSegmentSchema>;

@@ -123,8 +123,8 @@ export class DrizzleTranscriptChunkRepository {
 
   async addContextsByTimeRange(
     meetingId: string,
-    from: string,
-    to: string,
+    fromMs: number,
+    toMs: number,
     contexts: string[],
   ): Promise<number> {
     if (contexts.length === 0) return 0;
@@ -133,8 +133,8 @@ export class DrizzleTranscriptChunkRepository {
 
     const conditions = [
       eq(transcriptChunks.meetingId, meetingId),
-      gte(transcriptChunks.startTime, from),
-      lte(transcriptChunks.startTime, to),
+      gte(transcriptChunks.startTimeMs, fromMs),
+      lte(transcriptChunks.startTimeMs, toMs),
     ];
 
     const rows = await db

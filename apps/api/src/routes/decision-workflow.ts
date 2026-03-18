@@ -2166,8 +2166,8 @@ export const listLLMInteractionsRoute = createRoute({
 
 const TagChunksByTimeRangeRequestSchema = z
   .object({
-    from: z.string().regex(/^\d{2}:\d{2}:\d{2}$/, "Must be HH:MM:SS"),
-    to: z.string().regex(/^\d{2}:\d{2}:\d{2}$/, "Must be HH:MM:SS"),
+    fromMs: z.number().int().nonnegative(),
+    toMs: z.number().int().nonnegative(),
     contexts: z.array(z.string().min(1)).min(1),
   })
   .openapi("TagChunksByTimeRangeRequest");

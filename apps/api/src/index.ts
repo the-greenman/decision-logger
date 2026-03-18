@@ -945,8 +945,8 @@ app.openapi(tagChunksByTimeRangeRoute, async (c) => {
   }
 
   const { id } = c.req.valid("param");
-  const { from, to, contexts } = c.req.valid("json");
-  const updatedCount = await services.transcriptService.tagChunksByTimeRange(id, from, to, contexts);
+  const { fromMs, toMs, contexts } = c.req.valid("json");
+  const updatedCount = await services.transcriptService.tagChunksByTimeRange(id, fromMs, toMs, contexts);
   return c.json({ updatedCount });
 });
 

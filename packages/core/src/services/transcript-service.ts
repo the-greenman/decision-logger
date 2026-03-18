@@ -201,11 +201,11 @@ export class TranscriptService {
 
   async tagChunksByTimeRange(
     meetingId: string,
-    from: string,
-    to: string,
+    fromMs: number,
+    toMs: number,
     contexts: string[],
   ): Promise<number> {
-    return this.chunkRepo.addContextsByTimeRange(meetingId, from, to, contexts);
+    return this.chunkRepo.addContextsByTimeRange(meetingId, fromMs, toMs, contexts);
   }
 
   async processTranscript(
@@ -406,7 +406,7 @@ export class TranscriptService {
       rawTranscriptId: rawTranscript.id,
       rawTranscriptUploadedAt: rawTranscript.uploadedAt,
       rawTranscriptFormat: rawTranscript.format,
-      sequenceNumber: segment.sequenceNumber,
+      sequenceNumber: segment.sequenceNumber ?? 0,
       displayText: segment.text,
       chunkIds: this.resolveChunkIdsForSegment(segment, transcriptChunks),
     };
