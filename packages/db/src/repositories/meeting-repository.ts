@@ -86,7 +86,7 @@ export class DrizzleMeetingRepository {
     return this.mapToMeeting(result[0]);
   }
 
-  async updateStatus(id: string, status: "proposed" | "in_session" | "ended"): Promise<Meeting> {
+  async updateStatus(id: string, status: "proposed" | "in_session" | "ended" | "transcription_complete"): Promise<Meeting> {
     const [result] = await db
       .update(meetings)
       .set({ status })

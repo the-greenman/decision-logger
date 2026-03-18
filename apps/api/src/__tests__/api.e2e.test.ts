@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 
 process.env.DATABASE_URL =
@@ -1930,5 +1930,90 @@ describe("API E2E Tests", () => {
     expect(logDecisionResponses?.["200"]).toBeDefined();
     expect(logDecisionResponses?.["400"]).toBeDefined();
     expect(logDecisionResponses?.["404"]).toBeDefined();
+  });
+});
+
+describe("Phase 1b — transcription_complete meeting state", () => {
+  let meetingId: string;
+
+  beforeEach(async () => {
+    const res = await app.request("/api/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Lifecycle Test Meeting", date: "2026-03-18T10:00:00Z", participants: ["Facilitator"] }),
+    });
+    const data = await res.json() as any;
+    meetingId = data.id;
+  });
+
+  it("PATCH /api/meetings/:id - transitions to transcription_complete", async () => {
+    // First end the meeting
+    await app.request(`/api/meetings/${meetingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "ended" }),
+    });
+
+    const res = await app.request(`/api/meetings/${meetingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "transcription_complete" }),
+    });
+
+    expect(res.status).toBe(200);
+    const data = await res.json() as any;
+    expect(data.status).toBe("transcription_complete");
+  });
+
+  it("POST /api/meetings/:id/transcripts/upload - returns 409 for transcription_complete meeting", async () => {
+    // End then complete
+    await app.request(`/api/meetings/${meetingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "ended" }),
+    });
+    await app.request(`/api/meetings/${meetingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "transcription_complete" }),
+    });
+
+    const res = await app.request(`/api/meetings/${meetingId}/transcripts/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        format: "txt",
+        content: "Late upload attempt",
+        chunkStrategy: "fixed",
+      }),
+    });
+
+    expect(res.status).toBe(409);
+    const data = await res.json() as any;
+    expect(data.error).toMatch(/transcription_complete/);
+  });
+
+  it("POST /api/meetings/:id/transcripts/stream - returns 409 after meeting ended", async () => {
+    await app.request(`/api/meetings/${meetingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "ended" }),
+    });
+
+    const res = await app.request(`/api/meetings/${meetingId}/transcripts/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Connection-ID": "conn-lifecycle-test" },
+      body: JSON.stringify({ text: "Post-meeting stream attempt" }),
+    });
+
+    expect(res.status).toBe(409);
+    const data = await res.json() as any;
+    expect(data.error).toMatch(/ended/i);
+  });
+
+  it("MeetingStatusSchema accepts transcription_complete", () => {
+    const { MeetingStatusSchema } = require("@repo/schema");
+    const result = MeetingStatusSchema.safeParse("transcription_complete");
+    expect(result.success).toBe(true);
   });
 });

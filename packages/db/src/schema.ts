@@ -33,7 +33,7 @@ import {
 // ENUMS
 // ============================================================================
 
-export const meetingStatusEnum = pgEnum("meeting_status", ["proposed", "in_session", "ended"]);
+export const meetingStatusEnum = pgEnum("meeting_status", ["proposed", "in_session", "ended", "transcription_complete"]);
 export const transcriptSourceEnum = pgEnum("transcript_source", ["upload", "stream", "import"]);
 export const transcriptFormatEnum = pgEnum("transcript_format", [
   "json",

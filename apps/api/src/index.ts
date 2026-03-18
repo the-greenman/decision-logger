@@ -726,6 +726,14 @@ app.openapi(uploadTranscriptRoute, async (c) => {
   try {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
+
+    const meeting = await meetingService.findById(id);
+    if (!meeting) {
+      return c.json({ error: "Meeting not found" }, 404);
+    }
+    if (meeting.status === "transcription_complete") {
+      return c.json({ error: "Uploads are locked: meeting is transcription_complete" }, 409);
+    }
     const uploadPayload: {
       meetingId: string;
       source: "upload";
@@ -816,6 +824,14 @@ app.openapi(streamTranscriptRoute, async (c) => {
 
   const { id } = c.req.valid("param");
   const event = c.req.valid("json");
+
+  const meeting = await meetingService.findById(id);
+  if (!meeting) {
+    return c.json({ error: "Meeting not found" }, 404);
+  }
+  if (meeting.status === "ended" || meeting.status === "transcription_complete") {
+    return c.json({ error: "Stream events not accepted: meeting is ended" }, 409);
+  }
   const connectionId = c.req.header("X-Connection-ID");
   const globalContext = connectionId
     ? await globalContextService.getContext(connectionId)

@@ -1,0 +1,1 @@
+ALTER TYPE "meeting_status" ADD VALUE 'transcription_complete';

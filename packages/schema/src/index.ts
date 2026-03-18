@@ -5,7 +5,7 @@ export { z } from "@hono/zod-openapi";
 // MEETING SCHEMAS
 // ============================================================================
 
-export const MeetingStatusSchema = z.enum(["proposed", "in_session", "ended"]);
+export const MeetingStatusSchema = z.enum(["proposed", "in_session", "ended", "transcription_complete"]);
 
 export const MeetingSchema = z
   .object({

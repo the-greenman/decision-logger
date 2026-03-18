@@ -113,6 +113,13 @@
       "when": 1773857991682,
       "tag": "0015_sturdy_impossible_man",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "5",
+      "when": 1773859475707,
+      "tag": "0016_panoramic_jackpot",
+      "breakpoints": true
     }
   ]
 }
