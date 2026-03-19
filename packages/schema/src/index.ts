@@ -5,7 +5,7 @@ export { z } from "@hono/zod-openapi";
 // MEETING SCHEMAS
 // ============================================================================
 
-export const MeetingStatusSchema = z.enum(["proposed", "in_session", "ended"]);
+export const MeetingStatusSchema = z.enum(["proposed", "in_session", "ended", "transcription_complete"]);
 
 export const MeetingSchema = z
   .object({
@@ -56,11 +56,18 @@ export const RawTranscriptSchema = z
     id: z.string().uuid(),
     meetingId: z.string().uuid(),
     source: z.enum(["upload", "stream", "import"]),
-    format: z.enum(["json", "txt", "vtt", "srt"]),
+    format: z.enum(["json", "txt", "vtt", "srt", "chat-json", "chat-txt"]),
     content: z.string(),
     metadata: z.record(z.any()).optional(),
     uploadedAt: z.string().datetime({ offset: true }),
     uploadedBy: z.string().optional(),
+    streamRelationship: z.enum(["equivalent", "parallel", "derived"]).default("equivalent"),
+    streamEpochMs: z.number().int().optional(),
+    audioUri: z.string().url().optional(),
+    language: z.string().optional(),
+    derivationType: z.enum(["synthesis", "translation", "cleanup", "interpretation"]).optional(),
+    derivedFromChunkIds: z.array(z.string().uuid()).optional(),
+    derivingAgentId: z.string().optional(),
   })
   .openapi("RawTranscript", {
     description: "Raw transcript uploaded to a meeting",
@@ -95,7 +102,7 @@ export const ReadableTranscriptRowSchema = z
     meetingId: z.string().uuid(),
     rawTranscriptId: z.string().uuid(),
     rawTranscriptUploadedAt: z.string().datetime({ offset: true }),
-    rawTranscriptFormat: z.enum(["json", "txt", "vtt", "srt"]),
+    rawTranscriptFormat: z.enum(["json", "txt", "vtt", "srt", "chat-json", "chat-txt"]),
     sequenceNumber: z.number().int().positive(),
     displayText: z.string(),
     chunkIds: z.array(z.string().uuid()).default([]),
@@ -140,6 +147,12 @@ export const TranscriptChunkSchema = z
     wordCount: z.number().int().optional(),
     contexts: z.array(z.string()).default([]),
     topics: z.array(z.string()).optional(),
+    streamSource: z.string().optional(), // Phase 3: Track source of streaming chunks
+    contentType: z.enum(["speech", "message"]).default("speech"),
+    startTimeMs: z.number().int().optional(),
+    endTimeMs: z.number().int().optional(),
+    messageId: z.string().optional(),
+    threadId: z.string().optional(),
     createdAt: z.string().datetime({ offset: true }),
   })
   .openapi("TranscriptChunk", {
@@ -158,6 +171,7 @@ export const TranscriptChunkSchema = z
       wordCount: 7,
       contexts: ["meeting:550e8400-e29b-41d4-a716-446655440000"],
       topics: ["architecture"],
+      streamSource: "transcription",
       createdAt: "2026-02-27T10:00:00Z",
     },
   });
@@ -177,6 +191,12 @@ export const CreateTranscriptChunkSchema = TranscriptChunkSchema.pick({
   wordCount: true,
   contexts: true,
   topics: true,
+  streamSource: true,
+  contentType: true,
+  startTimeMs: true,
+  endTimeMs: true,
+  messageId: true,
+  threadId: true,
 });
 
 export type CreateTranscriptChunk = z.infer<typeof CreateTranscriptChunkSchema>;
@@ -188,6 +208,10 @@ export const StreamTranscriptEventSchema = z
     timestamp: z.string().optional(),
     sequenceNumber: z.number().int().positive().optional(),
     contexts: z.array(z.string().min(1)).optional(),
+    streamSource: z.string().optional(),
+    contentType: z.enum(["speech", "message"]).optional(),
+    messageId: z.string().optional(),
+    threadId: z.string().optional(),
   })
   .openapi("StreamTranscriptEvent", {
     description: "A streaming transcript text event submitted during an active meeting",
@@ -195,9 +219,32 @@ export const StreamTranscriptEventSchema = z
       text: "We decided to defer the vendor selection",
       speaker: "Alice",
       timestamp: "00:12:33",
+      streamSource: "mic:front",
       contexts: ["custom:note"],
     },
   });
+
+/**
+ * CanonicalTranscriptSegment — the shared shape produced by all preprocessors
+ * and consumed by the ingest layer. All computation fields (ms timestamps) are
+ * preferred; string timestamps are display-only.
+ */
+export const CanonicalTranscriptSegmentSchema = z.object({
+  text: z.string().min(1),
+  speaker: z.string().optional(),
+  startTimeMs: z.number().int().optional(),
+  endTimeMs: z.number().int().optional(),
+  startTime: z.string().optional(),   // display-only, HH:MM:SS
+  endTime: z.string().optional(),     // display-only, HH:MM:SS
+  sequenceNumber: z.number().int().nonnegative().optional(),
+  contentType: z.enum(["speech", "message"]).default("speech"),
+  streamSource: z.string().optional(),
+  messageId: z.string().optional(),
+  threadId: z.string().optional(),
+  sourceMetadata: z.record(z.unknown()).optional(),
+});
+
+export type CanonicalTranscriptSegment = z.infer<typeof CanonicalTranscriptSegmentSchema>;
 
 export const StreamTranscriptResponseSchema = z
   .object({
@@ -217,7 +264,7 @@ export const StreamTranscriptResponseSchema = z
 
 export const StreamStatusResponseSchema = z
   .object({
-    status: z.enum(["active", "idle", "flushing"]),
+    status: z.enum(["active", "idle"]),
     eventCount: z.number().int().min(0),
   })
   .openapi("StreamStatusResponse", {
@@ -241,7 +288,9 @@ const TranscriptionPositiveMsSchema = z.number().int().positive();
 export const TranscriptionSessionCreateRequestSchema = z
   .object({
     meetingId: z.string().min(1, "meetingId is required"),
+    streamSource: z.string().min(1, "streamSource is required"),
     language: z.string().min(1).optional(),
+    streamRelationship: z.enum(["primary", "equivalent", "derived"]).default("equivalent"),
     windowMs: TranscriptionPositiveMsSchema.default(30_000),
     stepMs: TranscriptionPositiveMsSchema.default(10_000),
     dedupeHorizonMs: TranscriptionPositiveMsSchema.default(90_000),
@@ -259,6 +308,7 @@ export const TranscriptionSessionCreateRequestSchema = z
     description: "Start a browser-controlled transcription session",
     example: {
       meetingId: "550e8400-e29b-41d4-a716-446655440000",
+      streamSource: "mic:front",
       language: "en",
       windowMs: 30_000,
       stepMs: 10_000,
@@ -274,6 +324,8 @@ export const TranscriptionSessionCreateResponseSchema = z
   .object({
     sessionId: z.string().uuid(),
     meetingId: z.string().min(1),
+    streamSource: z.string().min(1),
+    streamEpochMs: z.number().int().nonnegative(),
     startedAt: z.string().datetime({ offset: true }),
     windowMs: TranscriptionPositiveMsSchema,
     stepMs: TranscriptionPositiveMsSchema,
@@ -1667,3 +1719,37 @@ export const CreateLLMInteractionSchema = LLMInteractionSchema.omit({
 });
 
 export type CreateLLMInteraction = z.infer<typeof CreateLLMInteractionSchema>;
+
+// ---------------------------------------------------------------------------
+// Connection
+// ---------------------------------------------------------------------------
+
+export const ConnectionSchema = z
+  .object({
+    id: z.string().min(1),
+    activeMeetingId: z.string().uuid().nullable(),
+    activeDecisionId: z.string().uuid().nullable(),
+    activeDecisionContextId: z.string().uuid().nullable(),
+    activeField: z.string().uuid().nullable(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    lastSeen: z.string().datetime(),
+  })
+  .openapi("Connection");
+
+export const CreateConnectionSchema = ConnectionSchema.pick({ id: true }).openapi(
+  "CreateConnection",
+);
+
+export const UpdateConnectionSchema = ConnectionSchema.pick({
+  activeMeetingId: true,
+  activeDecisionId: true,
+  activeDecisionContextId: true,
+  activeField: true,
+})
+  .partial()
+  .openapi("UpdateConnection");
+
+export type Connection = z.infer<typeof ConnectionSchema>;
+export type CreateConnection = z.infer<typeof CreateConnectionSchema>;
+export type UpdateConnection = z.infer<typeof UpdateConnectionSchema>;

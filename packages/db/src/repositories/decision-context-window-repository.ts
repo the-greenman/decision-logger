@@ -138,6 +138,12 @@ export class DrizzleDecisionContextWindowRepository {
       wordCount: row.wordCount || undefined,
       contexts: row.contexts,
       topics: row.topics || undefined,
+      streamSource: row.streamSource || undefined,
+      contentType: row.contentType ?? "speech",
+      startTimeMs: row.startTimeMs ?? undefined,
+      endTimeMs: row.endTimeMs ?? undefined,
+      messageId: row.messageId ?? undefined,
+      threadId: row.threadId ?? undefined,
       createdAt: row.createdAt.toISOString(),
     };
   }

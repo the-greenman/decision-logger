@@ -37,15 +37,18 @@ import {
 import { DrizzleMeetingRepository } from "@repo/db";
 import { MockMeetingRepository } from "./mock-repository.js";
 import {
+  clearBroadcastContextRoute,
   clearDecisionContextRoute,
   clearFieldContextRoute,
   clearMeetingContextRoute,
   getInSessionMeetingsContextSummaryRoute,
   getContextRoute,
+  setBroadcastContextRoute,
   setDecisionContextRoute,
   setFieldContextRoute,
   setMeetingContextRoute,
 } from "./routes/context.js";
+import { registerConnectionEventsRoute } from "./routes/connections.js";
 import {
   clearStreamingBufferRoute,
   changeDecisionContextTemplateRoute,
@@ -96,6 +99,7 @@ import {
   updateDecisionContextRoute,
   updateFlaggedDecisionRoute,
   updateFieldValueRoute,
+  tagChunksByTimeRangeRoute,
   uploadTranscriptRoute,
 } from "./routes/decision-workflow.js";
 
@@ -263,7 +267,10 @@ app.openapi(getContextRoute, async (c) => {
     return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
   }
 
-  const context = await globalContextService.getContext();
+  const connectionId = c.req.header("X-Connection-ID");
+  if (!connectionId) return c.json({ error: "X-Connection-ID header is required" }, 400);
+
+  const context = await globalContextService.getContext(connectionId);
   return c.json(context);
 });
 
@@ -272,8 +279,11 @@ app.openapi(getInSessionMeetingsContextSummaryRoute, async (c) => {
     return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
   }
 
+  const connectionId = c.req.header("X-Connection-ID");
+  if (!connectionId) return c.json({ error: "X-Connection-ID header is required" }, 400);
+
   const [currentContext, meetings] = await Promise.all([
-    globalContextService.getContext(),
+    globalContextService.getContext(connectionId),
     meetingService.findAll(),
   ]);
 
@@ -290,10 +300,13 @@ app.openapi(setMeetingContextRoute, async (c) => {
     return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
   }
 
+  const connectionId = c.req.header("X-Connection-ID");
+  if (!connectionId) return c.json({ error: "X-Connection-ID header is required" }, 400);
+
   try {
     const { meetingId } = c.req.valid("json");
-    await globalContextService.setActiveMeeting(meetingId);
-    return c.json(await globalContextService.getContext());
+    await globalContextService.setActiveMeeting(connectionId, meetingId);
+    return c.json(await globalContextService.getContext(connectionId));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (isNotFoundErrorMessage(message)) {
@@ -417,8 +430,11 @@ app.openapi(clearMeetingContextRoute, async (c) => {
     return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
   }
 
-  await globalContextService.clearMeeting();
-  return c.json(await globalContextService.getContext());
+  const connectionId = c.req.header("X-Connection-ID");
+  if (!connectionId) return c.json({ error: "X-Connection-ID header is required" }, 400);
+
+  await globalContextService.clearMeeting(connectionId);
+  return c.json(await globalContextService.getContext(connectionId));
 });
 
 app.openapi(setDecisionContextRoute, async (c) => {
@@ -426,11 +442,15 @@ app.openapi(setDecisionContextRoute, async (c) => {
     return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
   }
 
+  const connectionId = c.req.header("X-Connection-ID");
+  if (!connectionId) return c.json({ error: "X-Connection-ID header is required" }, 400);
+
   try {
     const { id } = c.req.valid("param");
     const { flaggedDecisionId, templateId, contextId } = c.req.valid("json");
-    await globalContextService.setActiveMeeting(id);
+    await globalContextService.setActiveMeeting(connectionId, id);
     const decisionContext = await globalContextService.setActiveDecision(
+      connectionId,
       flaggedDecisionId,
       templateId,
       contextId,
@@ -439,7 +459,7 @@ app.openapi(setDecisionContextRoute, async (c) => {
       return c.json({ error: "Flagged decision not found" }, 404);
     }
 
-    return c.json(await globalContextService.getContext());
+    return c.json(await globalContextService.getContext(connectionId));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (isNotFoundErrorMessage(message)) {
@@ -455,14 +475,17 @@ app.openapi(clearDecisionContextRoute, async (c) => {
     return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
   }
 
+  const connectionId = c.req.header("X-Connection-ID");
+  if (!connectionId) return c.json({ error: "X-Connection-ID header is required" }, 400);
+
   const { id } = c.req.valid("param");
-  const context = await globalContextService.getContext();
+  const context = await globalContextService.getContext(connectionId);
   if (context.activeMeetingId !== undefined && context.activeMeetingId !== id) {
     return c.json({ error: "Active meeting does not match requested meeting" }, 400);
   }
 
-  await globalContextService.clearDecision();
-  return c.json(await globalContextService.getContext());
+  await globalContextService.clearDecision(connectionId);
+  return c.json(await globalContextService.getContext(connectionId));
 });
 
 app.openapi(setFieldContextRoute, async (c) => {
@@ -470,16 +493,19 @@ app.openapi(setFieldContextRoute, async (c) => {
     return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
   }
 
+  const connectionId = c.req.header("X-Connection-ID");
+  if (!connectionId) return c.json({ error: "X-Connection-ID header is required" }, 400);
+
   try {
     const { id } = c.req.valid("param");
     const { fieldId } = c.req.valid("json");
-    const context = await globalContextService.getContext();
+    const context = await globalContextService.getContext(connectionId);
     if (context.activeMeetingId !== undefined && context.activeMeetingId !== id) {
       return c.json({ error: "Active meeting does not match requested meeting" }, 400);
     }
 
-    await globalContextService.setActiveField(fieldId);
-    return c.json(await globalContextService.getContext());
+    await globalContextService.setActiveField(connectionId, fieldId);
+    return c.json(await globalContextService.getContext(connectionId));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (isNotFoundErrorMessage(message)) {
@@ -495,14 +521,42 @@ app.openapi(clearFieldContextRoute, async (c) => {
     return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
   }
 
+  const connectionId = c.req.header("X-Connection-ID");
+  if (!connectionId) return c.json({ error: "X-Connection-ID header is required" }, 400);
+
   const { id } = c.req.valid("param");
-  const context = await globalContextService.getContext();
+  const context = await globalContextService.getContext(connectionId);
   if (context.activeMeetingId !== undefined && context.activeMeetingId !== id) {
     return c.json({ error: "Active meeting does not match requested meeting" }, 400);
   }
 
-  await globalContextService.clearField();
-  return c.json(await globalContextService.getContext());
+  await globalContextService.clearField(connectionId);
+  return c.json(await globalContextService.getContext(connectionId));
+});
+
+app.openapi(setBroadcastContextRoute, async (c) => {
+  if (!globalContextService) {
+    return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
+  }
+
+  const { id } = c.req.valid("param");
+  const { decisionContextId, fieldId } = c.req.valid("json");
+  const result = await globalContextService.setBroadcastContext(
+    id,
+    decisionContextId ?? null,
+    fieldId ?? null,
+  );
+  return c.json(result);
+});
+
+app.openapi(clearBroadcastContextRoute, async (c) => {
+  if (!globalContextService) {
+    return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
+  }
+
+  const { id } = c.req.valid("param");
+  await globalContextService.clearBroadcastContext(id);
+  return c.json({ decisionContextId: null, fieldId: null });
 });
 
 app.openapi(createMeetingRoute, async (c) => {
@@ -545,9 +599,12 @@ app.openapi(updateMeetingRoute, async (c) => {
     if (status !== undefined) {
       const meeting = await meetingService.updateStatus(id, status);
       if (status === "ended" && globalContextService) {
-        const context = await globalContextService.getContext();
-        if (context.activeMeetingId === id) {
-          await globalContextService.clearMeeting();
+        const connectionId = c.req.header("X-Connection-ID");
+        if (connectionId) {
+          const context = await globalContextService.getContext(connectionId);
+          if (context.activeMeetingId === id) {
+            await globalContextService.clearMeeting(connectionId);
+          }
         }
       }
 
@@ -669,6 +726,14 @@ app.openapi(uploadTranscriptRoute, async (c) => {
   try {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
+
+    const meeting = await meetingService.findById(id);
+    if (!meeting) {
+      return c.json({ error: "Meeting not found" }, 404);
+    }
+    if (meeting.status === "transcription_complete") {
+      return c.json({ error: "Uploads are locked: meeting is transcription_complete" }, 409);
+    }
     const uploadPayload: {
       meetingId: string;
       source: "upload";
@@ -759,7 +824,18 @@ app.openapi(streamTranscriptRoute, async (c) => {
 
   const { id } = c.req.valid("param");
   const event = c.req.valid("json");
-  const globalContext = await globalContextService.getContext();
+
+  const meeting = await meetingService.findById(id);
+  if (!meeting) {
+    return c.json({ error: "Meeting not found" }, 404);
+  }
+  if (meeting.status === "ended" || meeting.status === "transcription_complete") {
+    return c.json({ error: "Stream events not accepted: meeting is ended" }, 409);
+  }
+  const connectionId = c.req.header("X-Connection-ID");
+  const globalContext = connectionId
+    ? await globalContextService.getContext(connectionId)
+    : {};
   const autoContexts = [`meeting:${id}`];
 
   if (globalContext.activeDecisionContextId) {
@@ -771,6 +847,15 @@ app.openapi(streamTranscriptRoute, async (c) => {
     }
   }
 
+  // Merge broadcast context — facilitator-pushed context applies to all streams
+  const broadcastContext = await globalContextService.getBroadcastContext(id);
+  if (broadcastContext.decisionContextId) {
+    autoContexts.push(`decision:${broadcastContext.decisionContextId}`);
+    if (broadcastContext.fieldId) {
+      autoContexts.push(`decision:${broadcastContext.decisionContextId}:${broadcastContext.fieldId}`);
+    }
+  }
+
   const appliedContexts = Array.from(new Set([...autoContexts, ...(event.contexts ?? [])]));
 
   const streamEventData: {
@@ -779,6 +864,7 @@ app.openapi(streamTranscriptRoute, async (c) => {
     speaker?: string;
     startTime?: string;
     sequenceNumber?: number;
+    streamSource?: string;
   } = {
     text: event.text,
     contexts: appliedContexts,
@@ -794,6 +880,10 @@ app.openapi(streamTranscriptRoute, async (c) => {
 
   if (event.sequenceNumber !== undefined) {
     streamEventData.sequenceNumber = event.sequenceNumber;
+  }
+
+  if (event.streamSource !== undefined) {
+    streamEventData.streamSource = event.streamSource;
   }
 
   await services.transcriptService.addStreamEvent(id, {
@@ -821,7 +911,7 @@ app.openapi(getStreamingStatusRoute, async (c) => {
   const { id } = c.req.valid("param");
   const status = await services.transcriptService.getStreamStatus(id);
   return c.json({
-    status: status.status as "active" | "idle" | "flushing",
+    status: status.status,
     eventCount: status.eventCount,
   });
 });
@@ -846,6 +936,18 @@ app.openapi(clearStreamingBufferRoute, async (c) => {
   const { id } = c.req.valid("param");
   await services.transcriptService.clearStream(id);
   return c.body(null, 204);
+});
+
+app.openapi(tagChunksByTimeRangeRoute, async (c) => {
+  const services = getWorkflowServices();
+  if (!services) {
+    return c.json({ error: "This endpoint requires DATABASE_URL to be configured" }, 503);
+  }
+
+  const { id } = c.req.valid("param");
+  const { fromMs, toMs, contexts } = c.req.valid("json");
+  const updatedCount = await services.transcriptService.tagChunksByTimeRange(id, fromMs, toMs, contexts);
+  return c.json({ updatedCount });
 });
 
 app.openapi(listExpertsRoute, async (c) => {
@@ -1676,6 +1778,11 @@ app.openapi(listLLMInteractionsRoute, async (c) => {
 app.get("/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
+// Register SSE route for connection events
+if (globalContextService) {
+  registerConnectionEventsRoute(app, globalContextService);
+}
 
 // OpenAPI documentation
 app.doc("/openapi.json", {

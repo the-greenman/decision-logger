@@ -3,7 +3,11 @@ export interface TranscriptEvent {
   speaker?: string;
   startTimeSeconds?: number;
   endTimeSeconds?: number;
+  startTimeMs?: number;
+  endTimeMs?: number;
   sequenceNumber?: number;
+  contentType?: "speech" | "message";
+  streamSource?: string;
 }
 
 export interface TranscriptionResult {

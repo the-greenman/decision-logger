@@ -22,6 +22,7 @@ import {
   boolean,
   real,
   uniqueIndex,
+  bigint,
 } from "drizzle-orm/pg-core";
 
 // ============================================================================
@@ -32,9 +33,28 @@ import {
 // ENUMS
 // ============================================================================
 
-export const meetingStatusEnum = pgEnum("meeting_status", ["proposed", "in_session", "ended"]);
+export const meetingStatusEnum = pgEnum("meeting_status", ["proposed", "in_session", "ended", "transcription_complete"]);
 export const transcriptSourceEnum = pgEnum("transcript_source", ["upload", "stream", "import"]);
-export const transcriptFormatEnum = pgEnum("transcript_format", ["json", "txt", "vtt", "srt"]);
+export const transcriptFormatEnum = pgEnum("transcript_format", [
+  "json",
+  "txt",
+  "vtt",
+  "srt",
+  "chat-json",
+  "chat-txt",
+]);
+export const streamRelationshipEnum = pgEnum("stream_relationship", [
+  "equivalent",
+  "parallel",
+  "derived",
+]);
+export const derivationTypeEnum = pgEnum("derivation_type", [
+  "synthesis",
+  "translation",
+  "cleanup",
+  "interpretation",
+]);
+export const contentTypeEnum = pgEnum("content_type", ["speech", "message"]);
 export const chunkStrategyEnum = pgEnum("chunk_strategy", [
   "fixed",
   "semantic",
@@ -147,6 +167,13 @@ export const rawTranscripts = pgTable(
     metadata: jsonb("metadata"),
     uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
     uploadedBy: text("uploaded_by"),
+    streamRelationship: streamRelationshipEnum("stream_relationship").notNull().default("equivalent"),
+    streamEpochMs: bigint("stream_epoch_ms", { mode: "number" }),
+    audioUri: text("audio_uri"),
+    language: text("language"),
+    derivationType: derivationTypeEnum("derivation_type"),
+    derivedFromChunkIds: uuid("derived_from_chunk_ids").array(),
+    derivingAgentId: text("deriving_agent_id"),
   },
   (table) => ({
     meetingIdx: index("idx_raw_transcripts_meeting").on(table.meetingId),
@@ -180,6 +207,12 @@ export const transcriptChunks = pgTable(
     wordCount: integer("word_count"),
     contexts: text("contexts").array().notNull(),
     topics: text("topics").array(),
+    streamSource: text("stream_source"), // Phase 3: Track source of streaming chunks
+    contentType: contentTypeEnum("content_type").notNull().default("speech"),
+    startTimeMs: integer("start_time_ms"),
+    endTimeMs: integer("end_time_ms"),
+    messageId: text("message_id"),
+    threadId: text("thread_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -705,10 +738,65 @@ export const llmInteractions = pgTable(
   }),
 );
 
+// ============================================================================
+// CONNECTIONS
+// ============================================================================
+
+export const connections = pgTable("connections", {
+  id: text("id").primaryKey(),
+  activeMeetingId: uuid("active_meeting_id").references(() => meetings.id),
+  activeDecisionId: uuid("active_decision_id").references(() => flaggedDecisions.id),
+  activeDecisionContextId: uuid("active_decision_context_id").references(
+    () => decisionContexts.id,
+  ),
+  activeField: uuid("active_field"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  lastSeen: timestamp("last_seen", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type ConnectionSelect = typeof connections.$inferSelect;
+export type ConnectionInsert = typeof connections.$inferInsert;
+
+// ============================================================================
+// STREAM EVENTS (Phase 3)
+// ============================================================================
+
+export const streamEvents = pgTable(
+  "stream_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    meetingId: uuid("meeting_id").notNull().references(() => meetings.id),
+    type: text("type").notNull(), // "text" | "metadata" | etc.
+    text: text("text"), // Extracted text content for text events
+    speaker: text("speaker"),
+    startTime: timestamp("start_time", { withTimezone: true }),
+    endTime: timestamp("end_time", { withTimezone: true }),
+    streamSource: text("stream_source"), // e.g., "transcription", "local-audio"
+    data: jsonb("data").notNull(), // Full event payload
+    flushed: boolean("flushed").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    meetingIdx: index("stream_events_meeting_idx").on(table.meetingId),
+    flushedIdx: index("stream_events_flushed_idx").on(table.flushed),
+    meetingFlushedIdx: index("stream_events_meeting_flushed_idx").on(table.meetingId, table.flushed),
+  }),
+);
+
+export type StreamEventSelect = typeof streamEvents.$inferSelect;
+export type StreamEventInsert = typeof streamEvents.$inferInsert;
+
+// ============================================================================
+// SCHEMA EXPORT
+// ============================================================================
+
 export const schema = {
+  connections,
   meetings,
   rawTranscripts,
   transcriptChunks,
+  streamEvents,
   chunkRelevance,
   decisionContextWindows,
   decisionFields,

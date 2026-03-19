@@ -61,6 +61,13 @@ export class DrizzleRawTranscriptRepository {
       metadata: row.metadata || undefined,
       uploadedAt: row.uploadedAt.toISOString(),
       uploadedBy: row.uploadedBy || undefined,
+      streamRelationship: row.streamRelationship,
+      streamEpochMs: row.streamEpochMs ?? undefined,
+      audioUri: row.audioUri ?? undefined,
+      language: row.language ?? undefined,
+      derivationType: row.derivationType ?? undefined,
+      derivedFromChunkIds: row.derivedFromChunkIds ?? undefined,
+      derivingAgentId: row.derivingAgentId ?? undefined,
     };
   }
 }

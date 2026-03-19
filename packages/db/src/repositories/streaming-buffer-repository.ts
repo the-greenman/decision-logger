@@ -1,109 +1,131 @@
 /**
- * Drizzle implementation of IStreamingBufferRepository
+ * Drizzle implementation of IStreamingBufferRepository - Phase 3
  *
- * Note: This is a simplified implementation that stores events in memory
- * and creates chunks when flushed. In a production environment, this might
- * use Redis or another streaming solution.
+ * DB-backed streaming buffer with streamSource support and advisory lock-based
+ * flush idempotency.
  */
 
 import { db } from "../client.js";
-import { rawTranscripts, transcriptChunks, TranscriptChunkInsert } from "../schema.js";
+import { streamEvents, transcriptChunks, rawTranscripts } from "../schema.js";
 import { TranscriptChunk, CreateTranscriptChunk } from "@repo/schema";
+import { eq, and, sql, count, asc } from "drizzle-orm";
 
 interface StreamingEvent {
   type: "text" | "metadata";
   data: any;
-  timestamp: Date;
+  streamSource?: string;
 }
 
-interface BufferState {
-  status: "active" | "idle" | "flushing";
-  events: StreamingEvent[];
-  lastActivity: Date;
+interface BufferStatus {
+  status: "idle" | "active";
+  eventCount: number;
 }
-
-// In-memory buffer store (production: use Redis)
-const bufferStore = new Map<string, BufferState>();
 
 export class DrizzleStreamingBufferRepository {
-  async appendEvent(meetingId: string, event: any): Promise<void> {
-    const buffer = bufferStore.get(meetingId) || {
-      status: "active" as const,
-      events: [],
-      lastActivity: new Date(),
-    };
+  async appendEvent(meetingId: string, event: StreamingEvent): Promise<void> {
+    // Extract fields for easier querying
+    const { text, speaker, startTime, endTime, streamSource } = event.data || event;
 
-    buffer.events.push({
+    await db.insert(streamEvents).values({
+      meetingId,
       type: event.type || "text",
+      text: typeof text === "string" ? text : null,
+      speaker: speaker || null,
+      startTime: startTime ? new Date(startTime) : null,
+      endTime: endTime ? new Date(endTime) : null,
+      streamSource: streamSource || null,
       data: event.data || event,
-      timestamp: new Date(),
+      flushed: false,
     });
-
-    buffer.lastActivity = new Date();
-    buffer.status = "active";
-
-    bufferStore.set(meetingId, buffer);
   }
 
-  async getStatus(meetingId: string): Promise<{ status: string; eventCount: number }> {
-    const buffer = bufferStore.get(meetingId);
+  async getStatus(meetingId: string): Promise<BufferStatus> {
+    const [result] = await db
+      .select({ count: count() })
+      .from(streamEvents)
+      .where(and(eq(streamEvents.meetingId, meetingId), eq(streamEvents.flushed, false)));
 
-    if (!buffer) {
-      return { status: "idle", eventCount: 0 };
-    }
-
-    // Mark as idle if no activity for 5 minutes
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    if (buffer.lastActivity < fiveMinutesAgo && buffer.status === "active") {
-      buffer.status = "idle";
-      bufferStore.set(meetingId, buffer);
-    }
-
+    const eventCount = Number(result?.count || 0);
+    
     return {
-      status: buffer.status,
-      eventCount: buffer.events.length,
+      status: eventCount > 0 ? "active" : "idle",
+      eventCount,
     };
   }
 
   async flush(meetingId: string): Promise<TranscriptChunk[]> {
-    const buffer = bufferStore.get(meetingId);
+    // Use PostgreSQL advisory lock to prevent concurrent flushes
+    const lockKey = `stream_flush_${meetingId}`;
+    
+    return await db.transaction(async (tx) => {
+      // Acquire advisory lock using raw SQL
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
 
-    if (!buffer || buffer.events.length === 0) {
-      return [];
-    }
+      // Get unflushed events ordered by (createdAt, id) for stable ordering
+      // when multiple rows share the same timestamp granularity.
+      const events = await tx
+        .select()
+        .from(streamEvents)
+        .where(and(eq(streamEvents.meetingId, meetingId), eq(streamEvents.flushed, false)))
+        .orderBy(asc(streamEvents.createdAt), asc(streamEvents.id));
 
-    buffer.status = "flushing";
+      if (events.length === 0) {
+        return [];
+      }
 
-    try {
-      const fallbackRawTranscriptId = await this.createFallbackRawTranscript(
-        meetingId,
-        buffer.events,
-      );
+      // Group events by streamSource, create one raw_transcript per group
+      const NO_SOURCE = "__no_source__";
+      const eventsBySource = new Map<string, typeof events>();
+      for (const event of events) {
+        const key = event.streamSource ?? NO_SOURCE;
+        if (!eventsBySource.has(key)) eventsBySource.set(key, []);
+        eventsBySource.get(key)!.push(event);
+      }
 
-      // Group events by type and create chunks
+      const rawTranscriptBySource = new Map<string, string>();
+      for (const [source, sourceEvents] of eventsBySource) {
+        const id = await this.createFallbackRawTranscript(
+          tx,
+          meetingId,
+          sourceEvents,
+          source === NO_SOURCE ? undefined : source,
+        );
+        rawTranscriptBySource.set(source, id);
+      }
+
+      // Create chunks from events, sequence numbers reset per source
       const chunks: TranscriptChunk[] = [];
-      let sequenceNumber = 1;
+      const seqBySource = new Map<string, number>();
 
-      // For now, we'll create one chunk per text event
-      // In production, this would use more sophisticated chunking
-      for (const event of buffer.events) {
-        if (event.type === "text" && event.data.text) {
+      for (const event of events) {
+        if (event.type === "text" && event.text) {
+          const eventData = event.data as any;
+          const sourceKey = event.streamSource ?? NO_SOURCE;
+          const rawTranscriptId = eventData.rawTranscriptId ?? rawTranscriptBySource.get(sourceKey)!;
+          const seq = (seqBySource.get(sourceKey) ?? 0) + 1;
+          seqBySource.set(sourceKey, seq);
+
           const chunkData: CreateTranscriptChunk = {
             meetingId,
-            rawTranscriptId: event.data.rawTranscriptId || fallbackRawTranscriptId,
-            sequenceNumber: sequenceNumber++,
-            text: event.data.text,
-            speaker: event.data.speaker,
-            startTime: event.data.startTime,
-            endTime: event.data.endTime,
+            rawTranscriptId,
+            sequenceNumber: seq,
+            text: event.text,
+            speaker: event.speaker || undefined,
+            startTime: event.startTime?.toISOString(),
+            endTime: event.endTime?.toISOString(),
             chunkStrategy: "streaming",
-            tokenCount: this.estimateTokenCount(event.data.text),
-            wordCount: this.countWords(event.data.text),
-            contexts: event.data.contexts || [`meeting:${meetingId}`],
-            topics: event.data.topics,
+            tokenCount: this.estimateTokenCount(event.text),
+            wordCount: this.countWords(event.text),
+            contexts: eventData.contexts || [`meeting:${meetingId}`],
+            topics: eventData.topics,
+            contentType: eventData.contentType ?? "speech",
+            startTimeMs: eventData.startTimeMs,
+            endTimeMs: eventData.endTimeMs,
+            messageId: eventData.messageId,
+            threadId: eventData.threadId,
           };
 
-          const insertData: TranscriptChunkInsert = {
+          const [result] = await tx.insert(transcriptChunks).values({
             meetingId: chunkData.meetingId,
             rawTranscriptId: chunkData.rawTranscriptId,
             sequenceNumber: chunkData.sequenceNumber,
@@ -116,29 +138,30 @@ export class DrizzleStreamingBufferRepository {
             wordCount: chunkData.wordCount || null,
             contexts: chunkData.contexts,
             topics: chunkData.topics || null,
-          };
-
-          const [result] = await db.insert(transcriptChunks).values(insertData).returning();
+            streamSource: event.streamSource,
+            contentType: eventData.contentType ?? "speech",
+            startTimeMs: eventData.startTimeMs ?? null,
+            endTimeMs: eventData.endTimeMs ?? null,
+            messageId: eventData.messageId ?? null,
+            threadId: eventData.threadId ?? null,
+          }).returning();
 
           chunks.push(this.mapToSchema(result));
         }
       }
 
-      // Clear the buffer after successful flush
-      buffer.events = [];
-      buffer.status = "idle";
-      bufferStore.set(meetingId, buffer);
+      // Mark all events as flushed
+      await tx
+        .update(streamEvents)
+        .set({ flushed: true })
+        .where(and(eq(streamEvents.meetingId, meetingId), eq(streamEvents.flushed, false)));
 
       return chunks;
-    } catch (error) {
-      buffer.status = "active";
-      bufferStore.set(meetingId, buffer);
-      throw error;
-    }
+    });
   }
 
   async clear(meetingId: string): Promise<void> {
-    bufferStore.delete(meetingId);
+    await db.delete(streamEvents).where(eq(streamEvents.meetingId, meetingId));
   }
 
   private estimateTokenCount(text: string): number {
@@ -151,26 +174,33 @@ export class DrizzleStreamingBufferRepository {
   }
 
   private async createFallbackRawTranscript(
+    tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
     meetingId: string,
-    events: StreamingEvent[],
+    events: any[],
+    streamSource?: string,
   ): Promise<string> {
     const combinedText = events
-      .filter((event) => event.type === "text" && typeof event.data?.text === "string")
-      .map((event) => String(event.data.text).trim())
+      .filter((event) => event.type === "text" && typeof event.text === "string")
+      .map((event) => event.text.trim())
       .filter(Boolean)
       .join("\n");
 
-    const [rawTranscript] = await db
+    const metadata: Record<string, unknown> = {
+      generatedBy: "streaming-buffer-flush",
+      eventCount: events.length,
+    };
+    if (streamSource !== undefined) {
+      metadata.streamSource = streamSource;
+    }
+
+    const [rawTranscript] = await tx
       .insert(rawTranscripts)
       .values({
         meetingId,
         source: "stream",
         format: "txt",
         content: combinedText.length > 0 ? combinedText : "[stream flush without text payload]",
-        metadata: {
-          generatedBy: "streaming-buffer-flush",
-          eventCount: events.length,
-        },
+        metadata,
       })
       .returning({ id: rawTranscripts.id });
 
@@ -182,9 +212,6 @@ export class DrizzleStreamingBufferRepository {
   }
 
   private mapToSchema(row: any): TranscriptChunk {
-    const startTime = row.startTime instanceof Date ? row.startTime.toISOString() : row.startTime;
-    const endTime = row.endTime instanceof Date ? row.endTime.toISOString() : row.endTime;
-
     return {
       id: row.id,
       meetingId: row.meetingId,
@@ -192,13 +219,19 @@ export class DrizzleStreamingBufferRepository {
       sequenceNumber: row.sequenceNumber,
       text: row.text,
       speaker: row.speaker || undefined,
-      startTime: startTime || undefined,
-      endTime: endTime || undefined,
+      startTime: row.startTime?.toISOString() || undefined,
+      endTime: row.endTime?.toISOString() || undefined,
       chunkStrategy: row.chunkStrategy,
       tokenCount: row.tokenCount || undefined,
       wordCount: row.wordCount || undefined,
       contexts: row.contexts,
       topics: row.topics || undefined,
+      streamSource: row.streamSource || undefined,
+      contentType: row.contentType ?? "speech",
+      startTimeMs: row.startTimeMs ?? undefined,
+      endTimeMs: row.endTimeMs ?? undefined,
+      messageId: row.messageId ?? undefined,
+      threadId: row.threadId ?? undefined,
       createdAt: row.createdAt.toISOString(),
     };
   }

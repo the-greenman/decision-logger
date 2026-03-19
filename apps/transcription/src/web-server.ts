@@ -77,6 +77,8 @@ interface SessionDeliveredEventDiagnostic {
 interface SessionState {
   id: string;
   meetingId: string;
+  streamSource: string;
+  streamEpochMs: number;
   language?: string;
   status: "active" | "stopping" | "stopped";
   startedAt: string;
@@ -347,9 +349,10 @@ async function normalizeAudioChunkWithFfmpeg(audio: Buffer): Promise<Buffer> {
 export async function startWebServer(options?: StartWebServerOptions): Promise<RunningWebServer> {
   const apiUrl = resolveDecisionLoggerApiUrl();
   const apiKey = process.env.DECISION_LOGGER_API_KEY;
+  const connectionId = process.env.DECISION_LOGGER_CONNECTION_ID;
 
   const provider = options?.provider ?? createProviderFromEnv();
-  const apiClient = options?.apiClient ?? new DecisionLoggerApiClient(apiUrl, apiKey);
+  const apiClient = options?.apiClient ?? new DecisionLoggerApiClient(apiUrl, apiKey, fetch, connectionId);
   const sleep = options?.sleep ?? wait;
   const deliveryConfig = resolveDeliveryConfig(options?.deliveryConfig);
   const maxChunkBytes =
@@ -450,10 +453,13 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
           return;
         }
         const meetingId = parsed.data.meetingId.trim();
+        const streamEpochMs = Date.now();
 
         const session: SessionState = {
           id: randomUUID(),
           meetingId,
+          streamSource: parsed.data.streamSource,
+          streamEpochMs,
           ...(parsed.data.language === undefined ? {} : { language: parsed.data.language }),
           status: "active",
           startedAt: new Date().toISOString(),
@@ -461,7 +467,7 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
           postedEvents: 0,
           dedupedEvents: 0,
           nextSequenceNumber: 1,
-          lastFlushedAtMs: Date.now(),
+          lastFlushedAtMs: streamEpochMs,
           windowMs: parsed.data.windowMs,
           stepMs: parsed.data.stepMs,
           dedupeHorizonMs: parsed.data.dedupeHorizonMs,
@@ -477,6 +483,8 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
         const payload = TranscriptionSessionCreateResponseSchema.parse({
           sessionId: session.id,
           meetingId: session.meetingId,
+          streamSource: session.streamSource,
+          streamEpochMs: session.streamEpochMs,
           startedAt: session.startedAt,
           windowMs: session.windowMs,
           stepMs: session.stepMs,
@@ -594,7 +602,19 @@ export async function startWebServer(options?: StartWebServerOptions): Promise<R
           return true;
         });
 
-        const normalizedEvents = normalizeSequenceNumbers(dedupedEvents, session.nextSequenceNumber);
+        const normalizedEvents = normalizeSequenceNumbers(dedupedEvents, session.nextSequenceNumber).map(
+          (event): TranscriptEvent => ({
+            ...event,
+            contentType: event.contentType ?? "speech",
+            streamSource: session.streamSource,
+            ...(event.startTimeSeconds !== undefined
+              ? { startTimeMs: Math.round(event.startTimeSeconds * 1000) }
+              : {}),
+            ...(event.endTimeSeconds !== undefined
+              ? { endTimeMs: Math.round(event.endTimeSeconds * 1000) }
+              : {}),
+          }),
+        );
         normalizedEvents.forEach((event) => {
           pushDiagnosticEntry(session.deliveredEvents, {
             createdAt: new Date().toISOString(),

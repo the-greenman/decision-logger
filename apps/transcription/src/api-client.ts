@@ -22,6 +22,7 @@ export class DecisionLoggerApiClient {
     private readonly baseUrl: string,
     private readonly apiKey?: string,
     private readonly fetchImpl: FetchLike = fetch,
+    private readonly connectionId?: string,
   ) {}
 
   async postStreamEvent(meetingId: string, event: TranscriptEvent): Promise<void> {
@@ -34,6 +35,16 @@ export class DecisionLoggerApiClient {
           event.startTimeSeconds === undefined
             ? undefined
             : formatSecondsAsTimestamp(event.startTimeSeconds),
+        startTimeMs:
+          event.startTimeSeconds === undefined
+            ? undefined
+            : Math.round(event.startTimeSeconds * 1000),
+        endTimeMs:
+          event.endTimeSeconds === undefined
+            ? undefined
+            : Math.round(event.endTimeSeconds * 1000),
+        contentType: event.contentType ?? "speech",
+        streamSource: event.streamSource,
         sequenceNumber: event.sequenceNumber,
       },
     });
@@ -94,6 +105,10 @@ export class DecisionLoggerApiClient {
 
     if (this.apiKey !== undefined) {
       headers["x-api-key"] = this.apiKey;
+    }
+
+    if (this.connectionId !== undefined) {
+      headers["x-connection-id"] = this.connectionId;
     }
 
     const requestInit: RequestInit = {

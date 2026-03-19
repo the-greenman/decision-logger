@@ -73,6 +73,7 @@ describe("web transcription server", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         meetingId: "meeting-browser-1",
+        streamSource: "mic:front",
         language: "en",
       }),
     });
@@ -112,16 +113,26 @@ describe("web transcription server", () => {
       filename: expect.stringMatching(/^window-\d+\.wav$/),
       language: "en",
     });
-    expect(apiClient.postStreamEvent).toHaveBeenNthCalledWith(1, "meeting-browser-1", {
-      text: "hello world",
-      startTimeSeconds: 0.2,
-      sequenceNumber: 1,
-    });
-    expect(apiClient.postStreamEvent).toHaveBeenNthCalledWith(2, "meeting-browser-1", {
-      text: "second line",
-      startTimeSeconds: 1.1,
-      sequenceNumber: 2,
-    });
+    expect(apiClient.postStreamEvent).toHaveBeenNthCalledWith(1, "meeting-browser-1",
+      expect.objectContaining({
+        text: "hello world",
+        startTimeSeconds: 0.2,
+        startTimeMs: 200,
+        contentType: "speech",
+        streamSource: "mic:front",
+        sequenceNumber: 1,
+      }),
+    );
+    expect(apiClient.postStreamEvent).toHaveBeenNthCalledWith(2, "meeting-browser-1",
+      expect.objectContaining({
+        text: "second line",
+        startTimeSeconds: 1.1,
+        startTimeMs: 1100,
+        contentType: "speech",
+        streamSource: "mic:front",
+        sequenceNumber: 2,
+      }),
+    );
 
     const statusResponse = await fetch(`${baseUrl}/sessions/${createPayload.sessionId}/status`);
     expect(statusResponse.status).toBe(200);
@@ -282,6 +293,7 @@ describe("web transcription server", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         meetingId: "meeting-browser-2",
+        streamSource: "mic:front",
         windowMs: 10_000,
         stepMs: 20_000,
       }),
@@ -325,7 +337,7 @@ describe("web transcription server", () => {
     const createResponse = await fetch(`${baseUrl}/sessions`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ meetingId: "meeting-browser-dedupe" }),
+      body: JSON.stringify({ meetingId: "meeting-browser-dedupe", streamSource: "mic:front" }),
     });
     const createPayload = (await createResponse.json()) as { sessionId: string };
 
@@ -394,6 +406,7 @@ describe("web transcription server", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         meetingId: "meeting-browser-window",
+        streamSource: "mic:front",
         windowMs: 30_000,
         stepMs: 10_000,
       }),
@@ -434,5 +447,114 @@ describe("web transcription server", () => {
       pcmToWav(Buffer.concat([Buffer.from("b"), Buffer.from("c"), Buffer.from("d")])),
       expect.objectContaining({ filename: expect.stringMatching(/^window-\d+\.wav$/) }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 1d — canonical stream producer contract (#34)
+// ---------------------------------------------------------------------------
+
+describe("Phase 1d — streamSource and streamEpochMs on session creation", () => {
+  it("returns 400 when streamSource is missing", async () => {
+    const server = await startWebServer({
+      port: 0,
+      host: "127.0.0.1",
+      provider: { transcribe: vi.fn() } as ITranscriptionProvider,
+      apiClient: { postStreamEvent: vi.fn(), flushStream: vi.fn() },
+      normalizeAudioChunk: async (audio) => audio,
+    });
+    runningServers.push(server);
+    const baseUrl = `http://127.0.0.1:${server.port}`;
+
+    const res = await fetch(`${baseUrl}/sessions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ meetingId: "meeting-1" }), // no streamSource
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("includes streamEpochMs in the 201 response", async () => {
+    const before = Date.now();
+    const server = await startWebServer({
+      port: 0,
+      host: "127.0.0.1",
+      provider: { transcribe: vi.fn() } as ITranscriptionProvider,
+      apiClient: { postStreamEvent: vi.fn(), flushStream: vi.fn() },
+      normalizeAudioChunk: async (audio) => audio,
+    });
+    runningServers.push(server);
+    const baseUrl = `http://127.0.0.1:${server.port}`;
+
+    const res = await fetch(`${baseUrl}/sessions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ meetingId: "meeting-1", streamSource: "mic:front" }),
+    });
+    const after = Date.now();
+
+    expect(res.status).toBe(201);
+    const payload = (await res.json()) as { streamEpochMs: number; streamSource: string };
+    expect(typeof payload.streamEpochMs).toBe("number");
+    expect(payload.streamEpochMs).toBeGreaterThanOrEqual(before);
+    expect(payload.streamEpochMs).toBeLessThanOrEqual(after);
+    expect(payload.streamSource).toBe("mic:front");
+  });
+});
+
+describe("Phase 1d — canonical fields on delivered events", () => {
+  it("passes startTimeMs, endTimeMs, contentType: speech, and streamSource to postStreamEvent", async () => {
+    const provider: ITranscriptionProvider = {
+      transcribe: vi.fn().mockResolvedValue({
+        events: [
+          { text: "hello world", startTimeSeconds: 1.0, endTimeSeconds: 2.5 },
+        ],
+        rawResponse: {},
+      }),
+    };
+
+    const apiClient = {
+      postStreamEvent: vi.fn().mockResolvedValue(undefined),
+      flushStream: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const server = await startWebServer({
+      port: 0,
+      host: "127.0.0.1",
+      provider,
+      apiClient,
+      autoFlushMs: 999_999,
+      normalizeAudioChunk: async (audio) => audio,
+    });
+    runningServers.push(server);
+    const baseUrl = `http://127.0.0.1:${server.port}`;
+
+    await fetch(`${baseUrl}/sessions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ meetingId: "meeting-canonical", streamSource: "mic:rear" }),
+    });
+    const createPayload = (await (await fetch(`${baseUrl}/sessions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ meetingId: "meeting-canonical", streamSource: "mic:rear" }),
+    })).json()) as { sessionId: string };
+
+    await fetch(
+      `${baseUrl}/sessions/${createPayload.sessionId}/chunks?filename=chunk.webm`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/octet-stream" },
+        body: Buffer.from("fake-audio"),
+      },
+    );
+
+    const lastCall = apiClient.postStreamEvent.mock.calls.at(-1) as [string, unknown];
+    const deliveredEvent = lastCall[1] as Record<string, unknown>;
+    expect(deliveredEvent.startTimeMs).toBe(1000);
+    expect(deliveredEvent.endTimeMs).toBe(2500);
+    expect(deliveredEvent.contentType).toBe("speech");
+    expect(deliveredEvent.streamSource).toBe("mic:rear");
   });
 });

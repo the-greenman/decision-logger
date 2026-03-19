@@ -2163,3 +2163,59 @@ export const listLLMInteractionsRoute = createRoute({
     },
   },
 });
+
+const TagChunksByTimeRangeRequestSchema = z
+  .object({
+    fromMs: z.number().int().nonnegative(),
+    toMs: z.number().int().nonnegative(),
+    contexts: z.array(z.string().min(1)).min(1),
+  })
+  .openapi("TagChunksByTimeRangeRequest");
+
+const TagChunksByTimeRangeResponseSchema = z
+  .object({
+    updatedCount: z.number().int(),
+  })
+  .openapi("TagChunksByTimeRangeResponse");
+
+export const tagChunksByTimeRangeRoute = createRoute({
+  method: "post",
+  path: "/api/meetings/:id/chunks/tag",
+  tags: ["transcripts"],
+  request: {
+    params: MeetingIdParamSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: TagChunksByTimeRangeRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: TagChunksByTimeRangeResponseSchema,
+        },
+      },
+      description: "Retroactively applied context tags to all chunks in the time window",
+    },
+    400: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Invalid request",
+    },
+    503: {
+      content: {
+        "application/json": {
+          schema: ErrorResponseSchema,
+        },
+      },
+      description: "Database-backed endpoint unavailable",
+    },
+  },
+});

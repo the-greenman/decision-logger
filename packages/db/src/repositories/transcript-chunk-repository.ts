@@ -2,7 +2,7 @@
  * Drizzle implementation of ITranscriptChunkRepository
  */
 
-import { eq, and, ilike, arrayContains, inArray } from "drizzle-orm";
+import { eq, and, ilike, arrayContains, inArray, gte, lte } from "drizzle-orm";
 import { db } from "../client.js";
 import { transcriptChunks, TranscriptChunkSelect, TranscriptChunkInsert } from "../schema.js";
 import { TranscriptChunk } from "@repo/schema";
@@ -22,6 +22,12 @@ export class DrizzleTranscriptChunkRepository {
       wordCount: data.wordCount || null,
       contexts: data.contexts || [],
       topics: data.topics || null,
+      streamSource: data.streamSource || null,
+      contentType: data.contentType ?? "speech",
+      startTimeMs: data.startTimeMs ?? null,
+      endTimeMs: data.endTimeMs ?? null,
+      messageId: data.messageId ?? null,
+      threadId: data.threadId ?? null,
     };
 
     const [result] = await db.insert(transcriptChunks).values(insertData).returning();
@@ -115,6 +121,42 @@ export class DrizzleTranscriptChunkRepository {
     return bySequence.map((row) => this.mapToSchema(row));
   }
 
+  async addContextsByTimeRange(
+    meetingId: string,
+    fromMs: number,
+    toMs: number,
+    contexts: string[],
+  ): Promise<number> {
+    if (contexts.length === 0) return 0;
+
+    const dedupedContexts = Array.from(new Set(contexts));
+
+    const conditions = [
+      eq(transcriptChunks.meetingId, meetingId),
+      gte(transcriptChunks.startTimeMs, fromMs),
+      lte(transcriptChunks.startTimeMs, toMs),
+    ];
+
+    const rows = await db
+      .select({ id: transcriptChunks.id, contexts: transcriptChunks.contexts })
+      .from(transcriptChunks)
+      .where(and(...conditions));
+
+    if (rows.length === 0) return 0;
+
+    await Promise.all(
+      rows.map(async (row) => {
+        const merged = Array.from(new Set([...(row.contexts ?? []), ...dedupedContexts]));
+        await db
+          .update(transcriptChunks)
+          .set({ contexts: merged })
+          .where(eq(transcriptChunks.id, row.id));
+      }),
+    );
+
+    return rows.length;
+  }
+
   private mapToSchema(row: TranscriptChunkSelect): TranscriptChunk {
     const rawStartTime = row.startTime as unknown;
     const rawEndTime = row.endTime as unknown;
@@ -135,6 +177,12 @@ export class DrizzleTranscriptChunkRepository {
       wordCount: row.wordCount || undefined,
       contexts: row.contexts,
       topics: row.topics || undefined,
+      streamSource: row.streamSource || undefined,
+      contentType: row.contentType,
+      startTimeMs: row.startTimeMs ?? undefined,
+      endTimeMs: row.endTimeMs ?? undefined,
+      messageId: row.messageId ?? undefined,
+      threadId: row.threadId ?? undefined,
       createdAt: row.createdAt.toISOString(),
     };
   }

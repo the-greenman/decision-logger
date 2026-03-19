@@ -26,11 +26,12 @@ export interface ITranscriptChunkRepository {
   search(meetingId: string, query: string): Promise<TranscriptChunk[]>;
   findByDecisionContext(decisionContextId: string): Promise<TranscriptChunk[]>;
   addContexts(chunkIds: string[], contexts: string[]): Promise<TranscriptChunk[]>;
+  addContextsByTimeRange(meetingId: string, fromMs: number, toMs: number, contexts: string[]): Promise<number>;
 }
 
 export interface IStreamingBufferRepository {
   appendEvent(meetingId: string, event: any): Promise<void>;
-  getStatus(meetingId: string): Promise<{ status: string; eventCount: number }>;
+  getStatus(meetingId: string): Promise<{ status: "active" | "idle"; eventCount: number }>;
   flush(meetingId: string): Promise<TranscriptChunk[]>;
   clear(meetingId: string): Promise<void>;
 }

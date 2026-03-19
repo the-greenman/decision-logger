@@ -28,10 +28,11 @@ import {
 export interface TranscriptUploadData {
   meetingId: string;
   source: "upload" | "stream" | "import";
-  format: "json" | "txt" | "vtt" | "srt";
+  format: "json" | "txt" | "vtt" | "srt" | "chat-json" | "chat-txt";
   content: string;
   metadata?: Record<string, any>;
   uploadedBy?: string;
+  streamEpochMs?: number;
 }
 
 export interface StreamEventData {
@@ -44,6 +45,7 @@ export interface StreamEventData {
     rawTranscriptId?: string;
     contexts?: string[];
     topics?: string[];
+    streamSource?: string;
     [key: string]: any;
   };
 }
@@ -64,6 +66,11 @@ export interface AddTranscriptTextData {
   contexts?: string[];
   topics?: string[];
   uploadedBy?: string;
+  contentType?: "speech" | "message";
+  startTimeMs?: number;
+  endTimeMs?: number;
+  messageId?: string;
+  threadId?: string;
 }
 
 export interface AssignChunkContextsData {
@@ -91,6 +98,7 @@ export class TranscriptService {
       content: data.content,
       metadata: data.metadata,
       uploadedBy: data.uploadedBy,
+      ...(data.streamEpochMs !== undefined ? { streamEpochMs: data.streamEpochMs } : {}),
     };
 
     const transcript = await this.rawTranscriptRepo.create(createData);
@@ -135,6 +143,11 @@ export class TranscriptService {
       wordCount: data.text.split(/\s+/).filter(Boolean).length,
       contexts,
       topics: data.topics,
+      contentType: data.contentType ?? "speech",
+      startTimeMs: data.startTimeMs,
+      endTimeMs: data.endTimeMs,
+      messageId: data.messageId,
+      threadId: data.threadId,
     });
   }
 
@@ -186,6 +199,15 @@ export class TranscriptService {
 
   async searchChunks(meetingId: string, query: string): Promise<TranscriptChunk[]> {
     return this.chunkRepo.search(meetingId, query);
+  }
+
+  async tagChunksByTimeRange(
+    meetingId: string,
+    fromMs: number,
+    toMs: number,
+    contexts: string[],
+  ): Promise<number> {
+    return this.chunkRepo.addContextsByTimeRange(meetingId, fromMs, toMs, contexts);
   }
 
   async processTranscript(
@@ -257,6 +279,7 @@ export class TranscriptService {
             tokenCount: this.estimateTokens(chunkText),
             wordCount: chunkText.split(/\s+/).filter(Boolean).length,
             contexts: [`meeting:${rawTranscript.meetingId}`],
+            contentType: "speech",
           });
           chunks.push(chunk);
 
@@ -281,6 +304,7 @@ export class TranscriptService {
           tokenCount: this.estimateTokens(chunkText),
           wordCount: chunkText.split(/\s+/).filter(Boolean).length,
           contexts: [`meeting:${rawTranscript.meetingId}`],
+          contentType: "speech",
         });
         chunks.push(chunk);
       }
@@ -305,6 +329,7 @@ export class TranscriptService {
             tokenCount: this.estimateTokens(chunkText),
             wordCount: currentChunk.length,
             contexts: [`meeting:${rawTranscript.meetingId}`],
+            contentType: "speech",
           });
           chunks.push(chunk);
 
@@ -324,6 +349,7 @@ export class TranscriptService {
           tokenCount: this.estimateTokens(chunkText),
           wordCount: currentChunk.length,
           contexts: [`meeting:${rawTranscript.meetingId}`],
+          contentType: "speech",
         });
         chunks.push(chunk);
       }
@@ -382,7 +408,7 @@ export class TranscriptService {
       rawTranscriptId: rawTranscript.id,
       rawTranscriptUploadedAt: rawTranscript.uploadedAt,
       rawTranscriptFormat: rawTranscript.format,
-      sequenceNumber: segment.sequenceNumber,
+      sequenceNumber: segment.sequenceNumber ?? 0,
       displayText: segment.text,
       chunkIds: this.resolveChunkIdsForSegment(segment, transcriptChunks),
     };
@@ -469,7 +495,7 @@ export class TranscriptService {
     await this.streamingBuffer.appendEvent(meetingId, event);
   }
 
-  async getStreamStatus(meetingId: string): Promise<{ status: string; eventCount: number }> {
+  async getStreamStatus(meetingId: string): Promise<{ status: "active" | "idle"; eventCount: number }> {
     return this.streamingBuffer.getStatus(meetingId);
   }
 

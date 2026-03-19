@@ -1,9 +1,14 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 
 process.env.DATABASE_URL =
   "postgresql://decision_logger:decision_logger@localhost:5433/decision_logger_test";
 process.env.USE_MOCK_LLM = "true";
+
+// Fixed connection ID used for all context-endpoint calls in this test suite.
+// Phase 1 requires X-Connection-ID on every context mutating/reading request.
+const E2E_CONN_ID = "e2e00000-0000-4000-8000-000000000001";
+const connHeader = { "X-Connection-ID": E2E_CONN_ID };
 
 const [{ app }, core] = await Promise.all([import("../index"), import("@repo/core")]);
 
@@ -246,7 +251,7 @@ describe("API E2E Tests", () => {
   it("POST /api/context/meeting - should set the active meeting context", async () => {
     const response = await app.request("/api/context/meeting", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...connHeader },
       body: JSON.stringify({ meetingId: createdMeetingId }),
     });
 
@@ -259,7 +264,7 @@ describe("API E2E Tests", () => {
   it("POST /api/context/meeting - should return 404 for a missing meeting", async () => {
     const response = await app.request("/api/context/meeting", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...connHeader },
       body: JSON.stringify({ meetingId: "11111111-1111-4111-8111-111111111111" }),
     });
 
@@ -269,7 +274,7 @@ describe("API E2E Tests", () => {
   });
 
   it("GET /api/context - should return current context state", async () => {
-    const response = await app.request("/api/context");
+    const response = await app.request("/api/context", { headers: connHeader });
 
     expect(response.status).toBe(200);
     const data = await response.json();
@@ -278,7 +283,7 @@ describe("API E2E Tests", () => {
   });
 
   it("GET /api/context/in-session-meetings - should return current context plus meetings with in-session record status", async () => {
-    const response = await app.request("/api/context/in-session-meetings");
+    const response = await app.request("/api/context/in-session-meetings", { headers: connHeader });
 
     expect(response.status).toBe(200);
     const data = await response.json();
@@ -781,7 +786,7 @@ describe("API E2E Tests", () => {
   it("POST /api/meetings/:id/context/decision - should set the active decision context", async () => {
     const response = await app.request(`/api/meetings/${createdMeetingId}/context/decision`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...connHeader },
       body: JSON.stringify({ flaggedDecisionId: createdDecisionId }),
     });
 
@@ -795,7 +800,7 @@ describe("API E2E Tests", () => {
   it("POST /api/meetings/:id/context/decision - should return 404 for a missing flagged decision", async () => {
     const response = await app.request(`/api/meetings/${createdMeetingId}/context/decision`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...connHeader },
       body: JSON.stringify({ flaggedDecisionId: "11111111-1111-4111-8111-111111111111" }),
     });
 
@@ -807,7 +812,7 @@ describe("API E2E Tests", () => {
   it("POST /api/meetings/:id/context/field - should set the active field context", async () => {
     const response = await app.request(`/api/meetings/${createdMeetingId}/context/field`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...connHeader },
       body: JSON.stringify({ fieldId: createdFieldId }),
     });
 
@@ -825,7 +830,7 @@ describe("API E2E Tests", () => {
   it("POST /api/meetings/:id/context/field - should return 404 for a missing field", async () => {
     const response = await app.request(`/api/meetings/${createdMeetingId}/context/field`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...connHeader },
       body: JSON.stringify({ fieldId: "11111111-1111-4111-8111-111111111111" }),
     });
 
@@ -839,7 +844,7 @@ describe("API E2E Tests", () => {
       "/api/meetings/11111111-1111-4111-8111-111111111111/context/decision",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...connHeader },
         body: JSON.stringify({ flaggedDecisionId: createdDecisionId }),
       },
     );
@@ -854,7 +859,7 @@ describe("API E2E Tests", () => {
       "/api/meetings/11111111-1111-4111-8111-111111111111/context/field",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...connHeader },
         body: JSON.stringify({ fieldId: createdFieldId }),
       },
     );
@@ -879,7 +884,7 @@ describe("API E2E Tests", () => {
 
     const response = await app.request(`/api/meetings/${mismatchMeeting.id}/context/field`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...connHeader },
       body: JSON.stringify({ fieldId: createdFieldId }),
     });
 
@@ -1532,6 +1537,7 @@ describe("API E2E Tests", () => {
   it("DELETE /api/meetings/:id/context/field - should clear the active field context", async () => {
     const response = await app.request(`/api/meetings/${createdMeetingId}/context/field`, {
       method: "DELETE",
+      headers: connHeader,
     });
 
     expect(response.status).toBe(200);
@@ -1555,6 +1561,7 @@ describe("API E2E Tests", () => {
 
     const response = await app.request(`/api/meetings/${mismatchMeeting.id}/context/field`, {
       method: "DELETE",
+      headers: connHeader,
     });
 
     expect(response.status).toBe(400);
@@ -1565,6 +1572,7 @@ describe("API E2E Tests", () => {
   it("DELETE /api/meetings/:id/context/decision - should clear the active decision context", async () => {
     const response = await app.request(`/api/meetings/${createdMeetingId}/context/decision`, {
       method: "DELETE",
+      headers: connHeader,
     });
 
     expect(response.status).toBe(200);
@@ -1577,7 +1585,7 @@ describe("API E2E Tests", () => {
   it("DELETE /api/meetings/:id/context/decision - should return 400 when the active meeting does not match", async () => {
     const restoreMeetingContextResponse = await app.request("/api/context/meeting", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...connHeader },
       body: JSON.stringify({ meetingId: createdMeetingId }),
     });
     expect(restoreMeetingContextResponse.status).toBe(200);
@@ -1586,7 +1594,7 @@ describe("API E2E Tests", () => {
       `/api/meetings/${createdMeetingId}/context/decision`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...connHeader },
         body: JSON.stringify({ flaggedDecisionId: createdDecisionId }),
       },
     );
@@ -1606,6 +1614,7 @@ describe("API E2E Tests", () => {
 
     const response = await app.request(`/api/meetings/${mismatchMeeting.id}/context/decision`, {
       method: "DELETE",
+      headers: connHeader,
     });
 
     expect(response.status).toBe(400);
@@ -1616,6 +1625,7 @@ describe("API E2E Tests", () => {
   it("DELETE /api/context/meeting - should clear the active meeting context", async () => {
     const response = await app.request("/api/context/meeting", {
       method: "DELETE",
+      headers: connHeader,
     });
 
     expect(response.status).toBe(200);
@@ -1920,5 +1930,90 @@ describe("API E2E Tests", () => {
     expect(logDecisionResponses?.["200"]).toBeDefined();
     expect(logDecisionResponses?.["400"]).toBeDefined();
     expect(logDecisionResponses?.["404"]).toBeDefined();
+  });
+});
+
+describe("Phase 1b — transcription_complete meeting state", () => {
+  let meetingId: string;
+
+  beforeEach(async () => {
+    const res = await app.request("/api/meetings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Lifecycle Test Meeting", date: "2026-03-18T10:00:00Z", participants: ["Facilitator"] }),
+    });
+    const data = await res.json() as any;
+    meetingId = data.id;
+  });
+
+  it("PATCH /api/meetings/:id - transitions to transcription_complete", async () => {
+    // First end the meeting
+    await app.request(`/api/meetings/${meetingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "ended" }),
+    });
+
+    const res = await app.request(`/api/meetings/${meetingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "transcription_complete" }),
+    });
+
+    expect(res.status).toBe(200);
+    const data = await res.json() as any;
+    expect(data.status).toBe("transcription_complete");
+  });
+
+  it("POST /api/meetings/:id/transcripts/upload - returns 409 for transcription_complete meeting", async () => {
+    // End then complete
+    await app.request(`/api/meetings/${meetingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "ended" }),
+    });
+    await app.request(`/api/meetings/${meetingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "transcription_complete" }),
+    });
+
+    const res = await app.request(`/api/meetings/${meetingId}/transcripts/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        format: "txt",
+        content: "Late upload attempt",
+        chunkStrategy: "fixed",
+      }),
+    });
+
+    expect(res.status).toBe(409);
+    const data = await res.json() as any;
+    expect(data.error).toMatch(/transcription_complete/);
+  });
+
+  it("POST /api/meetings/:id/transcripts/stream - returns 409 after meeting ended", async () => {
+    await app.request(`/api/meetings/${meetingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "ended" }),
+    });
+
+    const res = await app.request(`/api/meetings/${meetingId}/transcripts/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Connection-ID": "conn-lifecycle-test" },
+      body: JSON.stringify({ text: "Post-meeting stream attempt" }),
+    });
+
+    expect(res.status).toBe(409);
+    const data = await res.json() as any;
+    expect(data.error).toMatch(/ended/i);
+  });
+
+  it("MeetingStatusSchema accepts transcription_complete", () => {
+    const { MeetingStatusSchema } = require("@repo/schema");
+    const result = MeetingStatusSchema.safeParse("transcription_complete");
+    expect(result.success).toBe(true);
   });
 });

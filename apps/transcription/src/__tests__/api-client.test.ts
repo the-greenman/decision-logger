@@ -38,4 +38,30 @@ describe("DecisionLoggerApiClient", () => {
       chunkStrategy: "speaker",
     });
   });
+
+  it("postStreamEvent sends startTimeMs, endTimeMs, contentType, and streamSource", async () => {
+    const fetchMockFn = vi.fn().mockResolvedValue(
+      new Response(null, { status: 200 }),
+    );
+    const fetchMock = fetchMockFn as unknown as typeof fetch;
+
+    const client = new DecisionLoggerApiClient("http://localhost:3000", undefined, fetchMock);
+    await client.postStreamEvent("meeting-123", {
+      text: "hello",
+      startTimeSeconds: 1.5,
+      endTimeSeconds: 3.0,
+      contentType: "speech",
+      streamSource: "mic:front",
+      sequenceNumber: 1,
+    });
+
+    const [, init] = fetchMockFn.mock.calls[0] ?? [];
+    const body = JSON.parse((init?.body as string) ?? "{}");
+    expect(body.startTimeMs).toBe(1500);
+    expect(body.endTimeMs).toBe(3000);
+    expect(body.contentType).toBe("speech");
+    expect(body.streamSource).toBe("mic:front");
+    // display string still present for compatibility (no ms precision in formatter)
+    expect(body.timestamp).toBe("00:00:01");
+  });
 });

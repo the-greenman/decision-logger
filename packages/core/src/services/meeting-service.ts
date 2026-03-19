@@ -2,7 +2,7 @@ import type { IMeetingRepository } from "../interfaces/i-meeting-repository";
 import { CreateMeetingSchema } from "@repo/schema";
 import type { Meeting, CreateMeeting } from "@repo/schema";
 
-const editableMeetingStatuses = ["proposed", "in_session", "ended"] as const;
+const editableMeetingStatuses = ["proposed", "in_session", "ended", "transcription_complete"] as const;
 
 export class MeetingService {
   constructor(private readonly repo: IMeetingRepository) {}
@@ -54,19 +54,26 @@ export class MeetingService {
     return this.repo.update(id, data);
   }
 
-  async updateStatus(id: string, status: "proposed" | "in_session" | "ended"): Promise<Meeting> {
+  async updateStatus(
+    id: string,
+    status: "proposed" | "in_session" | "ended" | "transcription_complete",
+  ): Promise<Meeting> {
     if (!id) {
       throw new Error("Meeting ID is required");
     }
     if (!editableMeetingStatuses.includes(status)) {
-      throw new Error('Status must be one of "proposed", "in_session", or "ended"');
+      throw new Error('Status must be one of "proposed", "in_session", "ended", or "transcription_complete"');
     }
     const existing = await this.repo.findById(id);
     if (!existing) {
       throw new Error("Meeting not found");
     }
-    if (existing.status === "ended") {
-      throw new Error("Ended meetings cannot be reopened or modified");
+    // ended → transcription_complete is the only valid transition from ended
+    if (existing.status === "ended" && status !== "transcription_complete") {
+      throw new Error("Ended meetings can only transition to transcription_complete");
+    }
+    if (existing.status === "transcription_complete") {
+      throw new Error("transcription_complete meetings cannot be modified");
     }
     if (status === "proposed" && existing.status === "in_session") {
       throw new Error("In-session meetings cannot move back to proposed");
