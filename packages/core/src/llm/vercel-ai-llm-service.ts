@@ -1,6 +1,7 @@
 import { generateObject } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { openai } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { z } from "@repo/schema";
 import type {
   ILLMService,
@@ -12,6 +13,25 @@ import type {
 function getModel() {
   const provider = process.env["LLM_PROVIDER"] ?? "anthropic";
   const modelId = process.env["LLM_MODEL"] ?? "claude-opus-4-5";
+
+  // Local / self-hosted models exposed over an OpenAI-compatible HTTP API
+  // (Ollama at /v1, vLLM, LM Studio, llama.cpp server, LocalAI, etc.).
+  if (provider === "ollama" || provider === "openai-compatible") {
+    const defaultBaseUrl =
+      provider === "ollama" ? "http://localhost:11434/v1" : "http://localhost:8080/v1";
+    const baseURL = process.env["LLM_BASE_URL"] ?? defaultBaseUrl;
+    const apiKey = process.env["LLM_API_KEY"] ?? "not-needed";
+    // Opt in to OpenAI-style `response_format: { type: "json_schema" }`.
+    // Without this the AI SDK drops the schema and `generateObject` collapses
+    // to free-form JSON guessing. Ollama has supported this since v0.5.
+    const local = createOpenAICompatible({
+      name: provider,
+      baseURL,
+      apiKey,
+      supportsStructuredOutputs: true,
+    });
+    return local(modelId);
+  }
 
   if (provider === "openai") {
     return openai(modelId);

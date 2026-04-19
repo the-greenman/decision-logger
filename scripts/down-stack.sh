@@ -7,5 +7,6 @@ cd "$ROOT_DIR"
 
 docker compose down --remove-orphans
 docker compose -f docker-compose.whisper.yml down --remove-orphans
+docker compose -f docker-compose.ollama.yml down --remove-orphans
 
-echo "Stack stopped (api/db/transcription/whisper)."
+echo "Stack stopped (api/db/transcription/whisper/ollama)."

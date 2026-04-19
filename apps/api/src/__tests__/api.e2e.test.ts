@@ -1728,6 +1728,10 @@ describe("API E2E Tests", () => {
     expect(["mock", "real"]).toContain(data.llm.mode);
     expect(typeof data.llm.provider).toBe("string");
     expect(typeof data.llm.model).toBe("string");
+    // Reachability is always reported. In the e2e suite USE_MOCK_LLM=true so
+    // the probe short-circuits to true without touching the network.
+    expect(typeof data.llm.reachable).toBe("boolean");
+    expect(data.llm.reachable).toBe(true);
   });
 
   it("GET /openapi.json - should return OpenAPI spec", async () => {

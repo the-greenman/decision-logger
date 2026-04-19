@@ -1,6 +1,6 @@
 openapi: 3.0.0
 info:
-  version: 1.0.0
+  version: 1.0.1
   title: μ democracy API
   description: Context-driven decision logging system API
 components:
@@ -17,15 +17,26 @@ components:
           type: string
         model:
           type: string
+        reachable:
+          type: boolean
+        latencyMs:
+          type: integer
+          minimum: 0
+        error:
+          type: string
+        baseUrl:
+          type: string
       required:
         - mode
         - provider
         - model
+        - reachable
       description: Safe LLM runtime configuration currently active in the API process
       example:
         mode: real
         provider: anthropic
         model: claude-opus-4-5
+        reachable: true
     ApiStatus:
       type: object
       properties:
@@ -67,6 +78,7 @@ components:
           mode: real
           provider: anthropic
           model: claude-opus-4-5
+          reachable: true
     Meeting:
       type: object
       properties:

@@ -502,6 +502,20 @@ export const ApiStatusLlmSchema = z
     mode: z.enum(["mock", "real"]),
     provider: z.string(),
     model: z.string(),
+    /**
+     * Whether the configured LLM summariser is usable right now.
+     * - For local/openai-compatible providers: probed via GET {baseUrl}/models.
+     * - For anthropic/openai: treated as reachable iff the corresponding API key env is set
+     *   (we deliberately avoid a live network probe to skip usage cost & rate limits).
+     * - For mock mode: always true.
+     */
+    reachable: z.boolean(),
+    /** Round-trip latency of the reachability probe in ms (omitted when no network probe was performed). */
+    latencyMs: z.number().int().nonnegative().optional(),
+    /** Short human-readable reason when `reachable` is false. */
+    error: z.string().optional(),
+    /** Base URL used to probe local/openai-compatible providers (omitted for hosted providers). */
+    baseUrl: z.string().optional(),
   })
   .openapi("ApiStatusLlm", {
     description: "Safe LLM runtime configuration currently active in the API process",
@@ -509,6 +523,7 @@ export const ApiStatusLlmSchema = z
       mode: "real",
       provider: "anthropic",
       model: "claude-opus-4-5",
+      reachable: true,
     },
   });
 
@@ -535,6 +550,7 @@ export const ApiStatusSchema = z
         mode: "real",
         provider: "anthropic",
         model: "claude-opus-4-5",
+        reachable: true,
       },
     },
   });
