@@ -1,4 +1,5 @@
 import { Lock, Unlock, RefreshCw, Maximize2, Loader2, Paperclip } from "lucide-react";
+import { Label } from "@/components/ui/Label";
 import type { Field, AgendaItemStatus } from "@/lib/ui-models";
 
 interface DecisionFieldsCardProps {
@@ -62,9 +63,7 @@ export function DecisionFieldsCard({
           {/* Label + value */}
           <div className="px-5 pt-4 pb-3">
             <div className="flex items-center gap-2 mb-2">
-              <span className="font-mono text-xs uppercase tracking-widest text-text-muted">
-                {field.label}
-              </span>
+              <Label>{field.label}</Label>
               <FieldStatusIcon status={field.status} />
               {field.required && field.status === "idle" && !field.value && (
                 <span className="font-mono text-xs text-danger/60">required</span>

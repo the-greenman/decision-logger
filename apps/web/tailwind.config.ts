@@ -54,22 +54,22 @@ const config: Config = {
         "candidate-dismissed": "var(--color-candidate-dismissed)",
       },
       fontSize: {
-        // μDemocracy type scale
+        // μDemocracy type scale — letter-spacing creates editorial feel
         "xs":   ["11px", { lineHeight: "1.4", letterSpacing: "0.1em" }],
         "sm":   ["13px", { lineHeight: "1.6" }],
         "base": ["16px", { lineHeight: "1.6" }],
-        "md":   ["20px", { lineHeight: "1.3" }],
-        "lg":   ["28px", { lineHeight: "1.25" }],
-        "xl":   ["42px", { lineHeight: "1.15" }],
-        "2xl":  ["64px", { lineHeight: "1.1" }],
-        "3xl":  ["96px", { lineHeight: "1.1" }],
+        "md":   ["20px", { lineHeight: "1.3", letterSpacing: "-0.01em" }],
+        "lg":   ["28px", { lineHeight: "1.25", letterSpacing: "-0.01em" }],
+        "xl":   ["42px", { lineHeight: "1.15", letterSpacing: "-0.02em" }],
+        "2xl":  ["64px", { lineHeight: "1.1", letterSpacing: "-0.025em" }],
+        "3xl":  ["96px", { lineHeight: "1.1", letterSpacing: "-0.03em" }],
 
         // Density modes (retained)
         "display-title": ["2rem",     { lineHeight: "1.2",  fontWeight: "700" }],
         "display-field": ["1.375rem", { lineHeight: "1.5" }],
         "display-label": ["0.9375rem",{ lineHeight: "1.4",  fontWeight: "700" }],
         "display-meta":  ["0.875rem", { lineHeight: "1.4" }],
-        "fac-title":     ["1.125rem", { lineHeight: "1.3",  fontWeight: "700" }],
+        "fac-title":     ["1.75rem",  { lineHeight: "1.2",  fontWeight: "700", letterSpacing: "-0.015em" }],
         "fac-field":     ["0.9375rem",{ lineHeight: "1.5" }],
         "fac-label":     ["0.75rem",  { lineHeight: "1.4",  fontWeight: "700", letterSpacing: "0.05em" }],
         "fac-meta":      ["0.75rem",  { lineHeight: "1.4" }],

@@ -3,23 +3,24 @@
 @tailwind utilities;
 
 /* ── Light theme (default) ───────────────────────────────────────── */
+/* Paper-forward: warm surfaces, ink text, clear hierarchy */
 
 :root {
-  /* Surfaces */
-  --color-base:      #f4f2ee;
-  --color-surface:   #e8e5df;
-  --color-surface-2: #d8d4cc;
-  --color-overlay:   #c8c4bc;
+  /* Surfaces — layered paper tones from styleguide */
+  --color-base:      #f4f2ee;  /* Paper — main background */
+  --color-surface:   #e8e5df;  /* Grey 1 — cards, panels */
+  --color-surface-2: #ddd9d1;  /* Between grey-1 and grey-2 */
+  --color-overlay:   #c8c4bc;  /* Grey 2 — borders, dividers */
 
   /* Borders */
-  --color-border:       #c8c4bc;
-  --color-border-strong: #8a8680;
-  --color-border-locked: #1a6645;
+  --color-border:        #c8c4bc;  /* Grey 2 */
+  --color-border-strong: #8a8680;  /* Grey 3 */
+  --color-border-locked:   #1a6645;
 
-  /* Text */
-  --color-text-primary:   #2b2926;
-  --color-text-secondary: #4a4744;
-  --color-text-muted:     #8a8680;
+  /* Text — ink primary for document feel */
+  --color-text-primary:   #2b2926;  /* Ink — body text */
+  --color-text-secondary: #4a4744;  /* Grey 4 — secondary */
+  --color-text-muted:     #8a8680;  /* Grey 3 — labels, hints */
   --color-text-locked:    #1a6645;
 
   /* Brand absolute */

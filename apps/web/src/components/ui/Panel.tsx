@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { Label } from "./Label";
 
 interface PanelProps extends HTMLAttributes<HTMLElement> {
   title?: string;
@@ -15,7 +16,7 @@ export function Panel({ title, right, className, children, ...props }: PanelProp
       {(title || right) && (
         <div className="flex items-center justify-between gap-2 mb-3">
           {title ? (
-            <h2 className="text-fac-field text-text-primary font-medium">{title}</h2>
+            <Label as="h2" className="text-text-primary">{title}</Label>
           ) : (
             <span />
           )}

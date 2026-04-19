@@ -1802,24 +1802,6 @@ export function FacilitatorMeetingPage() {
               <span className="hidden xl:inline">Stream control</span>
             </Link>
 
-            <span
-              className="inline-flex items-center gap-1.5 font-mono text-[11px] px-1.5 py-0.5 border"
-              style={{ color: "var(--nav-text-dim)", borderColor: "var(--nav-border)" }}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  sharedStreamStatus?.streamState === "live"
-                    ? "bg-settled"
-                    : sharedStreamStatus?.streamState === "connecting"
-                      ? "bg-caution"
-                      : sharedStreamStatus?.streamState === "stopped"
-                        ? "bg-danger"
-                        : "bg-text-muted"
-                }`}
-              />
-              {sharedStreamStatus?.streamState ?? "idle"} · {transcriptRowCount} rows · {contextTaggedChunkCount} tagged
-            </span>
-
             <Link
               to={meetingTranscriptPath}
               target="_blank"

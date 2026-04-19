@@ -93,14 +93,14 @@ export function MainHeader({
             {titleTo ? (
               <Link
                 to={titleTo}
-                className="text-fac-title truncate hover:opacity-75"
+                className="text-fac-title truncate hover:opacity-75 tracking-tight"
                 style={dark ? titleStyle : { color: "var(--color-text-primary)" }}
               >
                 {title}
               </Link>
             ) : (
               <h1
-                className="text-fac-title truncate"
+                className="text-fac-title truncate tracking-tight"
                 style={dark ? titleStyle : { color: "var(--color-text-primary)" }}
               >
                 {title}
