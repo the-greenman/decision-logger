@@ -73,7 +73,7 @@ export function DecisionFieldsCard({
             {field.status === "generating" ? (
               <GeneratingPlaceholder />
             ) : field.value ? (
-              <p className="text-fac-field text-text-primary leading-relaxed">{field.value}</p>
+              <p className="text-fac-field text-text-primary leading-relaxed whitespace-pre-wrap">{field.value}</p>
             ) : (
               <p className="text-fac-field text-text-muted italic">Not yet generated</p>
             )}
