@@ -18,8 +18,8 @@ export function FieldCard({ field, density = "display" }: FieldCardProps) {
     : "text-fac-label text-text-secondary uppercase tracking-wider";
 
   const valueClass = isDisplay
-    ? "text-display-field text-text-primary leading-relaxed"
-    : "text-fac-field text-text-primary leading-relaxed";
+    ? "text-display-field text-text-primary leading-relaxed whitespace-pre-wrap"
+    : "text-fac-field text-text-primary leading-relaxed whitespace-pre-wrap";
 
   const statusBorder: Record<Field["status"], string> = {
     idle: "border-border bg-surface",

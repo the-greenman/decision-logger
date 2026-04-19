@@ -204,7 +204,7 @@ export function SharedMeetingPage() {
                 {zoomedField.instructions}
               </p>
             )}
-            <p className="text-display-field text-text-primary leading-relaxed mt-4">
+            <p className="text-display-field text-text-primary leading-relaxed whitespace-pre-wrap mt-4">
               {zoomedField.value || "Not yet generated"}
             </p>
           </div>

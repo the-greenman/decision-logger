@@ -200,7 +200,7 @@ export function LoggedDecisionPage() {
                   <span className="block font-mono text-xs uppercase tracking-widest text-text-muted mb-2">
                     {field.label}
                   </span>
-                  <p className="text-display-field text-text-primary leading-relaxed">
+                  <p className="text-display-field text-text-primary leading-relaxed whitespace-pre-wrap">
                     {field.value}
                   </p>
                 </div>
