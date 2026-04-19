@@ -21,7 +21,7 @@ export function IconButton({
     <button
       type={type}
       className={cn(
-        "inline-flex items-center justify-center w-8 h-8 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
+        "inline-flex items-center justify-center w-8 h-8 disabled:opacity-40 disabled:cursor-not-allowed",
         TONE_CLASS[tone],
         className,
       )}

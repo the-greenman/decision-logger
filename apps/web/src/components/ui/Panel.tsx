@@ -9,7 +9,7 @@ interface PanelProps extends HTMLAttributes<HTMLElement> {
 export function Panel({ title, right, className, children, ...props }: PanelProps) {
   return (
     <section
-      className={cn("rounded-card border border-border bg-surface p-4", className)}
+      className={cn("border border-border bg-surface p-4", className)}
       {...props}
     >
       {(title || right) && (

@@ -14,7 +14,7 @@ const CATEGORY_CLASSES: Record<TagCategory, string> = {
 export function TagPill({ name, category }: TagPillProps) {
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-pill text-fac-meta border font-medium ${CATEGORY_CLASSES[category]}`}
+      className={`inline-flex items-center px-2.5 py-0.5 font-mono text-xs uppercase tracking-wider border ${CATEGORY_CLASSES[category]}`}
     >
       {name}
     </span>

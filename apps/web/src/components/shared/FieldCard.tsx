@@ -10,8 +10,8 @@ export function FieldCard({ field, density = "display" }: FieldCardProps) {
   const isDisplay = density === "display";
 
   const containerClass = isDisplay
-    ? "rounded-card border p-12 gap-4"
-    : "rounded-card border p-4 gap-2";
+    ? "border p-12 gap-4"
+    : "border p-4 gap-2";
 
   const labelClass = isDisplay
     ? "text-display-label text-text-secondary uppercase tracking-widest"
@@ -66,9 +66,9 @@ function FieldStatusIcon({ status }: { status: Field["status"] }) {
 function GeneratingPlaceholder({ isDisplay }: { isDisplay: boolean }) {
   return (
     <div className={`flex flex-col gap-2 ${isDisplay ? "mt-2" : ""}`}>
-      <div className="h-4 bg-caution/10 rounded animate-pulse-slow w-full" />
-      <div className="h-4 bg-caution/10 rounded animate-pulse-slow w-4/5" />
-      <div className="h-4 bg-caution/10 rounded animate-pulse-slow w-2/3" />
+      <div className="h-4 bg-caution/10 animate-pulse-slow w-full" />
+      <div className="h-4 bg-caution/10 animate-pulse-slow w-4/5" />
+      <div className="h-4 bg-caution/10 animate-pulse-slow w-2/3" />
     </div>
   );
 }

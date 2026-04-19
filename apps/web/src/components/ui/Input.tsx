@@ -14,7 +14,7 @@ export function Input({ inputSize = "md", className, ...props }: InputProps) {
   return (
     <input
       className={cn(
-        "rounded border border-border bg-overlay text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent",
+        "border border-border bg-surface text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-strong",
         SIZE_CLASS[inputSize],
         className,
       )}

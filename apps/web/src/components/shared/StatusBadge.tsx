@@ -16,7 +16,7 @@ export function StatusBadge({ status }: StatusBadgeProps) {
   const { label, className } = STATUS_CONFIG[status];
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-badge text-fac-meta border font-medium ${className}`}
+      className={`inline-flex items-center px-2 py-0.5 font-mono text-xs uppercase tracking-wider border ${className}`}
     >
       {label}
     </span>

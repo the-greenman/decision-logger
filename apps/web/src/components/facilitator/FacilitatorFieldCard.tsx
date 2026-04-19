@@ -24,7 +24,7 @@ export function FacilitatorFieldCard({
       <FieldCard field={field} density="facilitator" />
 
       {/* Control strip */}
-      <div className="flex items-center gap-1 px-4 py-1.5 border-x border-b border-border rounded-b-card bg-surface/50">
+      <div className="flex items-center gap-1 px-4 py-1.5 border-x border-b border-border bg-surface/50">
         {field.status === "locked" ? (
           <IconButton
             icon={<Unlock size={14} />}
@@ -86,7 +86,7 @@ function IconButton({ icon, label, onClick, className = "", disabled }: IconButt
       title={label}
       onClick={onClick}
       disabled={disabled}
-      className={`p-1.5 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${className}`}
+      className={`p-1.5 disabled:opacity-30 disabled:cursor-not-allowed ${className}`}
     >
       {icon}
     </button>

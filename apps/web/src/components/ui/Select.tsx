@@ -14,7 +14,7 @@ export function Select({ selectSize = "md", className, children, ...props }: Sel
   return (
     <select
       className={cn(
-        "rounded border border-border bg-overlay text-text-primary focus:outline-none focus:border-accent",
+        "border border-border bg-surface text-text-primary focus:outline-none focus:border-border-strong",
         SIZE_CLASS[selectSize],
         className,
       )}

@@ -179,16 +179,27 @@ export function LoggedDecisionPage() {
               <MetaItem label="Date" value={formattedDate} />
             </div>
 
-            {/* Fields */}
-            <div className="flex flex-col gap-6 mb-8">
+            {/* Fields — MVD card (read-only) */}
+            <div className="mb-8 border border-border-locked">
+              {/* Black header bar */}
+              <div className="ink-surface px-5 py-3 flex items-baseline gap-4" style={{ background: "var(--nav-bg)" }}>
+                <span className="font-mono text-xs tracking-wider shrink-0" style={{ color: "var(--nav-text-dim)" }}>
+                  {log.id.slice(-6).toUpperCase()}
+                </span>
+                <span className="font-sans text-sm font-medium flex-1 leading-snug" style={{ color: "var(--nav-text)" }}>
+                  {displayTitle}
+                </span>
+                <span className="font-mono text-xs uppercase tracking-widest shrink-0" style={{ color: "var(--nav-text-dim)" }}>
+                  logged
+                </span>
+              </div>
+
+              {/* Field rows */}
               {displayFields.map((field) => (
-                <div
-                  key={field.id}
-                  className="flex flex-col gap-3 p-8 rounded-card border border-border-locked bg-settled-dim/10"
-                >
-                  <p className="text-display-label text-text-secondary uppercase tracking-widest">
+                <div key={field.id} className="border-t border-border-locked bg-settled-dim/10 px-5 py-5">
+                  <span className="block font-mono text-xs uppercase tracking-widest text-text-muted mb-2">
                     {field.label}
-                  </p>
+                  </span>
                   <p className="text-display-field text-text-primary leading-relaxed">
                     {field.value}
                   </p>

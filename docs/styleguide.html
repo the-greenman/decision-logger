@@ -1,0 +1,1490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>μDemocracy — Style Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400&display=swap" rel="stylesheet">
+
+<style>
+  /* ─── RESET ─────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ─── TOKENS ─────────────────────────────────────────── */
+  :root {
+    --black:    #1a1a1a;
+    --white:    #f4f2ee;
+    --grey-1:   #e8e5df;
+    --grey-2:   #c8c4bc;
+    --grey-3:   #8a8680;
+    --grey-4:   #4a4744;
+    --ink:      #2b2926;
+
+    --font-sans: 'IBM Plex Sans', Arial, sans-serif;
+    --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+
+    --size-xs:   11px;
+    --size-sm:   13px;
+    --size-base: 16px;
+    --size-md:   20px;
+    --size-lg:   28px;
+    --size-xl:   42px;
+    --size-2xl:  64px;
+    --size-3xl:  96px;
+
+    --leading-tight:  1.1;
+    --leading-body:   1.6;
+    --leading-loose:  1.9;
+
+    --space-xs:  8px;
+    --space-sm:  16px;
+    --space-md:  32px;
+    --space-lg:  64px;
+    --space-xl:  96px;
+    --space-2xl: 128px;
+
+    --rule: 1px solid var(--grey-2);
+  }
+
+  /* ─── BASE ───────────────────────────────────────────── */
+  html { font-size: 16px; }
+
+  body {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: var(--size-base);
+    line-height: var(--leading-body);
+    color: var(--ink);
+    background: var(--white);
+    -webkit-font-smoothing: subpixel-antialiased; /* slightly grittier */
+    text-rendering: optimizeLegibility;
+  }
+
+  /* ─── LAYOUT ─────────────────────────────────────────── */
+  .page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  .section {
+    margin-bottom: var(--space-xl);
+    padding-bottom: var(--space-xl);
+    border-bottom: var(--rule);
+  }
+
+  .section:last-child { border-bottom: none; }
+
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--grey-3);
+    margin-bottom: var(--space-md);
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-md);
+  }
+
+  .three-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: var(--space-md);
+  }
+
+  /* ─── GUIDE HEADER ───────────────────────────────────── */
+  .guide-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: var(--space-xl);
+    padding-bottom: var(--space-md);
+    border-bottom: 2px solid var(--black);
+  }
+
+  .guide-title {
+    font-family: var(--font-mono);
+    font-size: var(--size-sm);
+    font-weight: 400;
+    color: var(--grey-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .guide-version {
+    font-family: var(--font-mono);
+    font-size: var(--size-sm);
+    color: var(--grey-3);
+  }
+
+  /* ─── LOGO ───────────────────────────────────────────── */
+  .logo-demos {
+    display: flex;
+    align-items: center;
+    gap: var(--space-lg);
+    flex-wrap: wrap;
+  }
+
+  .logo-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--black);
+    flex-shrink: 0;
+  }
+
+  .logo-mark span {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 36px;
+    color: var(--white);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  .logo-mark.light {
+    background: var(--white);
+    border: 1px solid var(--grey-2);
+  }
+
+  .logo-mark.light span { color: var(--black); }
+
+  .logo-lockup {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo-wordmark {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: 22px;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+
+  .logo-wordmark strong {
+    font-weight: 700;
+  }
+
+  .logo-note {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    color: var(--grey-3);
+    margin-top: var(--space-xs);
+  }
+
+  /* ─── COLOUR ─────────────────────────────────────────── */
+  .colour-row {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-sm);
+  }
+
+  .swatch {
+    flex: 1;
+    min-width: 100px;
+  }
+
+  .swatch-block {
+    height: 80px;
+    border: 1px solid rgba(0,0,0,0.08);
+    margin-bottom: var(--space-xs);
+  }
+
+  .swatch-name {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    color: var(--grey-4);
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  .swatch-value {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    color: var(--grey-3);
+    display: block;
+  }
+
+  /* ─── TYPE SPECIMENS ─────────────────────────────────── */
+  .type-specimen {
+    margin-bottom: var(--space-md);
+    padding-bottom: var(--space-md);
+    border-bottom: var(--rule);
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: var(--space-md);
+    align-items: baseline;
+  }
+
+  .type-specimen:last-child { border-bottom: none; }
+
+  .type-meta {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    color: var(--grey-3);
+    line-height: 1.6;
+  }
+
+  .type-meta strong {
+    display: block;
+    color: var(--grey-4);
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  /* Type scale */
+  .t-display {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: var(--size-3xl);
+    line-height: var(--leading-tight);
+    letter-spacing: -0.03em;
+    color: var(--ink);
+  }
+
+  .t-h1 {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: var(--size-2xl);
+    line-height: var(--leading-tight);
+    letter-spacing: -0.025em;
+    color: var(--ink);
+  }
+
+  .t-h2 {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: var(--size-xl);
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+
+  .t-h3 {
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: var(--size-lg);
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+
+  .t-h4 {
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: var(--size-md);
+    line-height: 1.3;
+    color: var(--ink);
+  }
+
+  .t-body {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: var(--size-base);
+    line-height: var(--leading-body);
+    color: var(--ink);
+  }
+
+  .t-small {
+    font-family: var(--font-sans);
+    font-weight: 400;
+    font-size: var(--size-sm);
+    line-height: var(--leading-body);
+    color: var(--grey-4);
+  }
+
+  .t-label {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--grey-3);
+  }
+
+  .t-mono-body {
+    font-family: var(--font-mono);
+    font-size: var(--size-sm);
+    font-weight: 400;
+    line-height: var(--leading-body);
+    color: var(--ink);
+  }
+
+  .t-mono-sm {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    color: var(--grey-3);
+  }
+
+  /* ─── COMPONENTS ─────────────────────────────────────── */
+
+  /* Nav */
+  .nav-demo {
+    background: var(--black);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 48px;
+    margin-bottom: var(--space-sm);
+  }
+
+  .nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+  }
+
+  .nav-logo-mark {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 22px;
+    color: var(--black);
+    flex-shrink: 0;
+  }
+
+  .nav-items {
+    display: flex;
+    gap: 32px;
+    list-style: none;
+    margin-left: auto;
+  }
+
+  .nav-items a {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 400;
+    color: rgba(244,242,238,0.6);
+    text-decoration: none;
+    letter-spacing: 0.01em;
+  }
+
+  .nav-items a.active {
+    color: var(--white);
+    font-weight: 500;
+  }
+
+  /* Buttons */
+  .btn-row {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: var(--space-sm);
+  }
+
+  .btn {
+    font-family: var(--font-sans);
+    font-size: var(--size-sm);
+    font-weight: 500;
+    padding: 10px 20px;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    letter-spacing: 0.01em;
+    transition: none; /* no smooth — deliberate */
+  }
+
+  .btn-primary {
+    background: var(--black);
+    color: var(--white);
+  }
+
+  .btn-primary:hover { background: var(--grey-4); }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--grey-2);
+  }
+
+  .btn-secondary:hover { border-color: var(--black); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--grey-3);
+    border: 1px solid var(--grey-1);
+    font-weight: 400;
+  }
+
+  .btn-mono {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    font-weight: 400;
+    background: var(--grey-1);
+    color: var(--grey-4);
+    border: none;
+    padding: 8px 14px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* MVD Card — the core UI element */
+  .mvd-card {
+    border: 1px solid var(--grey-2);
+    background: var(--white);
+    margin-bottom: var(--space-sm);
+  }
+
+  .mvd-header {
+    background: var(--black);
+    color: var(--white);
+    padding: 12px 20px;
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+
+  .mvd-header-id {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    color: rgba(244,242,238,0.5);
+    letter-spacing: 0.08em;
+  }
+
+  .mvd-header-title {
+    font-family: var(--font-sans);
+    font-size: var(--size-sm);
+    font-weight: 500;
+    color: var(--white);
+  }
+
+  .mvd-header-status {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    color: rgba(244,242,238,0.5);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .mvd-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .mvd-field {
+    padding: 16px 20px;
+    border-right: 1px solid var(--grey-1);
+    border-bottom: 1px solid var(--grey-1);
+  }
+
+  .mvd-field:nth-child(even) { border-right: none; }
+  .mvd-field:nth-last-child(-n+2) { border-bottom: none; }
+
+  .mvd-field-label {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    color: var(--grey-3);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    display: block;
+  }
+
+  .mvd-field-content {
+    font-family: var(--font-sans);
+    font-size: var(--size-sm);
+    line-height: 1.5;
+    color: var(--ink);
+  }
+
+  /* Inline callout */
+  .callout {
+    border-left: 3px solid var(--black);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--grey-1);
+    margin-bottom: var(--space-sm);
+  }
+
+  .callout-mono {
+    border-left: 3px solid var(--grey-2);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--grey-1);
+    font-family: var(--font-mono);
+    font-size: var(--size-sm);
+    line-height: 1.7;
+    color: var(--grey-4);
+  }
+
+  /* Table */
+  .table-demo {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--size-sm);
+  }
+
+  .table-demo th {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--grey-3);
+    border-bottom: 2px solid var(--black);
+    padding: 8px 12px;
+    text-align: left;
+  }
+
+  .table-demo td {
+    padding: 10px 12px;
+    border-bottom: var(--rule);
+    color: var(--ink);
+    vertical-align: top;
+  }
+
+  .table-demo tr:last-child td { border-bottom: none; }
+
+  .td-mono {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    color: var(--grey-3);
+  }
+
+  /* Status tags */
+  .tag-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: var(--space-sm);
+  }
+
+  .tag {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border: 1px solid;
+  }
+
+  .tag-active  { color: var(--ink);    border-color: var(--grey-4); background: transparent; }
+  .tag-open    { color: var(--grey-3); border-color: var(--grey-2); background: transparent; }
+  .tag-review  { color: var(--ink);    border-color: var(--grey-4); background: var(--grey-1); }
+  .tag-super   { color: var(--grey-3); border-color: var(--grey-1); background: transparent; text-decoration: line-through; }
+
+  /* Form elements */
+  .field-group { margin-bottom: var(--space-sm); }
+
+  .field-label {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--grey-3);
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .field-input {
+    font-family: var(--font-sans);
+    font-size: var(--size-sm);
+    color: var(--ink);
+    background: var(--white);
+    border: 1px solid var(--grey-2);
+    padding: 10px 12px;
+    width: 100%;
+    outline: none;
+    -webkit-appearance: none;
+  }
+
+  .field-input:focus { border-color: var(--black); }
+
+  .field-textarea {
+    font-family: var(--font-sans);
+    font-size: var(--size-sm);
+    line-height: 1.6;
+    color: var(--ink);
+    background: var(--white);
+    border: 1px solid var(--grey-2);
+    padding: 10px 12px;
+    width: 100%;
+    resize: vertical;
+    min-height: 80px;
+    outline: none;
+  }
+
+  .field-textarea:focus { border-color: var(--black); }
+
+  .field-hint {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    color: var(--grey-3);
+    margin-top: 4px;
+    display: block;
+  }
+
+  /* Hero section preview */
+  .hero-demo {
+    background: var(--black);
+    color: var(--white);
+    padding: var(--space-xl) var(--space-lg);
+    margin-bottom: var(--space-sm);
+  }
+
+  .hero-eyebrow {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    color: rgba(244,242,238,0.4);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: var(--space-sm);
+  }
+
+  .hero-headline {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: clamp(40px, 5vw, 80px);
+    line-height: 1.0;
+    letter-spacing: -0.03em;
+    color: var(--white);
+    margin-bottom: var(--space-md);
+    max-width: 700px;
+  }
+
+  .hero-headline em {
+    font-style: normal;
+    color: rgba(244,242,238,0.35);
+  }
+
+  .hero-body {
+    font-family: var(--font-sans);
+    font-size: var(--size-md);
+    font-weight: 300;
+    line-height: 1.55;
+    color: rgba(244,242,238,0.7);
+    max-width: 520px;
+    margin-bottom: var(--space-lg);
+  }
+
+  .hero-tagline {
+    font-family: var(--font-mono);
+    font-size: var(--size-sm);
+    color: rgba(244,242,238,0.4);
+    letter-spacing: 0.04em;
+  }
+
+  /* ─── SPACING VIZ ────────────────────────────────────── */
+  .space-demo {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+  }
+
+  .space-block-wrap { text-align: center; }
+
+  .space-block {
+    background: var(--grey-2);
+    width: 40px;
+    display: block;
+    margin: 0 auto var(--space-xs);
+  }
+
+  .space-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--grey-3);
+  }
+
+  /* ─── PRINT BOOKLET PREVIEW ───────────────────────────── */
+  .booklet-preview {
+    background: white;
+    border: 1px solid var(--grey-2);
+    padding: 48px 52px;
+    max-width: 480px;
+    font-family: var(--font-sans);
+    box-shadow: 4px 4px 0 var(--grey-2);
+  }
+
+  .booklet-header {
+    border-bottom: 2px solid var(--black);
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .booklet-mark {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 20px;
+  }
+
+  .booklet-doc-id {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--grey-3);
+  }
+
+  .booklet-title {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 28px;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 20px;
+  }
+
+  .booklet-body {
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--ink);
+    margin-bottom: 20px;
+  }
+
+  .booklet-rule {
+    border: none;
+    border-top: 1px solid var(--grey-2);
+    margin: 20px 0;
+  }
+
+  .booklet-field {
+    margin-bottom: 16px;
+  }
+
+  .booklet-field-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--grey-3);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .booklet-field-line {
+    border-bottom: 1px solid var(--grey-2);
+    height: 24px;
+  }
+
+  .booklet-footer {
+    margin-top: 32px;
+    border-top: 1px solid var(--grey-2);
+    padding-top: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .booklet-footer-text {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--grey-3);
+  }
+
+  .booklet-page-num {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--grey-3);
+  }
+
+  /* ─── MISC HELPERS ───────────────────────────────────── */
+  .note {
+    font-family: var(--font-mono);
+    font-size: var(--size-xs);
+    color: var(--grey-3);
+    margin-top: var(--space-xs);
+  }
+
+  hr.section-rule {
+    border: none;
+    border-top: var(--rule);
+    margin: var(--space-xl) 0;
+  }
+
+  .demo-bg-light { background: var(--grey-1); padding: var(--space-md); }
+  .demo-bg-dark  { background: var(--black);  padding: var(--space-md); }
+
+  /* ─── PRINT DECAY ────────────────────────────────────────
+     Applied to black surfaces and rule lines.
+     Fonts are untouched — text stays sharp.
+     The world around it degrades.
+     ──────────────────────────────────────────────────────── */
+
+  /* Solid black areas — nav, hero, card headers */
+  .nav-demo,
+  .hero-demo,
+  .mvd-header {
+    filter: url(#ink-surface);
+  }
+
+  /* Rule lines — the horizontal borders between sections */
+  .section {
+    border-bottom-style: solid;
+    /* Apply the filter to the section element itself so the
+       bottom border passes through the rule-line filter.
+       Overflow visible so the filter doesn't clip. */
+  }
+
+  /* Target rule lines more precisely via pseudo-elements
+     so text content is not affected */
+  .section::after {
+    content: '';
+    display: block;
+    height: 1px;
+    background: var(--grey-2);
+    margin-top: var(--space-xl);
+    filter: url(#rule-line);
+  }
+
+  /* Remove the original border — replaced by the pseudo-element */
+  .section {
+    border-bottom: none;
+  }
+
+  /* The booklet box-shadow — make it feel slightly offset/uneven */
+  .booklet-preview {
+    filter: url(#ink-surface);
+  }
+
+  /* Paper grain overlay on the whole page — barely visible */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.028;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23g)' opacity='1'/%3E%3C/svg%3E");
+    mix-blend-mode: multiply;
+  }
+
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     PRINT DECAY FILTERS
+     Hidden SVG block. Filters referenced by CSS filter: url(#...)
+     Three distinct filters:
+       #ink-surface  — for solid black areas (nav, card headers, hero)
+       #rule-line    — for horizontal/vertical rules and borders
+       #paper-grain  — overall page surface noise, multiply blended
+     ═══════════════════════════════════════════════════════ -->
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute">
+  <defs>
+
+    <!-- BLACK SURFACE IMPERFECTION
+         feTurbulence generates organic noise.
+         feDisplacementMap shifts pixels slightly using that noise.
+         baseFrequency controls grain scale — very low = slow roll, higher = fine grain.
+         scale controls displacement intensity — keep small (1–3px range).
+         This makes the flat black look like it has slightly uneven ink coverage. -->
+    <filter id="ink-surface" x="-2%" y="-2%" width="104%" height="104%" color-interpolation-filters="sRGB">
+      <!-- Coarse toner variation — slow rolling density shift across the surface -->
+      <feTurbulence
+        type="fractalNoise"
+        baseFrequency="0.012 0.018"
+        numOctaves="4"
+        seed="42"
+        result="noise-coarse" />
+      <!-- Fine grain — individual toner particle scatter -->
+      <feTurbulence
+        type="fractalNoise"
+        baseFrequency="0.9 0.7"
+        numOctaves="2"
+        seed="17"
+        result="noise-fine" />
+      <!-- Merge noise layers with the fine grain at low weight -->
+      <feMerge result="noise-combined">
+        <feMergeNode in="noise-coarse" />
+        <feMergeNode in="noise-fine" />
+      </feMerge>
+      <!-- Push noise into alpha channel only.
+           High negative multiplier (-18) means most of the noise field
+           produces zero alpha — only the rarest peaks break through.
+           The intercept (1.4) sets where the threshold sits:
+           lower = fewer white breaks, higher = more.
+           Result: mostly dark with occasional faint pale patches,
+           very rarely a near-white speck. -->
+      <feColorMatrix
+        in="noise-combined"
+        type="matrix"
+        values="0 0 0 0 0
+                0 0 0 0 0
+                0 0 0 0 0
+                0 0 0 -10 1.8"
+        result="toner-mask" />
+      <!-- Arithmetic composite: out = k2*src + k3*mask
+           k2=1 keeps the source fully intact as the base.
+           k3=0.018 means even where the mask fires, it only
+           lightens by ~2% — not to white, just slightly less dense. -->
+      <feComposite in="SourceGraphic" in2="toner-mask" operator="arithmetic"
+        k1="0" k2="1" k3="0.09" k4="0" result="surface-textured" />
+      <!-- Very slight edge displacement — surface breathes, doesn't warp -->
+      <feTurbulence
+        type="turbulence"
+        baseFrequency="0.03 0.015"
+        numOctaves="2"
+        seed="7"
+        result="edge-noise" />
+      <feDisplacementMap
+        in="surface-textured"
+        in2="edge-noise"
+        scale="1.0"
+        xChannelSelector="R"
+        yChannelSelector="G" />
+    </filter>
+
+    <!-- RULE LINE IMPERFECTION
+         Heavier Y-axis turbulence than X — lines waver vertically
+         more than they drift horizontally. Occasional darker/lighter
+         patch from the feComponentTransfer. -->
+    <filter id="rule-line" x="-1%" y="-20%" width="102%" height="140%" color-interpolation-filters="sRGB">
+      <feTurbulence
+        type="fractalNoise"
+        baseFrequency="0.008 0.6"
+        numOctaves="3"
+        seed="31"
+        result="line-noise" />
+      <feDisplacementMap
+        in="SourceGraphic"
+        in2="line-noise"
+        scale="0.08"
+        xChannelSelector="R"
+        yChannelSelector="G" />
+    </filter>
+
+    <!-- PAPER GRAIN — full page surface
+         Very fine noise, extremely low opacity.
+         Applied via a pseudo-element over the whole page.
+         mix-blend-mode: multiply means it darkens the paper slightly
+         in patches, leaving the white areas reading as slightly aged. -->
+    <filter id="paper-grain" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feTurbulence
+        type="fractalNoise"
+        baseFrequency="0.65"
+        numOctaves="3"
+        seed="89"
+        result="grain" />
+      <feColorMatrix
+        in="grain"
+        type="saturate"
+        values="0"
+        result="grain-grey" />
+      <feBlend in="SourceGraphic" in2="grain-grey" mode="multiply" />
+    </filter>
+
+  </defs>
+</svg>
+
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="guide-header">
+    <div>
+      <div class="guide-title">μDemocracy — Visual Identity &amp; Component Guide</div>
+      <div class="guide-version" style="margin-top:4px">v0.1 — working draft</div>
+    </div>
+    <div style="font-family:var(--font-mono);font-size:11px;color:var(--grey-3);text-align:right">
+      IBM Plex Sans / IBM Plex Mono<br>
+      April 2026
+    </div>
+  </div>
+
+
+  <!-- 1. LOGO -->
+  <div class="section">
+    <div class="section-label">01 — Logo &amp; Mark</div>
+
+    <div class="logo-demos" style="margin-bottom:var(--space-md)">
+      <!-- Primary: white on black -->
+      <div>
+        <div style="background:var(--black);padding:32px;display:inline-flex;align-items:center;gap:16px;margin-bottom:8px">
+          <div class="logo-mark">
+            <span>μ.</span>
+          </div>
+        </div>
+        <div class="note">Primary mark — white on black</div>
+      </div>
+
+      <!-- With wordmark -->
+      <div>
+        <div style="background:var(--black);padding:32px;display:inline-flex;align-items:center;gap:16px;margin-bottom:8px">
+          <div class="logo-mark"><span>μ.</span></div>
+          <div>
+            <div style="font-family:var(--font-sans);font-weight:700;font-size:20px;color:var(--white);letter-spacing:-0.01em;line-height:1.1">μ.democracy</div>
+            <div style="font-family:var(--font-mono);font-size:10px;color:rgba(244,242,238,0.4);letter-spacing:0.08em;margin-top:3px">DEMOCRACY BEGINS WITH YOU</div>
+          </div>
+        </div>
+        <div class="note">Lockup with wordmark + tagline</div>
+      </div>
+
+      <!-- Reversed -->
+      <div>
+        <div style="background:var(--white);border:1px solid var(--grey-1);padding:32px;display:inline-flex;align-items:center;gap:16px;margin-bottom:8px">
+          <div class="logo-mark light"><span>μ.</span></div>
+          <div>
+            <div style="font-family:var(--font-sans);font-weight:700;font-size:20px;color:var(--black);letter-spacing:-0.01em;line-height:1.1">μ.democracy</div>
+            <div style="font-family:var(--font-mono);font-size:10px;color:var(--grey-3);letter-spacing:0.08em;margin-top:3px">DEMOCRACY BEGINS WITH YOU</div>
+          </div>
+        </div>
+        <div class="note">Light variant</div>
+      </div>
+    </div>
+
+    <div class="callout-mono">
+      The dot in μ. is load-bearing — it creates a third figure between the symbol and the reader.<br>
+      The misread of μ as "U" (reading as "U.democracy") is a productive entry point, not an error to correct.
+    </div>
+  </div>
+
+
+  <!-- 2. COLOUR -->
+  <div class="section">
+    <div class="section-label">02 — Colour</div>
+
+    <div class="colour-row">
+      <div class="swatch">
+        <div class="swatch-block" style="background:#1a1a1a"></div>
+        <span class="swatch-name">Black</span>
+        <span class="swatch-value">#1a1a1a</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#f4f2ee;border:1px solid #e8e5df"></div>
+        <span class="swatch-name">Paper</span>
+        <span class="swatch-value">#f4f2ee</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#e8e5df"></div>
+        <span class="swatch-name">Grey 1</span>
+        <span class="swatch-value">#e8e5df</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#c8c4bc"></div>
+        <span class="swatch-name">Grey 2</span>
+        <span class="swatch-value">#c8c4bc</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#8a8680"></div>
+        <span class="swatch-name">Grey 3</span>
+        <span class="swatch-value">#8a8680</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#4a4744"></div>
+        <span class="swatch-name">Grey 4</span>
+        <span class="swatch-value">#4a4744</span>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#2b2926"></div>
+        <span class="swatch-name">Ink</span>
+        <span class="swatch-value">#2b2926</span>
+      </div>
+    </div>
+    <div class="note" style="margin-top:var(--space-sm)">
+      No accent colour. Hierarchy is achieved through weight, size, and mono/sans contrast.<br>
+      The background is paper-warm (#f4f2ee), not white. Reduces glare. Reads as slightly aged.
+    </div>
+  </div>
+
+
+  <!-- 3. TYPOGRAPHY -->
+  <div class="section">
+    <div class="section-label">03 — Typography</div>
+
+    <div class="type-specimen">
+      <div class="type-meta">
+        <strong>Display</strong>
+        IBM Plex Sans<br>Bold / 700<br>96px / –3%
+      </div>
+      <div class="t-display">Decide.</div>
+    </div>
+
+    <div class="type-specimen">
+      <div class="type-meta">
+        <strong>H1</strong>
+        IBM Plex Sans<br>Bold / 700<br>64px / –2.5%
+      </div>
+      <div class="t-h1">Democracy begins with you.</div>
+    </div>
+
+    <div class="type-specimen">
+      <div class="type-meta">
+        <strong>H2</strong>
+        IBM Plex Sans<br>Bold / 700<br>42px / –2%
+      </div>
+      <div class="t-h2">What was decided, and why.</div>
+    </div>
+
+    <div class="type-specimen">
+      <div class="type-meta">
+        <strong>H3</strong>
+        IBM Plex Sans<br>Medium / 500<br>28px / –1%
+      </div>
+      <div class="t-h3">The decision that needs writing down.</div>
+    </div>
+
+    <div class="type-specimen">
+      <div class="type-meta">
+        <strong>Body</strong>
+        IBM Plex Sans<br>Regular / 400<br>16px / 1.6
+      </div>
+      <div class="t-body">The first and most foundational democratic practice is writing decisions down clearly, owning them, and being willing to be wrong about them. Not because it is required. Because it is honest.</div>
+    </div>
+
+    <div class="type-specimen">
+      <div class="type-meta">
+        <strong>Small</strong>
+        IBM Plex Sans<br>Regular / 400<br>13px / Grey 4
+      </div>
+      <div class="t-small">Revised by the same process every 20–40 years. Immutable once approved.</div>
+    </div>
+
+    <div class="type-specimen">
+      <div class="type-meta">
+        <strong>Label / UI</strong>
+        IBM Plex Mono<br>Regular / 400<br>11px / +10% / UC
+      </div>
+      <div class="t-label">Decision record — version 3 — active</div>
+    </div>
+
+    <div class="type-specimen">
+      <div class="type-meta">
+        <strong>Mono body</strong>
+        IBM Plex Mono<br>Regular / 400<br>13px / 1.6
+      </div>
+      <div class="t-mono-body">ADR-004 · Adopted 14 March 2026 · Supersedes ADR-001<br>Revisit: annual review cycle, next June</div>
+    </div>
+  </div>
+
+
+  <!-- 4. NAV -->
+  <div class="section">
+    <div class="section-label">04 — Navigation</div>
+
+    <div class="nav-demo">
+      <a href="#" class="nav-logo">
+        <div class="nav-logo-mark">μ.</div>
+      </a>
+      <nav>
+        <ul class="nav-items">
+          <li><a href="#" class="active">home</a></li>
+          <li><a href="#">practice</a></li>
+          <li><a href="#">tools</a></li>
+          <li><a href="#">exploration</a></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="note">Black bar. Logo mark left. Nav items right, light weight. Active state: white, medium weight. No hover states that animate. No underlines.</div>
+  </div>
+
+
+  <!-- 5. HERO -->
+  <div class="section">
+    <div class="section-label">05 — Hero / Page Header</div>
+
+    <div class="hero-demo">
+      <div class="hero-eyebrow">μ.democracy — the decision practice</div>
+      <h1 class="hero-headline">Democracy<br><em>begins</em><br>with you.</h1>
+      <p class="hero-body">Not with elections. Not with constitutions. With the next decision your group needs to make — written down, owned, revisable.</p>
+      <div class="hero-tagline">democracy begins with you</div>
+    </div>
+    <div class="note">Dimmed secondary text in headline creates rhythm without a second colour. Tagline in mono, lowercase, minimal — not a rallying cry.</div>
+  </div>
+
+
+  <!-- 6. MVD CARD -->
+  <div class="section">
+    <div class="section-label">06 — Minimum Viable Decision (MVD) Card</div>
+
+    <div class="mvd-card">
+      <div class="mvd-header">
+        <span class="mvd-header-id">MVD-007</span>
+        <span class="mvd-header-title">We will use consent, not consensus, for operational decisions</span>
+        <span class="mvd-header-status">active</span>
+      </div>
+      <div class="mvd-body">
+        <div class="mvd-field">
+          <span class="mvd-field-label">What was decided</span>
+          <div class="mvd-field-content">Operational decisions pass when no-one has a paramount objection. Consent does not require enthusiasm, only the absence of a blocking concern.</div>
+        </div>
+        <div class="mvd-field">
+          <span class="mvd-field-label">Why</span>
+          <div class="mvd-field-content">Consensus was producing gridlock on minor items. The group agreed that requiring agreement from everyone on everything conflates strategy with administration.</div>
+        </div>
+        <div class="mvd-field">
+          <span class="mvd-field-label">What wasn't chosen</span>
+          <div class="mvd-field-content">Simple majority voting (rejected — felt too adversarial, produces winners and losers). Full consensus retained for boundary and purpose decisions.</div>
+        </div>
+        <div class="mvd-field">
+          <span class="mvd-field-label">When to revisit</span>
+          <div class="mvd-field-content">Annual review, or if a consent decision is later disputed by more than two members. Next: June 2026.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">The core artifact. Black header grounds it as a formal record. Mono labels throughout. No colour coding — status is text, not traffic-light.</div>
+  </div>
+
+
+  <!-- 7. STATUS TAGS -->
+  <div class="section">
+    <div class="section-label">07 — Status Tags</div>
+
+    <div class="tag-row">
+      <span class="tag tag-active">active</span>
+      <span class="tag tag-open">open</span>
+      <span class="tag tag-review">under review</span>
+      <span class="tag tag-super">superseded</span>
+    </div>
+    <div class="note">Mono, uppercase, small. No colour. Superseded gets strikethrough — legible but clearly done. No badges, no dots, no traffic lights.</div>
+  </div>
+
+
+  <!-- 8. BUTTONS -->
+  <div class="section">
+    <div class="section-label">08 — Buttons &amp; Actions</div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary">Record a decision</button>
+      <button class="btn btn-secondary">View log</button>
+      <button class="btn btn-ghost">Download booklet</button>
+      <button class="btn btn-mono">ADR-format ↓</button>
+    </div>
+    <div class="note">No border-radius. No shadows. No transitions. Primary is solid black. Everything else is outlined or flat. The mono button is for utility/format actions.</div>
+  </div>
+
+
+  <!-- 9. FORMS -->
+  <div class="section">
+    <div class="section-label">09 — Form Elements</div>
+
+    <div class="two-col">
+      <div>
+        <div class="field-group">
+          <label class="field-label">What was decided</label>
+          <textarea class="field-textarea" placeholder="State the decision in plain language. One decision per record."></textarea>
+          <span class="field-hint">Complete sentence. Own it.</span>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Revisit date</label>
+          <input class="field-input" type="text" placeholder="e.g. June 2026 / annual review">
+        </div>
+      </div>
+      <div>
+        <div class="field-group">
+          <label class="field-label">Why</label>
+          <textarea class="field-textarea" placeholder="The causal claim. What made this the right choice over the alternative?"></textarea>
+        </div>
+        <div class="field-group">
+          <label class="field-label">What wasn't chosen</label>
+          <textarea class="field-textarea" style="min-height:60px" placeholder="Name at least one alternative."></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 10. TABLE -->
+  <div class="section">
+    <div class="section-label">10 — Decision Log Table</div>
+
+    <table class="table-demo">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Decision</th>
+          <th>Type</th>
+          <th>Date</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="td-mono">MVD-007</td>
+          <td>Use consent, not consensus, for operational decisions</td>
+          <td class="td-mono">procedural</td>
+          <td class="td-mono">14 Mar 26</td>
+          <td><span class="tag tag-active">active</span></td>
+        </tr>
+        <tr>
+          <td class="td-mono">MVD-006</td>
+          <td>Pilot to run for 90 days before evaluation</td>
+          <td class="td-mono">strategy</td>
+          <td class="td-mono">02 Feb 26</td>
+          <td><span class="tag tag-review">under review</span></td>
+        </tr>
+        <tr>
+          <td class="td-mono">MVD-003</td>
+          <td>Events team holds budget authority up to £500</td>
+          <td class="td-mono">boundary</td>
+          <td class="td-mono">11 Nov 25</td>
+          <td><span class="tag tag-active">active</span></td>
+        </tr>
+        <tr>
+          <td class="td-mono">MVD-001</td>
+          <td>All decisions to be recorded before implementation</td>
+          <td class="td-mono">purpose</td>
+          <td class="td-mono">04 Sep 25</td>
+          <td><span class="tag tag-super">superseded</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+
+  <!-- 11. CALLOUTS -->
+  <div class="section">
+    <div class="section-label">11 — Callouts &amp; Pull Text</div>
+
+    <div class="callout" style="margin-bottom:var(--space-sm)">
+      <div style="font-family:var(--font-sans);font-size:var(--size-md);font-weight:500;line-height:1.35;margin-bottom:8px">Real democracy is about learning to be wrong better.</div>
+      <div style="font-family:var(--font-mono);font-size:var(--size-xs);color:var(--grey-3)">A well-reasoned decision that proves incorrect is acceptable. A decision never stated clearly enough to be examined is the actual failure.</div>
+    </div>
+
+    <div class="callout-mono">
+      MVD-007 · active · adopted 14 March 2026<br>
+      Supersedes: MVD-001<br>
+      Revisit: June 2026 or if disputed by 2+ members
+    </div>
+  </div>
+
+
+  <!-- 12. PRINT BOOKLET -->
+  <div class="section">
+    <div class="section-label">12 — Print Booklet Preview (A5)</div>
+
+    <div style="display:flex;gap:var(--space-lg);flex-wrap:wrap;align-items:flex-start">
+      <div class="booklet-preview">
+        <div class="booklet-header">
+          <span class="booklet-mark">μ.</span>
+          <span class="booklet-doc-id">BOOKLET 1 OF 6 — PROCEDURAL DECISIONS</span>
+        </div>
+        <h2 class="booklet-title">How to record a procedural decision</h2>
+        <p class="booklet-body">A procedural decision governs how the group will make other decisions. It is the most foundational type. Write it down before you need it.</p>
+        <hr class="booklet-rule">
+        <div class="booklet-field">
+          <span class="booklet-field-label">What was decided</span>
+          <div class="booklet-field-line"></div>
+          <div class="booklet-field-line" style="margin-top:8px"></div>
+        </div>
+        <div class="booklet-field">
+          <span class="booklet-field-label">Why</span>
+          <div class="booklet-field-line"></div>
+          <div class="booklet-field-line" style="margin-top:8px"></div>
+        </div>
+        <div class="booklet-field">
+          <span class="booklet-field-label">What wasn't chosen</span>
+          <div class="booklet-field-line"></div>
+        </div>
+        <div class="booklet-field">
+          <span class="booklet-field-label">Revisit date</span>
+          <div class="booklet-field-line"></div>
+        </div>
+        <div class="booklet-footer">
+          <span class="booklet-footer-text">μ.democracy — mudemocracy.com</span>
+          <span class="booklet-page-num">p. 04</span>
+        </div>
+      </div>
+
+      <div style="max-width:340px">
+        <p class="t-small" style="margin-bottom:var(--space-sm)">The booklet is the primary product. A5, two-colour (black + paper). Set in IBM Plex Sans throughout. Mono for all labels and IDs.</p>
+        <p class="t-small" style="margin-bottom:var(--space-sm)">Looks like it came out of a photocopier in a community centre. That's correct.</p>
+        <p class="t-small">One booklet per decision type. The fill-in fields are functional — the booklet is a coach, not a manual.</p>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 13. SPACING -->
+  <div class="section">
+    <div class="section-label">13 — Spacing Scale</div>
+
+    <div class="space-demo">
+      <div class="space-block-wrap">
+        <div class="space-block" style="height:8px"></div>
+        <div class="space-label">xs<br>8</div>
+      </div>
+      <div class="space-block-wrap">
+        <div class="space-block" style="height:16px"></div>
+        <div class="space-label">sm<br>16</div>
+      </div>
+      <div class="space-block-wrap">
+        <div class="space-block" style="height:32px"></div>
+        <div class="space-label">md<br>32</div>
+      </div>
+      <div class="space-block-wrap">
+        <div class="space-block" style="height:64px"></div>
+        <div class="space-label">lg<br>64</div>
+      </div>
+      <div class="space-block-wrap">
+        <div class="space-block" style="height:96px"></div>
+        <div class="space-label">xl<br>96</div>
+      </div>
+      <div class="space-block-wrap">
+        <div class="space-block" style="height:128px"></div>
+        <div class="space-label">2xl<br>128</div>
+      </div>
+    </div>
+    <div class="note" style="margin-top:var(--space-sm)">Base-8 grid. Generous. Defaults to more space rather than less — documents breathe.</div>
+  </div>
+
+
+  <!-- PRINCIPLES -->
+  <div class="section">
+    <div class="section-label">Design principles</div>
+
+    <table class="table-demo">
+      <thead>
+        <tr>
+          <th>Principle</th>
+          <th>In practice</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Cheap office</strong></td>
+          <td>IBM Plex, paper-warm background, no gradients, no shadows, no border-radius. Looks like it was set in Word by someone who knows what they're doing.</td>
+        </tr>
+        <tr>
+          <td><strong>No accent colour</strong></td>
+          <td>Hierarchy through weight and mono/sans contrast only. Colour would signal urgency or brand. This is neither.</td>
+        </tr>
+        <tr>
+          <td><strong>No transitions</strong></td>
+          <td>Hover states snap, not slide. Documents don't animate.</td>
+        </tr>
+        <tr>
+          <td><strong>Mono for meta</strong></td>
+          <td>All IDs, labels, dates, status tags, and system text in IBM Plex Mono. Functional distinction, not decorative.</td>
+        </tr>
+        <tr>
+          <td><strong>Text, not icons</strong></td>
+          <td>Status is a word. Actions are words. No chevrons, no checkmarks, no coloured dots.</td>
+        </tr>
+        <tr>
+          <td><strong>Immutability as aesthetic</strong></td>
+          <td>Superseded records are struck through, not deleted. The log is a record, not a to-do list.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div><!-- /page -->
+</body>
+</html>

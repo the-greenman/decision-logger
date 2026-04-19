@@ -2,91 +2,113 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  darkMode: "class",
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Atkinson Hyperlegible"', "Verdana", "sans-serif"],
-        mono: ["ui-monospace", "SFMono-Regular", "monospace"],
+        sans: ['"IBM Plex Sans"', "Arial", "sans-serif"],
+        mono: ['"IBM Plex Mono"', '"Courier New"', "monospace"],
       },
       colors: {
-        // Base surfaces
-        base: "#0f1117",
-        surface: "#1c2033",
-        "surface-2": "#252a3d",
-        overlay: "#2e3450",
+        // Surfaces
+        base:        "var(--color-base)",
+        surface:     "var(--color-surface)",
+        "surface-2": "var(--color-surface-2)",
+        overlay:     "var(--color-overlay)",
 
         // Borders
-        border: "#3a4060",
-        "border-strong": "#4a5280",
-        "border-locked": "#2a3a50",
+        border:          "var(--color-border)",
+        "border-strong": "var(--color-border-strong)",
+        "border-locked": "var(--color-border-locked)",
 
         // Text
-        "text-primary": "#e8eaf2",
-        "text-secondary": "#8891b0",
-        "text-muted": "#5a6380",
-        "text-locked": "#6a7590",
+        "text-primary":   "var(--color-text-primary)",
+        "text-secondary": "var(--color-text-secondary)",
+        "text-muted":     "var(--color-text-muted)",
+        "text-locked":    "var(--color-text-locked)",
 
-        // Semantic colours
-        settled: "#34d399", // locked / confirmed
-        "settled-dim": "#1a4a38", // locked field background
-        accent: "#6c8ef7", // primary action / active
-        "accent-dim": "#1e2a6e", // accent background
-        caution: "#f59e0b", // generating / in-progress
-        "caution-dim": "#3a2800", // caution background
-        danger: "#f87171", // error / dismiss
-        "danger-dim": "#3a1010", // danger background
+        // Brand absolute
+        black: "var(--color-black)",
+        white: "var(--color-white)",
 
-        // Tag category colours
-        "tag-topic": "#6c8ef7",
-        "tag-topic-bg": "#1e2a6e",
-        "tag-team": "#34d399",
-        "tag-team-bg": "#1a4a38",
-        "tag-project": "#f59e0b",
-        "tag-project-bg": "#3a2800",
+        // Semantic
+        settled:         "var(--color-settled)",
+        "settled-dim":   "var(--color-settled-dim)",
+        accent:          "var(--color-accent)",
+        "accent-dim":    "var(--color-accent-dim)",
+        caution:         "var(--color-caution)",
+        "caution-dim":   "var(--color-caution-dim)",
+        danger:          "var(--color-danger)",
+        "danger-dim":    "var(--color-danger-dim)",
+
+        // Tag categories
+        "tag-topic":      "var(--color-tag-topic)",
+        "tag-topic-bg":   "var(--color-tag-topic-bg)",
+        "tag-team":       "var(--color-tag-team)",
+        "tag-team-bg":    "var(--color-tag-team-bg)",
+        "tag-project":    "var(--color-tag-project)",
+        "tag-project-bg": "var(--color-tag-project-bg)",
 
         // Candidate states
-        "candidate-new": "#f59e0b",
-        "candidate-dismissed": "#5a6380",
+        "candidate-new":       "var(--color-candidate-new)",
+        "candidate-dismissed": "var(--color-candidate-dismissed)",
       },
       fontSize: {
-        // Display density (projection)
-        "display-title": ["2rem", { lineHeight: "1.2", fontWeight: "700" }],
-        "display-field": ["1.375rem", { lineHeight: "1.5" }],
-        "display-label": ["0.9375rem", { lineHeight: "1.4", fontWeight: "700" }],
-        "display-meta": ["0.875rem", { lineHeight: "1.4" }],
+        // μDemocracy type scale
+        "xs":   ["11px", { lineHeight: "1.4", letterSpacing: "0.1em" }],
+        "sm":   ["13px", { lineHeight: "1.6" }],
+        "base": ["16px", { lineHeight: "1.6" }],
+        "md":   ["20px", { lineHeight: "1.3" }],
+        "lg":   ["28px", { lineHeight: "1.25" }],
+        "xl":   ["42px", { lineHeight: "1.15" }],
+        "2xl":  ["64px", { lineHeight: "1.1" }],
+        "3xl":  ["96px", { lineHeight: "1.1" }],
 
-        // Facilitator density (laptop)
-        "fac-title": ["1.125rem", { lineHeight: "1.3", fontWeight: "700" }],
-        "fac-field": ["0.9375rem", { lineHeight: "1.5" }],
-        "fac-label": ["0.75rem", { lineHeight: "1.4", fontWeight: "700", letterSpacing: "0.05em" }],
-        "fac-meta": ["0.75rem", { lineHeight: "1.4" }],
+        // Density modes (retained)
+        "display-title": ["2rem",     { lineHeight: "1.2",  fontWeight: "700" }],
+        "display-field": ["1.375rem", { lineHeight: "1.5" }],
+        "display-label": ["0.9375rem",{ lineHeight: "1.4",  fontWeight: "700" }],
+        "display-meta":  ["0.875rem", { lineHeight: "1.4" }],
+        "fac-title":     ["1.125rem", { lineHeight: "1.3",  fontWeight: "700" }],
+        "fac-field":     ["0.9375rem",{ lineHeight: "1.5" }],
+        "fac-label":     ["0.75rem",  { lineHeight: "1.4",  fontWeight: "700", letterSpacing: "0.05em" }],
+        "fac-meta":      ["0.75rem",  { lineHeight: "1.4" }],
       },
       spacing: {
         "18": "4.5rem",
         "22": "5.5rem",
       },
       borderRadius: {
-        card: "0.5rem",
-        pill: "9999px",
-        badge: "0.25rem",
+        // Sharp everywhere — no radius in this design system
+        none:    "0",
+        DEFAULT: "0",
+        sm:      "0",
+        md:      "0",
+        lg:      "0",
+        xl:      "0",
+        "2xl":   "0",
+        full:    "0",
+        card:    "0",
+        pill:    "0",
+        badge:   "0",
       },
       keyframes: {
         pulse: {
           "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.4" },
+          "50%":       { opacity: "0.4" },
         },
         spin: {
           from: { transform: "rotate(0deg)" },
-          to: { transform: "360deg" },
+          to:   { transform: "rotate(360deg)" },
         },
         "field-in": {
           from: { opacity: "0", transform: "translateY(4px)" },
-          to: { opacity: "1", transform: "translateY(0)" },
+          to:   { opacity: "1", transform: "translateY(0)" },
         },
       },
       animation: {
         "pulse-slow": "pulse 2s ease-in-out infinite",
-        "field-in": "field-in 0.2s ease-out forwards",
+        "field-in":   "field-in 0.2s ease-out forwards",
       },
     },
   },

@@ -60,7 +60,7 @@ import type {
   LLMInteraction,
 } from "@/api/types";
 import { buildCandidates, buildAgendaItems } from "@/api/adapters";
-import { FacilitatorFieldCard } from "@/components/facilitator/FacilitatorFieldCard";
+import { DecisionFieldsCard } from "@/components/facilitator/DecisionFieldsCard";
 import { CandidateCard } from "@/components/facilitator/CandidateCard";
 import { AgendaList } from "@/components/shared/AgendaList";
 import { AgendaItemAddWidget } from "@/components/shared/AgendaItemAddWidget";
@@ -1729,7 +1729,8 @@ export function FacilitatorMeetingPage() {
       )}
       {/* ── Header strip ────────────────────────────────────────── */}
       <MainHeader
-        className="px-4 py-3"
+        variant="dark"
+        className="px-5 py-4"
         navItems={[{ label: "Meetings", to: "/" }, { label: meetingId }]}
         title={apiMeeting?.title ?? currentMeeting.title}
         titleTo={meetingHomePath}
@@ -1763,7 +1764,11 @@ export function FacilitatorMeetingPage() {
               to={meetingSharedPath}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta border"
+              style={{ color: "var(--nav-text-dim)", borderColor: "var(--nav-border)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--nav-text)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--nav-text-dim)")}
+
               title="Open shared view"
             >
               <ExternalLink size={13} />
@@ -1771,7 +1776,11 @@ export function FacilitatorMeetingPage() {
             </Link>
             <Link
               to={meetingHomePath}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta border"
+              style={{ color: "var(--nav-text-dim)", borderColor: "var(--nav-border)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--nav-text)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--nav-text-dim)")}
+
               title="Open meeting home"
             >
               <Home size={13} />
@@ -1782,14 +1791,21 @@ export function FacilitatorMeetingPage() {
               to={meetingStreamPath}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta border"
+              style={{ color: "var(--nav-text-dim)", borderColor: "var(--nav-border)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--nav-text)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--nav-text-dim)")}
+
               title="Open stream control"
             >
               <Radio size={13} />
               <span className="hidden xl:inline">Stream control</span>
             </Link>
 
-            <span className="inline-flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded-badge bg-overlay border border-border text-text-muted">
+            <span
+              className="inline-flex items-center gap-1.5 font-mono text-[11px] px-1.5 py-0.5 border"
+              style={{ color: "var(--nav-text-dim)", borderColor: "var(--nav-border)" }}
+            >
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
                   sharedStreamStatus?.streamState === "live"
@@ -1808,7 +1824,11 @@ export function FacilitatorMeetingPage() {
               to={meetingTranscriptPath}
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
+              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta border"
+              style={{ color: "var(--nav-text-dim)", borderColor: "var(--nav-border)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--nav-text)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--nav-text-dim)")}
+
               title="Open transcript"
             >
               <FilePlus2 size={13} />
@@ -1818,7 +1838,11 @@ export function FacilitatorMeetingPage() {
             <button
               onClick={() => setModal({ type: "upload" })}
               disabled={isMeetingCompleted}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta border"
+              style={{ color: "var(--nav-text-dim)", borderColor: "var(--nav-border)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--nav-text)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--nav-text-dim)")}
+
               title="Upload transcript"
               aria-label="Upload transcript"
             >
@@ -1830,7 +1854,11 @@ export function FacilitatorMeetingPage() {
             <button
               onClick={() => setModal({ type: "flag-later" })}
               disabled={isMeetingCompleted}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta border"
+              style={{ color: "var(--nav-text-dim)", borderColor: "var(--nav-border)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--nav-text)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--nav-text-dim)")}
+
               title="Flag for later"
               aria-label="Flag for later"
             >
@@ -1841,7 +1869,11 @@ export function FacilitatorMeetingPage() {
             <button
               onClick={openCreateContextDialog}
               disabled={isMeetingCompleted}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta border"
+              style={{ color: "var(--nav-text-dim)", borderColor: "var(--nav-border)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--nav-text)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--nav-text-dim)")}
+
               title="New decision"
               aria-label="New decision"
             >
@@ -1854,7 +1886,11 @@ export function FacilitatorMeetingPage() {
               disabled={
                 unlockedCount === 0 || isClosedContext || isMeetingCompleted || !hasSelectedContext
               }
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-text-secondary hover:text-text-primary border border-border rounded transition-colors disabled:opacity-30"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta border disabled:opacity-30"
+              style={{ color: "var(--nav-text-dim)", borderColor: "var(--nav-border)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--nav-text)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--nav-text-dim)")}
+
               title="Regenerate"
               aria-label="Regenerate"
             >
@@ -1870,7 +1906,7 @@ export function FacilitatorMeetingPage() {
             <button
               onClick={handleDeferActiveContext}
               disabled={isClosedContext || isMeetingCompleted || !hasSelectedContext}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-caution hover:text-caution border border-caution/30 rounded transition-colors disabled:opacity-30"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-fac-meta text-caution border border-caution/30 disabled:opacity-30"
               title="Defer"
               aria-label="Defer"
             >
@@ -1881,7 +1917,7 @@ export function FacilitatorMeetingPage() {
             <button
               onClick={() => void handleExportDecision()}
               disabled={!hasSelectedContext || exporting}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-fac-meta bg-settled text-base rounded font-medium hover:bg-settled/90 transition-colors disabled:opacity-30"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-fac-meta bg-settled text-base font-medium hover:opacity-85 disabled:opacity-30"
               title="Export"
               aria-label="Export"
             >
@@ -1892,7 +1928,7 @@ export function FacilitatorMeetingPage() {
               <button
                 onClick={() => setModal({ type: "finalise" })}
                 disabled={isMeetingCompleted || !hasSelectedContext}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-fac-meta bg-settled text-base rounded font-medium hover:bg-settled/90 transition-colors disabled:opacity-30"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-fac-meta bg-settled text-base font-medium hover:opacity-85 disabled:opacity-30"
                 title="Finalise"
                 aria-label="Finalise"
               >
@@ -1904,7 +1940,7 @@ export function FacilitatorMeetingPage() {
             <button
               onClick={() => void handleEndMeeting()}
               disabled={isMeetingCompleted || endingMeeting}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-fac-meta border border-danger/30 text-danger rounded transition-colors hover:bg-danger-dim/30 disabled:opacity-30"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-fac-meta border border-danger/30 text-danger hover:bg-danger-dim/30 disabled:opacity-30"
               title="End meeting"
               aria-label="End meeting"
             >
@@ -2147,7 +2183,7 @@ export function FacilitatorMeetingPage() {
                           type="text"
                           value={titleDraft}
                           onChange={(e) => setTitleDraft(e.target.value)}
-                          className="w-full max-w-2xl px-2.5 py-1.5 rounded border border-border bg-overlay text-fac-title text-text-primary focus:outline-none focus:border-accent"
+                          className="w-full max-w-2xl px-2.5 py-1.5 border border-border bg-surface text-lg font-medium text-text-primary focus:outline-none focus:border-border-strong"
                         />
                         <button
                           onClick={handleSaveTitleEdit}
@@ -2167,7 +2203,7 @@ export function FacilitatorMeetingPage() {
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <h1 className="text-fac-title text-text-primary">{activeContext.title}</h1>
+                        <h1 className="text-lg font-medium text-text-primary leading-snug">{activeContext.title}</h1>
                         <button
                           onClick={handleStartTitleEdit}
                           disabled={isClosedContext}
@@ -2218,23 +2254,21 @@ export function FacilitatorMeetingPage() {
                       </div>
                     )}
                   </div>
-                  <span className="shrink-0 text-fac-meta text-text-muted border border-border px-2 py-0.5 rounded-badge">
+                  <span
+                    className="shrink-0 font-mono text-xs uppercase tracking-wider text-text-muted border border-border px-2 py-0.5 cursor-default"
+                    title={activeApiTemplate?.description}
+                  >
                     {activeApiTemplate?.name ?? activeContext.templateName}
                   </span>
                   {!isClosedContext && (
                     <button
                       onClick={() => setModal({ type: "change-template" })}
-                      className="shrink-0 text-fac-meta text-accent hover:text-accent/80"
+                      className="shrink-0 text-fac-meta text-text-muted hover:text-text-primary"
                     >
                       Change template
                     </button>
                   )}
                 </div>
-                {activeApiTemplate?.description && (
-                  <p className="text-fac-meta text-text-muted mt-1 max-w-2xl">
-                    {activeApiTemplate.description}
-                  </p>
-                )}
 
                 <div className="mt-3 flex flex-wrap gap-2 items-center">
                   {activeContext.tags.map((tag) => (
@@ -2401,23 +2435,21 @@ export function FacilitatorMeetingPage() {
                 </p>
               </div>
 
-              {/* Field cards */}
-              <div className="flex flex-col gap-4">
-                {fields.map((field) => (
-                  <FacilitatorFieldCard
-                    key={field.id}
-                    field={field}
-                    onLock={isClosedContext ? undefined : handleLock}
-                    onUnlock={isClosedContext ? undefined : handleUnlock}
-                    onRegenerate={isClosedContext ? undefined : handleRegenerateSingleField}
-                    onZoom={isClosedContext ? undefined : setZoomedFieldId}
-                    supplementaryCount={
-                      supplementary.filter((s) => s.scope === "field" && s.fieldId === field.id)
-                        .length
-                    }
-                  />
-                ))}
-              </div>
+              {/* Decision fields — MVD card */}
+              <DecisionFieldsCard
+                contextId={activeApiContextId ?? ""}
+                title={activeContext.title}
+                status={activeContext.status}
+                fields={fields}
+                isReadOnly={isClosedContext}
+                supplementaryCount={(fieldId) =>
+                  supplementary.filter((s) => s.scope === "field" && s.fieldId === fieldId).length
+                }
+                onLock={isClosedContext ? undefined : handleLock}
+                onUnlock={isClosedContext ? undefined : handleUnlock}
+                onRegenerate={isClosedContext ? undefined : handleRegenerateSingleField}
+                onZoom={isClosedContext ? undefined : setZoomedFieldId}
+              />
             </>
           )}
         </main>

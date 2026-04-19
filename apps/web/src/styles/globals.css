@@ -2,7 +2,94 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Density modes ──────────────────────────────────────────────── */
+/* ── Light theme (default) ───────────────────────────────────────── */
+
+:root {
+  /* Surfaces */
+  --color-base:      #f4f2ee;
+  --color-surface:   #e8e5df;
+  --color-surface-2: #d8d4cc;
+  --color-overlay:   #c8c4bc;
+
+  /* Borders */
+  --color-border:       #c8c4bc;
+  --color-border-strong: #8a8680;
+  --color-border-locked: #1a6645;
+
+  /* Text */
+  --color-text-primary:   #2b2926;
+  --color-text-secondary: #4a4744;
+  --color-text-muted:     #8a8680;
+  --color-text-locked:    #1a6645;
+
+  /* Brand absolute */
+  --color-black: #1a1a1a;
+  --color-white: #f4f2ee;
+
+  /* Semantic — functional app states */
+  --color-settled:     #1a6645;
+  --color-settled-dim: #d4ede2;
+  --color-accent:      #1a1a1a;
+  --color-accent-dim:  #e8e5df;
+  --color-caution:     #92580a;
+  --color-caution-dim: #fdf0d8;
+  --color-danger:      #8b1a1a;
+  --color-danger-dim:  #fde8e8;
+
+  /* Tag categories */
+  --color-tag-topic:    #1a3a8b;
+  --color-tag-topic-bg: #dde4f7;
+  --color-tag-team:     #1a6645;
+  --color-tag-team-bg:  #d4ede2;
+  --color-tag-project:  #92580a;
+  --color-tag-project-bg: #fdf0d8;
+
+  /* Candidate states */
+  --color-candidate-new:       #92580a;
+  --color-candidate-dismissed: #8a8680;
+}
+
+/* ── Dark theme ──────────────────────────────────────────────────── */
+
+.dark {
+  --color-base:      #1a1a1a;
+  --color-surface:   #2b2926;
+  --color-surface-2: #3a3734;
+  --color-overlay:   #4a4744;
+
+  --color-border:       #4a4744;
+  --color-border-strong: #8a8680;
+  --color-border-locked: #34d399;
+
+  --color-text-primary:   #f4f2ee;
+  --color-text-secondary: #c8c4bc;
+  --color-text-muted:     #8a8680;
+  --color-text-locked:    #34d399;
+
+  --color-black: #f4f2ee;
+  --color-white: #1a1a1a;
+
+  --color-settled:     #34d399;
+  --color-settled-dim: #0d2b1e;
+  --color-accent:      #f4f2ee;
+  --color-accent-dim:  #2b2926;
+  --color-caution:     #f59e0b;
+  --color-caution-dim: #2a1e00;
+  --color-danger:      #f87171;
+  --color-danger-dim:  #2a0a0a;
+
+  --color-tag-topic:    #6c8ef7;
+  --color-tag-topic-bg: #1e2a6e;
+  --color-tag-team:     #34d399;
+  --color-tag-team-bg:  #0d2b1e;
+  --color-tag-project:  #f59e0b;
+  --color-tag-project-bg: #2a1e00;
+
+  --color-candidate-new:       #f59e0b;
+  --color-candidate-dismissed: #5a6380;
+}
+
+/* ── Density modes ───────────────────────────────────────────────── */
 
 .density-display {
   --field-font-size: 1.375rem;
@@ -31,11 +118,11 @@ body,
 }
 
 body {
-  background-color: #0f1117;
-  color: #e8eaf2;
-  font-family: "Atkinson Hyperlegible", Verdana, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-base);
+  color: var(--color-text-primary);
+  font-family: "IBM Plex Sans", Arial, sans-serif;
+  -webkit-font-smoothing: subpixel-antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 /* ── Scrollbar ───────────────────────────────────────────────────── */
@@ -45,12 +132,50 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #1c2033;
+  background: var(--color-surface);
 }
 ::-webkit-scrollbar-thumb {
-  background: #3a4060;
-  border-radius: 3px;
+  background: var(--color-border);
+  border-radius: 0;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4a5280;
+  background: var(--color-border-strong);
+}
+
+/* ── Print decay — paper grain overlay ──────────────────────────── */
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23g)' opacity='1'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+}
+
+/* ── Print decay — ink surface class (applied via JSX) ──────────── */
+
+.ink-surface {
+  filter: url(#ink-surface);
+}
+
+/* ── Nav / header dark variant ───────────────────────────────────── *
+ * Applied when MainHeader has variant="dark".
+ * Inverts automatically in .dark theme.
+ * ─────────────────────────────────────────────────────────────────── */
+
+:root {
+  --nav-bg:       #1a1a1a;
+  --nav-text:     #f4f2ee;
+  --nav-text-dim: rgba(244, 242, 238, 0.55);
+  --nav-border:   rgba(244, 242, 238, 0.16);
+}
+
+.dark {
+  --nav-bg:       #f4f2ee;
+  --nav-text:     #1a1a1a;
+  --nav-text-dim: rgba(26, 26, 26, 0.5);
+  --nav-border:   rgba(26, 26, 26, 0.18);
 }
