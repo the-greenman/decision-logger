@@ -112,6 +112,7 @@ import {
   tagChunksByTimeRangeRoute,
   uploadTranscriptRoute,
 } from "./routes/decision-workflow.js";
+import { getLlmReachability } from "./llm-reachability.js";
 
 const SERVER_STARTED_AT = new Date().toISOString();
 
@@ -261,6 +262,7 @@ app.openapi(getApiStatusRoute, async (c) => {
   const useMockLlm = process.env.NODE_ENV === "test" || process.env.USE_MOCK_LLM === "true";
   const provider = process.env.LLM_PROVIDER ?? "anthropic";
   const model = process.env.LLM_MODEL ?? "claude-opus-4-5";
+  const reachability = await getLlmReachability();
 
   return c.json({
     status: "ok",
@@ -273,6 +275,10 @@ app.openapi(getApiStatusRoute, async (c) => {
       mode: useMockLlm ? "mock" : "real",
       provider,
       model,
+      reachable: reachability.reachable,
+      ...(reachability.latencyMs !== undefined && { latencyMs: reachability.latencyMs }),
+      ...(reachability.error !== undefined && { error: reachability.error }),
+      ...(reachability.baseUrl !== undefined && { baseUrl: reachability.baseUrl }),
     },
   });
 });

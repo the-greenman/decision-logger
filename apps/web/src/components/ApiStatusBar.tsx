@@ -53,17 +53,28 @@ function ApiChip({ state }: { state: ApiState }) {
 
 function LlmChip({ data }: { data: ApiStatus }) {
   const isMock = data.llm.mode === "mock";
+  const isUnreachable = !isMock && !data.llm.reachable;
+  const color = isMock ? "text-caution" : isUnreachable ? "text-caution" : "text-settled";
+  const dot = isMock ? "bg-caution" : isUnreachable ? "bg-caution" : "bg-settled";
   return (
-    <span
-      className={`flex items-center gap-1.5 ${isMock ? "text-caution" : "text-accent"}`}
-    >
-      <span
-        className={`w-1.5 h-1.5 rounded-full shrink-0 ${isMock ? "bg-caution" : "bg-accent"}`}
-      />
+    <span className={`flex items-center gap-1.5 ${color}`}>
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
       {isMock ? (
-        <span>mock mode</span>
+        <span>LLM mock</span>
+      ) : isUnreachable ? (
+        <span>
+          LLM unreachable
+          {data.llm.error && (
+            <span className="text-text-muted"> &middot; {data.llm.error}</span>
+          )}
+        </span>
       ) : (
-        <span className="font-mono text-[10px]">{data.llm.model}</span>
+        <span className="font-mono text-[10px]">
+          {data.llm.model}
+          {data.llm.latencyMs !== undefined && (
+            <span className="text-text-muted"> ({data.llm.latencyMs}ms)</span>
+          )}
+        </span>
       )}
     </span>
   );
@@ -112,9 +123,9 @@ function CollapsedBar({
   const llmDot =
     llmData == null
       ? null
-      : llmData.llm.mode === "mock"
+      : llmData.llm.mode === "mock" || !llmData.llm.reachable
         ? "bg-caution"
-        : "bg-accent";
+        : "bg-settled";
   const streamDot =
     stream?.status === "active" ? "bg-caution animate-pulse" : null;
 

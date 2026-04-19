@@ -45,11 +45,18 @@ services:
       NODE_ENV: production
       LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
       LLM_MODEL: ${LLM_MODEL:-claude-opus-4-5}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       USE_TEMPLATE_PROMPT: ${USE_TEMPLATE_PROMPT:-false}
     ports:
       - "${COMPOSE_API_PORT:-3001}:3000"
+    # Allow `host.docker.internal` to resolve on Linux (Docker Desktop sets this
+    # automatically on macOS/Windows). Useful when LLM_BASE_URL points at an
+    # Ollama / vLLM / LM Studio instance running on the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy

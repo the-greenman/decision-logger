@@ -442,6 +442,7 @@ describe("CLI command request shapes", () => {
           mode: "real",
           provider: "anthropic",
           model: "claude-opus-4-5",
+          reachable: true,
         },
       }),
     });

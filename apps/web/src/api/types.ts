@@ -287,5 +287,9 @@ export interface ApiStatus {
     mode: "mock" | "real";
     provider: string;
     model: string;
+    reachable: boolean;
+    latencyMs?: number;
+    error?: string;
+    baseUrl?: string;
   };
 }

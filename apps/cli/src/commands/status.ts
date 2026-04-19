@@ -32,4 +32,13 @@ export const statusCommand = new Command("status")
     console.log(chalk.white(`LLM mode:            ${response.llm.mode}`));
     console.log(chalk.white(`LLM provider:        ${response.llm.provider}`));
     console.log(chalk.white(`LLM model:           ${response.llm.model}`));
+    const { reachable, latencyMs, error, baseUrl } = response.llm;
+    const reachabilityLabel = reachable
+      ? chalk.green("reachable") +
+        (latencyMs !== undefined ? chalk.gray(` (${latencyMs}ms)`) : "")
+      : chalk.red("unreachable") + (error ? chalk.gray(` — ${error}`) : "");
+    console.log(chalk.white(`LLM reachable:       ${reachabilityLabel}`));
+    if (baseUrl) {
+      console.log(chalk.gray(`LLM base URL:        ${baseUrl}`));
+    }
   });
