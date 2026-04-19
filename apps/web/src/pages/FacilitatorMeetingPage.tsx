@@ -44,7 +44,6 @@ import {
   updateFlaggedDecision,
   createFlaggedDecision,
   listLLMInteractions,
-  getTranscriptReading,
   listMeetingChunks,
   exportMarkdown,
   setActiveMeeting,
@@ -245,8 +244,6 @@ export function FacilitatorMeetingPage() {
   const [relationType, setRelationType] = useState<RelationType>("related");
 
   const [newRowsSinceGeneration, setNewRowsSinceGeneration] = useState(0);
-  const [transcriptRowCount, setTranscriptRowCount] = useState(0);
-  const [contextTaggedChunkCount, setContextTaggedChunkCount] = useState(0);
 
   const [flagLaterTitle, setFlagLaterTitle] = useState("");
   const [showLLMLog, setShowLLMLog] = useState(false);
@@ -580,33 +577,12 @@ export function FacilitatorMeetingPage() {
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const pollMs = sharedStreamStatus?.streamState === "live" ? 2000 : 5000;
-    const decisionTagPrefix = activeApiContextId ? `decision:${activeApiContextId}` : null;
-    const fieldTag =
-      activeApiContextId && zoomedFieldId ? `decision:${activeApiContextId}:${zoomedFieldId}` : null;
-    const meetingTag = `meeting:${meetingId}`;
 
     async function pollTranscript() {
       try {
-        const [reading, chunkData] = await Promise.all([
-          getTranscriptReading(meetingId),
-          listMeetingChunks(meetingId),
-        ]);
+        const chunkData = await listMeetingChunks(meetingId);
 
         if (cancelled) return;
-
-        const totalRows = reading.rows.length > 0 ? reading.rows.length : chunkData.chunks.length;
-        setTranscriptRowCount(totalRows);
-
-        const scoped = chunkData.chunks.filter((chunk) => {
-          if (fieldTag) return chunk.contexts.includes(fieldTag);
-          if (decisionTagPrefix) {
-            return chunk.contexts.some(
-              (context) => context === decisionTagPrefix || context.startsWith(`${decisionTagPrefix}:`),
-            );
-          }
-          return chunk.contexts.includes(meetingTag);
-        });
-        setContextTaggedChunkCount(scoped.length);
 
         const topicCounts = new Map<string, number>();
         chunkData.chunks.forEach((chunk) => {
@@ -627,8 +603,6 @@ export function FacilitatorMeetingPage() {
         );
       } catch {
         if (!cancelled) {
-          setTranscriptRowCount(0);
-          setContextTaggedChunkCount(0);
           setAvailableTranscriptTopics([]);
         }
       } finally {
